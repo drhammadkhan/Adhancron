@@ -1,0 +1,20 @@
+services:
+  adhan-manager:
+    build: .
+    image: adhan-manager:latest
+    container_name: adhan-manager
+    restart: unless-stopped
+    ports:
+      - "8090:8090"
+    volumes:
+      - adhan-data:/data
+    environment:
+      HA_TOKEN: "${HA_TOKEN:-}"
+      HA_URL: "${HA_URL:-http://homeassistant.local:8123}"
+      HA_ENTITY_ID: "${HA_ENTITY_ID:-media_player.bedroom_speaker}"
+      PUBLIC_BASE_URL: "${PUBLIC_BASE_URL:-http://adhan-manager.local:8090}"
+      ADHAN_VOLUME: "${ADHAN_VOLUME:-0.8}"
+      TZ: "${TZ:-Europe/London}"
+
+volumes:
+  adhan-data:

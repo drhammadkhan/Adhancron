@@ -1,0 +1,206 @@
+<!doctype html>
+<html lang="en" data-theme="emerald">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Prayer Times</title>
+    <link
+      href="https://cdn.jsdelivr.net/npm/daisyui@4.12.23/dist/full.min.css"
+      rel="stylesheet"
+      type="text/css"
+    />
+    <script src="https://cdn.tailwindcss.com"></script>
+  </head>
+  <body class="min-h-screen bg-slate-50 text-slate-800">
+    <main class="mx-auto max-w-6xl px-4 py-6 sm:px-6 lg:px-8">
+      <div class="mb-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <h1 class="text-3xl font-bold">Prayer Times</h1>
+          <p class="text-sm text-slate-600">Loaded from <code>prayer_times.json</code></p>
+        </div>
+        <div class="flex gap-2">
+          <a href="/" class="btn btn-outline">Back to Dashboard</a>
+          <button id="refreshBtn" class="btn btn-success">Refresh</button>
+        </div>
+      </div>
+
+      <div class="mb-4 flex flex-wrap items-center gap-4">
+        <div class="flex items-center gap-2">
+          <span class="text-sm font-semibold text-slate-500 uppercase tracking-wider">Year:</span>
+          <div class="join" id="yearFilters"></div>
+        </div>
+      </div>
+
+      <div class="mb-6 flex flex-wrap items-center gap-4 border-t border-slate-200 pt-4">
+        <div class="flex items-center gap-2">
+          <span class="text-sm font-semibold text-slate-500 uppercase tracking-wider">Month:</span>
+          <div class="flex flex-wrap gap-2" id="monthFilters"></div>
+        </div>
+      </div>
+
+      <div id="prayerCards" class="grid gap-3 sm:hidden"></div>
+
+      <div class="hidden overflow-x-auto rounded-2xl bg-white p-4 shadow sm:block">
+        <table class="table table-zebra w-full" id="prayerTable">
+          <thead>
+            <tr class="text-slate-500 uppercase tracking-wider text-xs">
+              <th>Date</th>
+              <th>Fajr</th>
+              <th>Dhuhr</th>
+              <th>Asr</th>
+              <th>Maghrib</th>
+              <th>Isha</th>
+            </tr>
+          </thead>
+          <tbody id="prayerTableBody">
+            <tr>
+              <td colspan="6" class="text-center py-8 text-slate-400">Loading schedule...</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </main>
+
+    <script>
+      let prayerData = {};
+      let selectedYear = new Date().getFullYear().toString();
+      let selectedMonth = new Intl.DateTimeFormat('en-US', { month: 'long' }).format(new Date());
+
+      const monthsOrder = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+
+      function updateStatus(message, isError = false) {
+        const prayerCards = document.getElementById('prayerCards');
+        const tableBody = document.getElementById('prayerTableBody');
+        const statusHtml = `<div class="rounded-2xl border ${isError ? 'border-error/30 bg-error/10 text-error' : 'border-info/30 bg-info/10 text-info'} p-4 text-sm">${message}</div>`;
+        
+        if (prayerCards) prayerCards.innerHTML = statusHtml;
+        if (tableBody) tableBody.innerHTML = `<tr><td colspan="6" class="text-center py-8 ${isError ? 'text-error' : ''}">${message}</td></tr>`;
+      }
+
+      function renderFilters() {
+        const yearContainer = document.getElementById('yearFilters');
+        const monthContainer = document.getElementById('monthFilters');
+        
+        // Year Filters
+        yearContainer.innerHTML = '';
+        const years = Object.keys(prayerData).sort();
+        years.forEach(year => {
+          const btn = document.createElement('button');
+          btn.textContent = year;
+          btn.className = `join-item btn btn-sm ${selectedYear === year ? 'btn-success' : 'btn-outline'}`;
+          btn.onclick = () => {
+            selectedYear = year;
+            renderFilters();
+            renderData();
+          };
+          yearContainer.appendChild(btn);
+        });
+
+        // Month Filters
+        monthContainer.innerHTML = '';
+        const allBtn = document.createElement('button');
+        allBtn.textContent = 'All';
+        allBtn.className = `btn btn-sm ${!selectedMonth ? 'btn-success' : 'btn-outline'}`;
+        allBtn.onclick = () => {
+          selectedMonth = null;
+          renderFilters();
+          renderData();
+        };
+        monthContainer.appendChild(allBtn);
+
+        const availableMonths = Object.keys(prayerData[selectedYear] || {});
+        monthsOrder.forEach(m => {
+          if (availableMonths.includes(m)) {
+            const btn = document.createElement('button');
+            btn.textContent = m;
+            btn.className = `btn btn-sm ${selectedMonth === m ? 'btn-success' : 'btn-outline'}`;
+            btn.onclick = () => {
+              selectedMonth = m;
+              renderFilters();
+              renderData();
+            };
+            monthContainer.appendChild(btn);
+          }
+        });
+      }
+
+      function renderData() {
+        const tableBody = document.getElementById('prayerTableBody');
+        const prayerCards = document.getElementById('prayerCards');
+        const fragmentTable = document.createDocumentFragment();
+        const fragmentCards = document.createDocumentFragment();
+
+        let hasData = false;
+        const yearData = prayerData[selectedYear] || {};
+        
+        monthsOrder.forEach(month => {
+          if (!yearData[month] || (selectedMonth && month !== selectedMonth)) return;
+          const monthData = yearData[month];
+          
+          Object.keys(monthData).sort((a,b) => parseInt(a) - parseInt(b)).forEach(day => {
+            const times = monthData[day];
+            hasData = true;
+
+            const row = document.createElement('tr');
+            row.innerHTML = `
+              <td class="font-medium text-slate-700">${day} ${month} ${selectedYear}</td>
+              <td>${times.Fajr || '-'}</td>
+              <td>${times.Dhuhr || '-'}</td>
+              <td>${times.Asr || '-'}</td>
+              <td>${times.Maghrib || '-'}</td>
+              <td>${times.Isha || '-'}</td>
+            `;
+            fragmentTable.appendChild(row);
+
+            const card = document.createElement('article');
+            card.className = 'rounded-2xl border border-white/70 bg-white p-4 shadow';
+            card.innerHTML = `
+              <h3 class="font-semibold text-slate-800 mb-2">${day} ${month} ${selectedYear}</h3>
+              <div class="grid grid-cols-2 gap-y-1 text-sm">
+                <span class="text-slate-500">Fajr</span><span class="font-medium">${times.Fajr || '-'}</span>
+                <span class="text-slate-500">Dhuhr</span><span class="font-medium">${times.Dhuhr || '-'}</span>
+                <span class="text-slate-500">Asr</span><span class="font-medium">${times.Asr || '-'}</span>
+                <span class="text-slate-500">Maghrib</span><span class="font-medium">${times.Maghrib || '-'}</span>
+                <span class="text-slate-500">Isha</span><span class="font-medium">${times.Isha || '-'}</span>
+              </div>
+            `;
+            fragmentCards.appendChild(card);
+          });
+        });
+
+        tableBody.innerHTML = '';
+        prayerCards.innerHTML = '';
+        if (hasData) {
+          tableBody.appendChild(fragmentTable);
+          prayerCards.appendChild(fragmentCards);
+        } else {
+          updateStatus('No data found for this selection.');
+        }
+      }
+
+      async function loadPrayerTimes() {
+        try {
+          const response = await fetch('/api/prayer-times');
+          if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+          
+          prayerData = await response.json();
+          if (prayerData.error) throw new Error(prayerData.error);
+
+          // Reset selection if current year/month doesn't exist in data
+          if (!prayerData[selectedYear]) selectedYear = Object.keys(prayerData).sort()[0];
+          if (!prayerData[selectedYear][selectedMonth]) selectedMonth = Object.keys(prayerData[selectedYear])[0];
+
+          renderFilters();
+          renderData();
+
+        } catch (error) {
+          console.error('Fetch error:', error);
+          updateStatus(error.message, true);
+        }
+      }
+
+      document.getElementById('refreshBtn').addEventListener('click', loadPrayerTimes);
+      loadPrayerTimes();
+    </script>
+  </body>
+</html>

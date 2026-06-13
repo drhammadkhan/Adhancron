@@ -1,0 +1,16 @@
+services:
+  adhan-manager:
+    image: ghcr.io/drhammadkhan/Adhancron:latest
+    container_name: adhan-manager
+    restart: unless-stopped
+    ports:
+      - "8090:8090"
+    volumes:
+      - /DATA/AppData/adhan-manager:/data
+    environment:
+      HA_TOKEN: ""
+      HA_URL: "http://homeassistant.local:8123"
+      HA_ENTITY_ID: "media_player.bedroom_speaker"
+      PUBLIC_BASE_URL: "http://YOUR_CASAOS_HOST_IP:8090"
+      ADHAN_VOLUME: "0.8"
+      TZ: "Europe/London"

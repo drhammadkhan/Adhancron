@@ -1,0 +1,24 @@
+.DS_Store
+
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+.pytest_cache/
+.venv/
+.venv-*/
+
+# Local secrets and runtime state
+.env
+.env.*
+!.env.example
+wifi_secrets.py
+data/
+cron_state.json
+
+# Logs
+*.log
+
+# Local editor/project files
+.idea/
+.vscode/
