@@ -13,6 +13,7 @@ const fajrRunStatus = document.getElementById("fajrRunStatus");
 const haSettingsBadge = document.getElementById("haSettingsBadge");
 const haUrlInput = document.getElementById("haUrlInput");
 const haEntityInput = document.getElementById("haEntityInput");
+const publicBaseUrlInput = document.getElementById("publicBaseUrlInput");
 const haTokenInput = document.getElementById("haTokenInput");
 const saveSettingsBtn = document.getElementById("saveSettingsBtn");
 
@@ -31,17 +32,18 @@ function setSettingsStatus(message, type = "ghost") {
   haSettingsBadge.textContent = message;
 }
 
-function renderSettings(settings) {
+function renderSettings(settings, overrideMessage = null) {
   if (!haUrlInput || !haEntityInput || !haTokenInput) return;
   haUrlInput.value = settings.ha_url || "";
   haEntityInput.value = settings.ha_entity_id || "";
+  if (publicBaseUrlInput) publicBaseUrlInput.value = settings.public_base_url || "";
   haTokenInput.value = "";
   const tokenStatus = settings.ha_token_source === "saved"
     ? "Token saved to /data"
     : settings.ha_token_source === "environment"
     ? "Token from env"
     : "No token saved";
-  setSettingsStatus(tokenStatus, settings.ha_token_set ? "success" : "warning");
+  setSettingsStatus(overrideMessage || tokenStatus, settings.ha_token_set ? "success" : "warning");
 }
 
 function renderJobs() {
@@ -180,6 +182,7 @@ async function saveSettings() {
   const payload = {
     ha_url: haUrlInput.value,
     ha_entity_id: haEntityInput.value,
+    public_base_url: publicBaseUrlInput ? publicBaseUrlInput.value : "",
   };
   if (haTokenInput.value.trim()) {
     payload.ha_token = haTokenInput.value;
@@ -200,8 +203,7 @@ async function saveSettings() {
     if (!response.ok) {
       throw new Error(data.detail || "Failed to save settings");
     }
-    renderSettings(data);
-    setSettingsStatus("Settings saved", "success");
+    renderSettings(data, "Settings saved");
   } catch (error) {
     setSettingsStatus(error.message, "error");
   } finally {

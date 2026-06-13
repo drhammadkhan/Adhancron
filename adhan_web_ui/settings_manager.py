@@ -21,14 +21,14 @@ class SettingsManager:
         return {
             key: value
             for key, value in data.items()
-            if key in {"ha_token", "ha_url", "ha_entity_id"} and isinstance(value, str)
+            if key in {"ha_token", "ha_url", "ha_entity_id", "public_base_url"} and isinstance(value, str)
         }
 
     def update_settings(self, updates: dict[str, str | None]) -> dict[str, str]:
         with self._lock:
             data = self.get_settings()
             for key, value in updates.items():
-                if key not in {"ha_token", "ha_url", "ha_entity_id"}:
+                if key not in {"ha_token", "ha_url", "ha_entity_id", "public_base_url"}:
                     continue
                 if value is None:
                     continue

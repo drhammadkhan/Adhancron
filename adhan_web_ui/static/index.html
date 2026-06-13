@@ -111,6 +111,15 @@
               <input id="haEntityInput" type="text" class="input input-bordered w-full bg-white/80" placeholder="media_player.bedroom_speaker" />
             </label>
           </div>
+          <label class="form-control">
+            <div class="label">
+              <span class="label-text text-sm font-medium">Public Audio URL</span>
+            </div>
+            <input id="publicBaseUrlInput" type="url" class="input input-bordered w-full bg-white/80" placeholder="http://192.168.1.16:8090" />
+            <div class="label">
+              <span class="label-text-alt text-slate-500">Use the CasaOS URL Home Assistant can reach.</span>
+            </div>
+          </label>
           <div class="grid gap-4 lg:grid-cols-[1fr_auto] lg:items-end">
             <label class="form-control">
               <div class="label">
@@ -200,6 +209,6 @@
         return false;
       }
     </script>
-    <script src="static/app.js?v=3"></script>
+    <script src="static/app.js?v=4"></script>
   </body>
 </html>

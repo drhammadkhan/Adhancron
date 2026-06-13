@@ -9,7 +9,8 @@ from fastapi.responses import StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
-from adhan_config import APP_DIR, DEFAULT_VOLUME, OVERRIDE_FILE, SETTINGS_FILE, STATUS_FILE, default_audio_url
+from adhan_config import APP_DIR, DEFAULT_VOLUME, OVERRIDE_FILE, PUBLIC_BASE_URL, SETTINGS_FILE, STATUS_FILE, default_audio_url
+from trigger_ha import trigger
 try:
     from .cron_manager import AdhanCronManager, CronError
     from .override_manager import OverrideManager
@@ -45,6 +46,7 @@ class SettingsUpdate(BaseModel):
     ha_token: str | None = None
     ha_url: str | None = None
     ha_entity_id: str | None = None
+    public_base_url: str | None = None
 
 
 def _settings_response() -> dict:
@@ -60,6 +62,8 @@ def _settings_response() -> dict:
         "settings_file_exists": SETTINGS_FILE.exists(),
         "ha_url": current.get("ha_url") or os.getenv("HA_URL", "http://homeassistant.local:8123"),
         "ha_entity_id": current.get("ha_entity_id") or os.getenv("HA_ENTITY_ID", "media_player.bedroom_speaker"),
+        "public_base_url": current.get("public_base_url") or PUBLIC_BASE_URL or "",
+        "audio_url": default_audio_url(),
     }
 
 
@@ -76,22 +80,11 @@ def update_settings(request: SettingsUpdate) -> dict:
 
 @app.post("/api/play")
 def play_adhan() -> dict:
-    import subprocess
-
     audio_url = default_audio_url()
-    trigger_script = Path(__file__).resolve().parent.parent / "trigger_ha.py"
 
     try:
-        result = subprocess.run(
-            ["python3", str(trigger_script), audio_url, DEFAULT_VOLUME],
-            capture_output=True,
-            check=True,
-            text=True,
-        )
-        return {"status": "playing", "detail": result.stdout.strip()}
-    except subprocess.CalledProcessError as exc:
-        detail = (exc.stderr or exc.stdout or str(exc)).strip()
-        raise HTTPException(status_code=500, detail=detail) from exc
+        trigger(audio_url, float(DEFAULT_VOLUME))
+        return {"status": "playing", "audio_url": audio_url}
     except Exception as exc:
         raise HTTPException(status_code=500, detail=str(exc)) from exc
 

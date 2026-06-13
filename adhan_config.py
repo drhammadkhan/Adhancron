@@ -3,6 +3,7 @@ from __future__ import annotations
 import os
 from pathlib import Path
 import shlex
+import json
 
 
 APP_DIR = Path(os.getenv("ADHAN_APP_DIR", Path(__file__).resolve().parent)).resolve()
@@ -31,12 +32,24 @@ PUBLIC_BASE_URL = os.getenv("PUBLIC_BASE_URL", "").rstrip("/")
 ADHAN_AUDIO_BASE_URL = os.getenv("ADHAN_AUDIO_BASE_URL", "").rstrip("/")
 
 
+def saved_setting(name: str) -> str:
+    try:
+        with open(SETTINGS_FILE, "r", encoding="utf-8") as f:
+            value = json.load(f).get(name, "")
+    except Exception:
+        return ""
+    return value.strip() if isinstance(value, str) else ""
+
+
 def default_audio_url() -> str:
     explicit_url = os.getenv("ADHAN_AUDIO_URL")
     if explicit_url:
         return explicit_url
     if ADHAN_AUDIO_BASE_URL:
         return f"{ADHAN_AUDIO_BASE_URL}/{DEFAULT_AUDIO_FILE}"
+    saved_public_base_url = saved_setting("public_base_url").rstrip("/")
+    if saved_public_base_url:
+        return f"{saved_public_base_url}/audio/{DEFAULT_AUDIO_FILE}"
     if PUBLIC_BASE_URL:
         return f"{PUBLIC_BASE_URL}/audio/{DEFAULT_AUDIO_FILE}"
     return f"http://127.0.0.1:8090/audio/{DEFAULT_AUDIO_FILE}"
