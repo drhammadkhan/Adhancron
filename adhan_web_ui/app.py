@@ -75,6 +75,10 @@ def get_settings() -> dict:
 @app.put("/api/settings")
 def update_settings(request: SettingsUpdate) -> dict:
     settings.update_settings(request.model_dump())
+    try:
+        manager.update_all_job_commands(default_audio_url(), DEFAULT_VOLUME)
+    except CronError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
     return _settings_response()
 
 

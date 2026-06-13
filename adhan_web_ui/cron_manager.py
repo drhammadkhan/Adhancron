@@ -143,7 +143,28 @@ class AdhanCronManager:
                 job.hour = hour
                 job.minute = minute
                 job.enabled = bool(payload["enabled"])
+                if payload.get("audio_url") or payload.get("volume"):
+                    self._update_trigger_args(
+                        job,
+                        payload.get("audio_url", job.audio_url),
+                        payload.get("volume", job.volume),
+                    )
             self.backend.write(self._serialize(lines))
+            return [line for line in lines if isinstance(line, AdhanJob)]
+
+    def update_all_job_commands(self, audio_url: str, volume: str) -> list[AdhanJob]:
+        with self._lock:
+            lines = self._parse_lines(self.backend.read())
+            self._ensure_labels(lines)
+            jobs = [line for line in lines if isinstance(line, AdhanJob)]
+            changed = False
+            for job in jobs:
+                if job.audio_url == audio_url and job.volume == volume:
+                    continue
+                self._update_trigger_args(job, audio_url, volume)
+                changed = True
+            if changed:
+                self.backend.write(self._serialize(lines))
             return [line for line in lines if isinstance(line, AdhanJob)]
 
     def _parse_lines(self, crontab_text: str) -> list[RawLine | AdhanJob]:
@@ -261,6 +282,14 @@ class AdhanCronManager:
             candidates,
             key=lambda label: abs(target - (CANONICAL_TIMES[label][0] * 60 + CANONICAL_TIMES[label][1])),
         )
+
+    def _update_trigger_args(self, job: AdhanJob, audio_url: str, volume: str) -> None:
+        def repl(match: re.Match) -> str:
+            return f"trigger_ha.py {audio_url} {volume}"
+
+        job.command = TRIGGER_PATTERN.sub(repl, job.command, count=1)
+        job.audio_url = audio_url
+        job.volume = volume
 
     def _serialize(self, lines: list[RawLine | AdhanJob]) -> str:
         output: list[str] = []

@@ -11,6 +11,7 @@ from adhan_config import (
     PRAYER_ORDER,
     PRAYER_TIMES_FILE,
     STATUS_FILE,
+    default_audio_url,
     trigger_command,
 )
 
@@ -94,6 +95,7 @@ def apply_updates(now: datetime | None = None) -> int:
 
     manager = AdhanCronManager()
     _seed_jobs(manager, day_times)
+    current_audio_url = default_audio_url()
     overrides = _load_overrides()
     updates = []
     messages = []
@@ -112,13 +114,21 @@ def apply_updates(now: datetime | None = None) -> int:
             messages.append(f"No {prayer_name} time in today's prayer data")
             continue
 
-        if job.time != new_time:
-            messages.append(f"Updating {prayer_name}: {job.time} -> {new_time}")
+        command_changed = job.audio_url != current_audio_url or job.volume != DEFAULT_VOLUME
+        if job.time != new_time or command_changed:
+            changes = []
+            if job.time != new_time:
+                changes.append(f"time {job.time} -> {new_time}")
+            if command_changed:
+                changes.append("audio command")
+            messages.append(f"Updating {prayer_name}: {', '.join(changes)}")
             updates.append(
                 {
                     "id": job.job_id,
                     "time": new_time,
                     "enabled": job.enabled,
+                    "audio_url": current_audio_url,
+                    "volume": DEFAULT_VOLUME,
                 }
             )
         else:
