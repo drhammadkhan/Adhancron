@@ -2,7 +2,8 @@ name: adhancron
 
 services:
   adhan-manager:
-    image: ghcr.io/drhammadkhan/adhancron:latest
+    build: https://github.com/drhammadkhan/Adhancron.git#main
+    image: adhancron:latest
     container_name: adhan-manager
     restart: unless-stopped
     ports:
