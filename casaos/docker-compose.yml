@@ -1,6 +1,6 @@
 services:
   adhan-manager:
-    image: ghcr.io/drhammadkhan/Adhancron:latest
+    image: ghcr.io/drhammadkhan/adhancron:latest
     container_name: adhan-manager
     restart: unless-stopped
     ports:

@@ -10,25 +10,17 @@ This is the best long-term setup once you have published a Docker image to GitHu
 2. Publish a Docker image to GitHub Container Registry as:
 
    ```text
-   ghcr.io/YOUR_GITHUB_USERNAME/YOUR_REPOSITORY_NAME:latest
+   ghcr.io/drhammadkhan/adhancron:latest
    ```
 
 3. Confirm the package exists at:
 
    ```text
-   ghcr.io/drhammadkhan/Adhancron:latest
+   ghcr.io/drhammadkhan/adhancron:latest
    ```
 
 4. In this repo, open `casaos/docker-compose.yml`.
 5. Replace:
-
-   ```text
-   ghcr.io/drhammadkhan/Adhancron:latest
-   ```
-
-   with your actual GHCR image.
-
-6. Replace:
 
    ```text
    PUBLIC_BASE_URL: "http://YOUR_CASAOS_HOST_IP:8090"
@@ -40,16 +32,16 @@ This is the best long-term setup once you have published a Docker image to GitHu
    PUBLIC_BASE_URL: "http://YOUR_CASAOS_HOST_IP:8090"
    ```
 
-7. In CasaOS, open **App Store** -> **Custom Install**.
-8. Paste the contents of `casaos/docker-compose.yml`.
-9. Install the app.
-10. Open:
+6. In CasaOS, open **App Store** -> **Custom Install**.
+7. Paste the contents of `casaos/docker-compose.yml`.
+8. Install the app.
+9. Open:
 
     ```text
     http://YOUR_CASAOS_HOST_IP:8090
     ```
 
-11. In the web UI, save your Home Assistant token, URL, and speaker entity.
+10. In the web UI, save your Home Assistant token, URL, and speaker entity.
 
 ## Option B: Build Directly On The CasaOS Machine
 
