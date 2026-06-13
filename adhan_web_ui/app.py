@@ -51,8 +51,13 @@ def _settings_response() -> dict:
     import os
 
     current = settings.get_settings()
+    saved_token = bool(current.get("ha_token"))
+    env_token = bool(os.getenv("HA_TOKEN"))
     return {
-        "ha_token_set": bool(current.get("ha_token") or os.getenv("HA_TOKEN")),
+        "ha_token_set": saved_token or env_token,
+        "ha_token_source": "saved" if saved_token else "environment" if env_token else "missing",
+        "settings_file": str(SETTINGS_FILE),
+        "settings_file_exists": SETTINGS_FILE.exists(),
         "ha_url": current.get("ha_url") or os.getenv("HA_URL", "http://homeassistant.local:8123"),
         "ha_entity_id": current.get("ha_entity_id") or os.getenv("HA_ENTITY_ID", "media_player.bedroom_speaker"),
     }
@@ -77,8 +82,16 @@ def play_adhan() -> dict:
     trigger_script = Path(__file__).resolve().parent.parent / "trigger_ha.py"
 
     try:
-        subprocess.run(["python3", str(trigger_script), audio_url, DEFAULT_VOLUME], check=True)
-        return {"status": "playing"}
+        result = subprocess.run(
+            ["python3", str(trigger_script), audio_url, DEFAULT_VOLUME],
+            capture_output=True,
+            check=True,
+            text=True,
+        )
+        return {"status": "playing", "detail": result.stdout.strip()}
+    except subprocess.CalledProcessError as exc:
+        detail = (exc.stderr or exc.stdout or str(exc)).strip()
+        raise HTTPException(status_code=500, detail=detail) from exc
     except Exception as exc:
         raise HTTPException(status_code=500, detail=str(exc)) from exc
 

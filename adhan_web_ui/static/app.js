@@ -36,7 +36,12 @@ function renderSettings(settings) {
   haUrlInput.value = settings.ha_url || "";
   haEntityInput.value = settings.ha_entity_id || "";
   haTokenInput.value = "";
-  setSettingsStatus(settings.ha_token_set ? "Token saved" : "No token saved", settings.ha_token_set ? "success" : "warning");
+  const tokenStatus = settings.ha_token_source === "saved"
+    ? "Token saved to /data"
+    : settings.ha_token_source === "environment"
+    ? "Token from env"
+    : "No token saved";
+  setSettingsStatus(tokenStatus, settings.ha_token_set ? "success" : "warning");
 }
 
 function renderJobs() {
