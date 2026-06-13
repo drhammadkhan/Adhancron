@@ -1,3 +1,5 @@
+name: adhancron
+
 services:
   adhan-manager:
     image: ghcr.io/drhammadkhan/adhancron:latest
@@ -14,3 +16,22 @@ services:
       PUBLIC_BASE_URL: "http://YOUR_CASAOS_HOST_IP:8090"
       ADHAN_VOLUME: "0.8"
       TZ: "Europe/London"
+    labels:
+      icon: "https://raw.githubusercontent.com/drhammadkhan/Adhancron/main/casaos/icon.png"
+
+x-casaos:
+  architectures:
+    - amd64
+    - arm64
+  author: Hammad Khan
+  category: Utilities
+  hostname: ""
+  icon: "https://raw.githubusercontent.com/drhammadkhan/Adhancron/main/casaos/icon.png"
+  index: /
+  is_uncontrolled: false
+  port_map: "8090"
+  scheme: http
+  store_app_id: adhancron
+  title:
+    custom: Adhancron
+    en_us: Adhancron
