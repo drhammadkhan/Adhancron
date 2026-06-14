@@ -105,16 +105,28 @@ def apply_updates(now: datetime | None = None) -> int:
         if not prayer_name:
             continue
 
-        if overrides.get(prayer_name):
-            messages.append(f"Skipping {prayer_name}: manual override is active")
-            continue
-
         new_time = day_times.get(prayer_name)
         if not new_time:
             messages.append(f"No {prayer_name} time in today's prayer data")
             continue
 
         command_changed = job.audio_url != current_audio_url or job.volume != DEFAULT_VOLUME
+        if overrides.get(prayer_name):
+            if command_changed:
+                messages.append(f"Updating {prayer_name}: audio command (manual time override preserved)")
+                updates.append(
+                    {
+                        "id": job.job_id,
+                        "time": job.time,
+                        "enabled": job.enabled,
+                        "audio_url": current_audio_url,
+                        "volume": DEFAULT_VOLUME,
+                    }
+                )
+            else:
+                messages.append(f"Skipping {prayer_name}: manual override is active")
+            continue
+
         if job.time != new_time or command_changed:
             changes = []
             if job.time != new_time:

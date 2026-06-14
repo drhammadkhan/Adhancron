@@ -81,6 +81,33 @@ class CronManagerTests(unittest.TestCase):
         finally:
             tempdir.cleanup()
 
+    def test_update_jobs_can_refresh_audio_url(self):
+        manager, path, tempdir = self.make_manager(
+            """
+            # [Adhan: Dhuhr]
+            34 15 * * * cd /app && python3 /app/trigger_ha.py http://adhan-manager.local:8090/audio/adhan_final.mp3 0.8 >> /data/adhan.log 2>&1
+            """
+        )
+        try:
+            job = manager.list_jobs()[0]
+            manager.update_jobs(
+                [
+                    {
+                        "id": job.job_id,
+                        "enabled": True,
+                        "time": "15:35",
+                        "audio_url": "http://192.168.1.16:8090/audio/adhan_final.mp3",
+                        "volume": "0.8",
+                    }
+                ]
+            )
+            saved = path.read_text(encoding="utf-8")
+            self.assertIn("35 15 * * * cd /app", saved)
+            self.assertIn("http://192.168.1.16:8090/audio/adhan_final.mp3 0.8", saved)
+            self.assertNotIn("adhan-manager.local", saved)
+        finally:
+            tempdir.cleanup()
+
 
 if __name__ == "__main__":
     unittest.main()

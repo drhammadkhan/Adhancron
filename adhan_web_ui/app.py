@@ -223,8 +223,18 @@ def update_jobs(request: UpdateRequest) -> dict:
         all_jobs_before = manager.list_jobs()
         id_to_label = {j.job_id: j.label for j in all_jobs_before if j.label}
         
-        # 2. Perform the crontab update
-        jobs = manager.update_jobs([job.model_dump() for job in request.jobs])
+        # 2. Perform the crontab update. Also refresh the trigger command so
+        # manual time changes cannot preserve a stale audio URL.
+        jobs = manager.update_jobs(
+            [
+                {
+                    **job.model_dump(),
+                    "audio_url": default_audio_url(),
+                    "volume": DEFAULT_VOLUME,
+                }
+                for job in request.jobs
+            ]
+        )
         
         # 3. Apply overrides using the label captured before the ID changed
         for update in request.jobs:
