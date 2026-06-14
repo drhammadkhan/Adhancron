@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import os
 import sys
+from datetime import datetime
 
 import requests
 
@@ -22,12 +23,27 @@ def _load_settings() -> dict:
         return {}
 
 
+def _log(message: str) -> None:
+    timestamp = datetime.now().isoformat(timespec="seconds")
+    print(f"[{timestamp}] {message}", flush=True)
+
+
 def _setting(name: str, env_name: str, default: str = "") -> str:
     settings = _load_settings()
     value = settings.get(name)
     if isinstance(value, str) and value.strip():
         return value.strip()
     return os.getenv(env_name, default)
+
+
+def _setting_source(name: str, env_name: str) -> str:
+    settings = _load_settings()
+    value = settings.get(name)
+    if isinstance(value, str) and value.strip():
+        return "saved"
+    if os.getenv(env_name):
+        return "environment"
+    return "default"
 
 
 def _load_ha_token() -> str:
@@ -47,12 +63,22 @@ def _load_ha_token() -> str:
 
 
 def _service_url(service: str) -> str:
-    configured = _setting("ha_url", "HA_URL", DEFAULT_HA_BASE_URL).rstrip("/")
+    configured = _ha_base_url()
     if "/api/services/" in configured:
         base = configured.split("/api/services/", 1)[0]
     else:
         base = configured
     return f"{base}/api/services/media_player/{service}"
+
+
+def _ha_base_url() -> str:
+    return _setting("ha_url", "HA_URL", DEFAULT_HA_BASE_URL).rstrip("/")
+
+
+def _token_source() -> str:
+    if _setting("ha_token", "HA_TOKEN"):
+        return _setting_source("ha_token", "HA_TOKEN")
+    return "missing"
 
 
 def _post_service(service: str, payload: dict) -> requests.Response:
@@ -72,6 +98,14 @@ def _post_service(service: str, payload: dict) -> requests.Response:
 
 def trigger(media_url: str, volume: float = 0.8) -> None:
     entity_id = _setting("ha_entity_id", "HA_ENTITY_ID", "media_player.bedroom_speaker")
+    _log(
+        "Trigger start: "
+        f"media_url={media_url}, volume={volume}, "
+        f"ha_url={_ha_base_url()}, "
+        f"entity_id={entity_id}, "
+        f"token_source={_token_source()}, "
+        f"settings_file={os.getenv('ADHAN_SETTINGS_FILE', str(SETTINGS_FILE))}"
+    )
     _post_service(
         "volume_set",
         {"entity_id": entity_id, "volume_level": volume},
@@ -84,7 +118,7 @@ def trigger(media_url: str, volume: float = 0.8) -> None:
             "media_content_type": "music",
         },
     )
-    print(f"Triggered {media_url}, status: {response.status_code}")
+    _log(f"Trigger complete: media_url={media_url}, status={response.status_code}")
 
 
 def main(argv: list[str]) -> int:
@@ -98,4 +132,8 @@ def main(argv: list[str]) -> int:
 
 
 if __name__ == "__main__":
-    raise SystemExit(main(sys.argv))
+    try:
+        raise SystemExit(main(sys.argv))
+    except Exception as exc:
+        _log(f"Trigger failed: {type(exc).__name__}: {exc}")
+        raise
