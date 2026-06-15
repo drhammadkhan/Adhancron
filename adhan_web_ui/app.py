@@ -4,6 +4,7 @@ import mimetypes
 from pathlib import Path
 
 from fastapi import FastAPI, HTTPException, Request
+from fastapi import Response
 from fastapi.responses import FileResponse
 from fastapi.responses import StreamingResponse
 from fastapi.staticfiles import StaticFiles
@@ -134,8 +135,37 @@ def index() -> FileResponse:
     return FileResponse(BASE_DIR / "static" / "index.html")
 
 
+def _parse_range_header(range_header: str, file_size: int) -> tuple[int, int]:
+    try:
+        units, byte_range = range_header.split("=", 1)
+        if units.strip().lower() != "bytes" or "," in byte_range:
+            raise ValueError
+        start_text, end_text = byte_range.strip().split("-", 1)
+
+        if start_text:
+            start = int(start_text)
+            end = int(end_text) if end_text else file_size - 1
+        else:
+            suffix_length = int(end_text)
+            if suffix_length <= 0:
+                raise ValueError
+            start = max(file_size - suffix_length, 0)
+            end = file_size - 1
+
+        if start < 0 or end >= file_size or start > end:
+            raise ValueError
+        return start, end
+    except (TypeError, ValueError) as exc:
+        raise HTTPException(
+            status_code=416,
+            detail="Invalid range",
+            headers={"Content-Range": f"bytes */{file_size}"},
+        ) from exc
+
+
 @app.get("/audio/{filename}")
-def audio(filename: str, request: Request) -> StreamingResponse:
+@app.head("/audio/{filename}")
+def audio(filename: str, request: Request):
     path = (AUDIO_DIR / filename).resolve()
     if path.parent != AUDIO_DIR or path.suffix.lower() != ".mp3" or not path.exists():
         raise HTTPException(status_code=404, detail="Audio file not found")
@@ -155,24 +185,22 @@ def audio(filename: str, request: Request) -> StreamingResponse:
                 remaining -= len(chunk)
                 yield chunk
 
-    if range_header:
-        try:
-            units, byte_range = range_header.split("=", 1)
-            if units != "bytes":
-                raise ValueError
-            start_text, end_text = byte_range.split("-", 1)
-            start = int(start_text) if start_text else 0
-            end = int(end_text) if end_text else file_size - 1
-            if start < 0 or end >= file_size or start > end:
-                raise ValueError
-        except ValueError as exc:
-            raise HTTPException(status_code=416, detail="Invalid range") from exc
+    common_headers = {
+        "Accept-Ranges": "bytes",
+        "Cache-Control": "public, max-age=3600, no-transform",
+        "Content-Disposition": f'inline; filename="{path.name}"',
+    }
 
+    if range_header:
+        start, end = _parse_range_header(range_header, file_size)
         headers = {
+            **common_headers,
             "Accept-Ranges": "bytes",
             "Content-Range": f"bytes {start}-{end}/{file_size}",
             "Content-Length": str(end - start + 1),
         }
+        if request.method == "HEAD":
+            return Response(status_code=206, media_type=media_type, headers=headers)
         return StreamingResponse(
             iter_file(start, end),
             status_code=206,
@@ -181,9 +209,11 @@ def audio(filename: str, request: Request) -> StreamingResponse:
         )
 
     headers = {
-        "Accept-Ranges": "bytes",
+        **common_headers,
         "Content-Length": str(file_size),
     }
+    if request.method == "HEAD":
+        return Response(media_type=media_type, headers=headers)
     return StreamingResponse(
         iter_file(0, file_size - 1),
         media_type=media_type,
