@@ -18,7 +18,7 @@ services:
       ADHAN_VOLUME: "0.8"
       TZ: "Europe/London"
     labels:
-      icon: "https://raw.githubusercontent.com/drhammadkhan/Adhancron/main/casaos/icon.png"
+      icon: "https://raw.githubusercontent.com/drhammadkhan/Adhancron/main/casaos/adhan.jpg"
 
 x-casaos:
   architectures:
@@ -27,7 +27,7 @@ x-casaos:
   author: Hammad Khan
   category: Utilities
   hostname: ""
-  icon: "https://raw.githubusercontent.com/drhammadkhan/Adhancron/main/casaos/icon.png"
+  icon: "https://raw.githubusercontent.com/drhammadkhan/Adhancron/main/casaos/adhan.jpg"
   index: /
   is_uncontrolled: false
   port_map: "8090"
