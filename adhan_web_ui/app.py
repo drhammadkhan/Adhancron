@@ -10,7 +10,7 @@ from fastapi.responses import StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
-from adhan_config import APP_DIR, DEFAULT_VOLUME, OVERRIDE_FILE, PUBLIC_BASE_URL, SETTINGS_FILE, STATUS_FILE, default_audio_url
+from adhan_config import APP_DIR, DATA_DIR, DEFAULT_VOLUME, OVERRIDE_FILE, PUBLIC_BASE_URL, SETTINGS_FILE, STATUS_FILE, default_audio_url
 from trigger_ha import trigger
 try:
     from .cron_manager import AdhanCronManager, CronError
@@ -163,6 +163,33 @@ def _parse_range_header(range_header: str, file_size: int) -> tuple[int, int]:
         ) from exc
 
 
+def _log_audio_request(
+    request: Request,
+    filename: str,
+    status_code: int,
+    content_length: int,
+    range_header: str | None,
+    content_range: str | None = None,
+) -> None:
+    import json
+    from datetime import datetime
+
+    DATA_DIR.mkdir(parents=True, exist_ok=True)
+    payload = {
+        "time": datetime.now().isoformat(timespec="seconds"),
+        "method": request.method,
+        "filename": filename,
+        "status": status_code,
+        "content_length": content_length,
+        "range": range_header or "",
+        "content_range": content_range or "",
+        "client": request.client.host if request.client else "",
+        "user_agent": request.headers.get("user-agent", ""),
+    }
+    with open(DATA_DIR / "adhan_access.log", "a", encoding="utf-8") as f:
+        f.write(json.dumps(payload) + "\n")
+
+
 @app.get("/audio/{filename}")
 @app.head("/audio/{filename}")
 def audio(filename: str, request: Request):
@@ -193,12 +220,15 @@ def audio(filename: str, request: Request):
 
     if range_header:
         start, end = _parse_range_header(range_header, file_size)
+        content_range = f"bytes {start}-{end}/{file_size}"
+        content_length = end - start + 1
         headers = {
             **common_headers,
             "Accept-Ranges": "bytes",
-            "Content-Range": f"bytes {start}-{end}/{file_size}",
-            "Content-Length": str(end - start + 1),
+            "Content-Range": content_range,
+            "Content-Length": str(content_length),
         }
+        _log_audio_request(request, filename, 206, content_length, range_header, content_range)
         if request.method == "HEAD":
             return Response(status_code=206, media_type=media_type, headers=headers)
         return StreamingResponse(
@@ -212,6 +242,7 @@ def audio(filename: str, request: Request):
         **common_headers,
         "Content-Length": str(file_size),
     }
+    _log_audio_request(request, filename, 200, file_size, range_header)
     if request.method == "HEAD":
         return Response(media_type=media_type, headers=headers)
     return StreamingResponse(
