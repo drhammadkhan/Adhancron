@@ -170,6 +170,9 @@ def _log_audio_request(
     content_length: int,
     range_header: str | None,
     content_range: str | None = None,
+    event: str = "start",
+    bytes_sent: int = 0,
+    completed: bool | None = None,
 ) -> None:
     import json
     from datetime import datetime
@@ -185,7 +188,11 @@ def _log_audio_request(
         "content_range": content_range or "",
         "client": request.client.host if request.client else "",
         "user_agent": request.headers.get("user-agent", ""),
+        "event": event,
+        "bytes_sent": bytes_sent,
     }
+    if completed is not None:
+        payload["completed"] = completed
     with open(DATA_DIR / "adhan_access.log", "a", encoding="utf-8") as f:
         f.write(json.dumps(payload) + "\n")
 
@@ -201,16 +208,32 @@ def audio(filename: str, request: Request):
     range_header = request.headers.get("range")
     media_type = mimetypes.guess_type(path.name)[0] or "audio/mpeg"
 
-    def iter_file(start: int, end: int):
-        with open(path, "rb") as f:
-            f.seek(start)
-            remaining = end - start + 1
-            while remaining > 0:
-                chunk = f.read(min(64 * 1024, remaining))
-                if not chunk:
-                    break
-                remaining -= len(chunk)
-                yield chunk
+    def iter_file(start: int, end: int, status_code: int, content_range: str | None = None):
+        remaining = end - start + 1
+        total_bytes = remaining
+        bytes_sent = 0
+        try:
+            with open(path, "rb") as f:
+                f.seek(start)
+                while remaining > 0:
+                    chunk = f.read(min(64 * 1024, remaining))
+                    if not chunk:
+                        break
+                    remaining -= len(chunk)
+                    bytes_sent += len(chunk)
+                    yield chunk
+        finally:
+            _log_audio_request(
+                request,
+                filename,
+                status_code,
+                total_bytes,
+                range_header,
+                content_range,
+                event="finish",
+                bytes_sent=bytes_sent,
+                completed=bytes_sent == total_bytes,
+            )
 
     common_headers = {
         "Accept-Ranges": "bytes",
@@ -232,7 +255,7 @@ def audio(filename: str, request: Request):
         if request.method == "HEAD":
             return Response(status_code=206, media_type=media_type, headers=headers)
         return StreamingResponse(
-            iter_file(start, end),
+            iter_file(start, end, 206, content_range),
             status_code=206,
             media_type=media_type,
             headers=headers,
@@ -246,7 +269,7 @@ def audio(filename: str, request: Request):
     if request.method == "HEAD":
         return Response(media_type=media_type, headers=headers)
     return StreamingResponse(
-        iter_file(0, file_size - 1),
+        iter_file(0, file_size - 1, 200),
         media_type=media_type,
         headers=headers,
     )
