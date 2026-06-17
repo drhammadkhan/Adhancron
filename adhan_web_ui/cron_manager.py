@@ -143,7 +143,13 @@ class AdhanCronManager:
                 job.hour = hour
                 job.minute = minute
                 job.enabled = bool(payload["enabled"])
-                if payload.get("audio_url") or payload.get("volume"):
+                if payload.get("command"):
+                    job.command = payload["command"]
+                    trigger_match = TRIGGER_PATTERN.search(job.command)
+                    if trigger_match:
+                        job.audio_url = trigger_match.group("audio_url")
+                        job.volume = trigger_match.group("volume") or "0.8"
+                elif payload.get("audio_url") or payload.get("volume"):
                     self._update_trigger_args(
                         job,
                         payload.get("audio_url", job.audio_url),
@@ -152,13 +158,24 @@ class AdhanCronManager:
             self.backend.write(self._serialize(lines))
             return [line for line in lines if isinstance(line, AdhanJob)]
 
-    def update_all_job_commands(self, audio_url: str, volume: str) -> list[AdhanJob]:
+    def update_all_job_commands(
+        self,
+        audio_url: str,
+        volume: str,
+        command: str | None = None,
+    ) -> list[AdhanJob]:
         with self._lock:
             lines = self._parse_lines(self.backend.read())
             self._ensure_labels(lines)
             jobs = [line for line in lines if isinstance(line, AdhanJob)]
             changed = False
             for job in jobs:
+                if command and job.command != command:
+                    job.command = command
+                    job.audio_url = audio_url
+                    job.volume = volume
+                    changed = True
+                    continue
                 if job.audio_url == audio_url and job.volume == volume:
                     continue
                 self._update_trigger_args(job, audio_url, volume)

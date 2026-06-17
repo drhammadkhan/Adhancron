@@ -10,7 +10,7 @@ from fastapi.responses import StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
-from adhan_config import APP_DIR, DATA_DIR, DEFAULT_VOLUME, OVERRIDE_FILE, PUBLIC_BASE_URL, SETTINGS_FILE, STATUS_FILE, default_audio_url
+from adhan_config import APP_DIR, DATA_DIR, DEFAULT_VOLUME, OVERRIDE_FILE, PUBLIC_BASE_URL, SETTINGS_FILE, STATUS_FILE, default_audio_url, trigger_command
 from trigger_ha import trigger
 try:
     from .cron_manager import AdhanCronManager, CronError
@@ -77,7 +77,12 @@ def get_settings() -> dict:
 def update_settings(request: SettingsUpdate) -> dict:
     settings.update_settings(request.model_dump())
     try:
-        manager.update_all_job_commands(default_audio_url(), DEFAULT_VOLUME)
+        audio_url = default_audio_url()
+        manager.update_all_job_commands(
+            audio_url,
+            DEFAULT_VOLUME,
+            trigger_command(audio_url, DEFAULT_VOLUME),
+        )
     except CronError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     return _settings_response()
@@ -315,6 +320,7 @@ def update_jobs(request: UpdateRequest) -> dict:
                     **job.model_dump(),
                     "audio_url": default_audio_url(),
                     "volume": DEFAULT_VOLUME,
+                    "command": trigger_command(default_audio_url(), DEFAULT_VOLUME),
                 }
                 for job in request.jobs
             ]

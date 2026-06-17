@@ -81,6 +81,26 @@ class CronManagerTests(unittest.TestCase):
         finally:
             tempdir.cleanup()
 
+    def test_update_all_job_commands_can_replace_full_command(self):
+        manager, path, tempdir = self.make_manager(
+            """
+            # [Adhan: Dhuhr]
+            34 15 * * * cd /old && python3 /app/trigger_ha.py http://adhan-manager.local:8090/audio/adhan_final.mp3 0.8 >> /tmp/old.log 2>&1
+            """
+        )
+        try:
+            manager.update_all_job_commands(
+                "http://192.168.1.16:8090/audio/adhan_final.mp3",
+                "0.8",
+                "cd /app && . /data/adhan.env && /usr/local/bin/python /app/trigger_ha.py http://192.168.1.16:8090/audio/adhan_final.mp3 0.8 >> /data/adhan.log 2>&1",
+            )
+            saved = path.read_text(encoding="utf-8")
+            self.assertIn("34 15 * * * cd /app && . /data/adhan.env", saved)
+            self.assertNotIn("cd /old", saved)
+            self.assertNotIn("/tmp/old.log", saved)
+        finally:
+            tempdir.cleanup()
+
     def test_update_jobs_can_refresh_audio_url(self):
         manager, path, tempdir = self.make_manager(
             """
@@ -105,6 +125,34 @@ class CronManagerTests(unittest.TestCase):
             self.assertIn("35 15 * * * cd /app", saved)
             self.assertIn("http://192.168.1.16:8090/audio/adhan_final.mp3 0.8", saved)
             self.assertNotIn("adhan-manager.local", saved)
+        finally:
+            tempdir.cleanup()
+
+    def test_update_jobs_can_replace_full_command(self):
+        manager, path, tempdir = self.make_manager(
+            """
+            # [Adhan: Fajr]
+            13 3 * * * cd /old && python3 /app/trigger_ha.py http://adhan-manager.local:8090/audio/adhan_final.mp3 0.8 >> /tmp/old.log 2>&1
+            """
+        )
+        try:
+            job = manager.list_jobs()[0]
+            manager.update_jobs(
+                [
+                    {
+                        "id": job.job_id,
+                        "enabled": True,
+                        "time": "03:14",
+                        "command": "cd /app && . /data/adhan.env && /usr/local/bin/python /app/trigger_ha.py http://192.168.1.16:8090/audio/adhan_final.mp3 0.8 >> /data/adhan.log 2>&1",
+                    }
+                ]
+            )
+            saved = path.read_text(encoding="utf-8")
+            self.assertIn("14 3 * * * cd /app && . /data/adhan.env", saved)
+            self.assertIn("/usr/local/bin/python /app/trigger_ha.py", saved)
+            self.assertIn(">> /data/adhan.log 2>&1", saved)
+            self.assertNotIn("/tmp/old.log", saved)
+            self.assertNotIn("cd /old", saved)
         finally:
             tempdir.cleanup()
 

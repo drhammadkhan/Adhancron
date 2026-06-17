@@ -121,6 +121,7 @@ def apply_updates(now: datetime | None = None) -> int:
                         "enabled": job.enabled,
                         "audio_url": current_audio_url,
                         "volume": DEFAULT_VOLUME,
+                        "command": trigger_command(current_audio_url, DEFAULT_VOLUME),
                     }
                 )
             else:
@@ -141,6 +142,7 @@ def apply_updates(now: datetime | None = None) -> int:
                     "enabled": job.enabled,
                     "audio_url": current_audio_url,
                     "volume": DEFAULT_VOLUME,
+                    "command": trigger_command(current_audio_url, DEFAULT_VOLUME),
                 }
             )
         else:
