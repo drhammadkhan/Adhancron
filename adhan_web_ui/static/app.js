@@ -6,6 +6,7 @@ const state = {
 const jobGrid = document.getElementById("jobGrid");
 const emptyState = document.getElementById("emptyState");
 const statusBadge = document.getElementById("statusBadge");
+const versionBadge = document.getElementById("versionBadge");
 const refreshBtn = document.getElementById("refreshBtn");
 const saveBtn = document.getElementById("saveBtn");
 const template = document.getElementById("jobCardTemplate");
@@ -176,6 +177,21 @@ async function loadSettings() {
   }
 }
 
+async function loadVersion() {
+  if (!versionBadge) return;
+
+  try {
+    const response = await fetch("api/version");
+    const payload = await response.json();
+    if (!response.ok) {
+      throw new Error(payload.detail || "Failed to load version");
+    }
+    versionBadge.textContent = `Version ${payload.version}`;
+  } catch (error) {
+    versionBadge.textContent = "Version unavailable";
+  }
+}
+
 async function saveSettings() {
   if (!haUrlInput || !haEntityInput || !haTokenInput || !saveSettingsBtn) return;
 
@@ -314,6 +330,7 @@ async function loadPrayerTimes() {
 refreshBtn.addEventListener("click", () => {
   loadJobs();
   loadSettings();
+  loadVersion();
   loadPrayerTimes();
   loadFajrStatus();
 });
@@ -322,5 +339,6 @@ if (saveSettingsBtn) saveSettingsBtn.addEventListener("click", saveSettings);
 
 loadJobs();
 loadSettings();
+loadVersion();
 loadPrayerTimes();
 loadFajrStatus();

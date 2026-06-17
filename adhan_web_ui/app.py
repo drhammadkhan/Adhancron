@@ -23,6 +23,7 @@ except ImportError:
 
 BASE_DIR = Path(__file__).resolve().parent
 AUDIO_DIR = APP_DIR
+VERSION_FILE = APP_DIR / "VERSION"
 
 app = FastAPI(title="Adhan Cron Manager")
 app.mount("/static", StaticFiles(directory=BASE_DIR / "static"), name="static")
@@ -48,6 +49,27 @@ class SettingsUpdate(BaseModel):
     ha_url: str | None = None
     ha_entity_id: str | None = None
     public_base_url: str | None = None
+
+
+def _app_version() -> str:
+    try:
+        return VERSION_FILE.read_text(encoding="utf-8").strip()
+    except FileNotFoundError:
+        return "unknown"
+
+
+@app.get("/api/version")
+def version() -> dict:
+    return {
+        "app": "Adhancron",
+        "version": _app_version(),
+        "features": {
+            "full_cron_command_normalization": True,
+            "audio_stream_completion_logging": True,
+            "cast_friendly_mp3": True,
+            "saved_home_assistant_token": True,
+        },
+    }
 
 
 def _settings_response() -> dict:
