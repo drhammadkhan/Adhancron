@@ -2,7 +2,7 @@ FROM python:3.11-slim
 
 LABEL org.opencontainers.image.title="Adhancron" \
       org.opencontainers.image.source="https://github.com/drhammadkhan/Adhancron" \
-      org.opencontainers.image.version="2026.06.17-1"
+      org.opencontainers.image.version="2026.06.17-2"
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
@@ -13,7 +13,12 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     HA_URL=http://homeassistant.local:8123 \
     HA_ENTITY_ID=media_player.bedroom_speaker \
     ADHAN_AUDIO_FILE=adhan_final.mp3 \
-    ADHAN_VOLUME=0.8
+    ADHAN_VOLUME=0.8 \
+    ADHAN_PLAY_ATTEMPTS=2 \
+    ADHAN_PLAY_RETRY_DELAY=4 \
+    ADHAN_PRE_PLAY_DELAY=1 \
+    ADHAN_MEDIA_CONTENT_TYPE=audio/mpeg \
+    ADHAN_STOP_BEFORE_PLAY=true
 
 RUN apt-get update \
     && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
