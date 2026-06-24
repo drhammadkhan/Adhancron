@@ -17,7 +17,7 @@ The main supported use case is running this as a CasaOS or Docker container on a
 - Serves `adhan_final.mp3` at `/audio/adhan_final.mp3`.
 - Supports byte-range and `HEAD` requests for Cast/media-player playback.
 - Logs playback triggers and audio fetches for troubleshooting.
-- Uses a Cast-friendly playback sequence with retry support.
+- Uses Home Assistant's `announce` playback and confirms playback by polling the speaker's state.
 
 Older ESP32, MAX7219, Wi-Fi, and hardware test files are still present from earlier experiments, but they are not required for the Docker/Home Assistant workflow.
 
@@ -35,7 +35,7 @@ Adhancron has four moving parts:
    At `00:05` every day, cron runs `update_adhan.py`. That script loads today’s times from `prayer_times.json` and updates the prayer cron entries. Manual overrides are preserved.
 
 4. **Home Assistant trigger**
-   `trigger_ha.py` calls the Home Assistant REST API. It sets the speaker volume, stops any stale media session, waits briefly, then sends `media_player.play_media`. It sends a second play command by default to help Cast speakers that wake up but do not start playback on the first attempt.
+   `trigger_ha.py` calls the Home Assistant REST API. It sets the speaker volume, then sends `media_player.play_media` with `announce: true` — Home Assistant's purpose-built "play this sound now" mode, which wakes the device, plays once, and restores prior state. It then polls the media player's state until it reports `playing`. If the speaker never reaches a playing state (or the integration does not support `announce`), it falls back to a plain `play_media` and re-sends only while playback remains unconfirmed.
 
 ## Playback Flow
 
@@ -51,11 +51,13 @@ At prayer time:
 
 3. It contacts Home Assistant at the configured `HA_URL`.
 
-4. Home Assistant tells the configured `media_player` entity to play the public audio URL.
+4. Home Assistant tells the configured `media_player` entity to play the public audio URL using `announce: true`.
 
 5. The speaker or Cast device fetches the MP3 from Adhancron’s `/audio/adhan_final.mp3` endpoint.
 
-6. Adhancron logs both the Home Assistant trigger and the speaker’s audio request.
+6. `trigger_ha.py` polls the media player's state to confirm it actually started playing, and only re-sends the command if it did not.
+
+7. Adhancron logs both the Home Assistant trigger and the speaker’s audio request.
 
 ## Web UI
 
@@ -206,11 +208,11 @@ Environment variables:
 | `PUBLIC_BASE_URL` | Base URL where HA/speaker can reach Adhancron | empty |
 | `ADHAN_VOLUME` | Playback volume, `0.0` to `1.0` | `0.8` |
 | `ADHAN_AUDIO_FILE` | Audio file served from `/audio` | `adhan_final.mp3` |
-| `ADHAN_PLAY_ATTEMPTS` | Number of `play_media` commands per trigger | `2` |
-| `ADHAN_PLAY_RETRY_DELAY` | Delay between play attempts in seconds | `4` |
-| `ADHAN_PRE_PLAY_DELAY` | Delay after media stop before playback | `1` |
+| `ADHAN_USE_ANNOUNCE` | Use Home Assistant `announce: true` playback first | `true` |
+| `ADHAN_PLAY_ATTEMPTS` | Max fallback `play_media` attempts when playback is not confirmed | `2` |
+| `ADHAN_PLAYBACK_TIMEOUT` | Seconds to wait for the player to report `playing` | `15` |
+| `ADHAN_PLAYBACK_POLL_INTERVAL` | Seconds between player state polls | `1` |
 | `ADHAN_MEDIA_CONTENT_TYPE` | Media type sent to Home Assistant | `audio/mpeg` |
-| `ADHAN_STOP_BEFORE_PLAY` | Stop stale media session before playback | `true` |
 | `TZ` | Container timezone | `Europe/London` |
 
 Settings saved from the web UI take priority for Home Assistant URL, entity, token, and public audio URL.
@@ -340,29 +342,28 @@ You can also click **Save Settings** in the web UI to repair existing cron comma
 
 ### Speaker Goes Bing But No Adhan Plays
 
-This means Home Assistant reached the speaker, but the Cast/media session may not have completed playback.
+This means Home Assistant reached the speaker, but the media session may not have completed playback.
 
-Check:
+First check the trigger log to see what playback confirmation reported:
+
+```bash
+docker exec -it adhan-manager tail -100 /data/adhan.log
+```
+
+`trigger_ha.py` logs whether playback was confirmed:
+
+- `Trigger complete: playback confirmed (announce)` — the speaker reported a playing state. If you still heard nothing, the issue is downstream of Home Assistant (speaker volume, the speaker could not reach the audio URL, or a Cast app problem).
+- `Trigger complete: playback could not be confirmed` — the speaker never reported `playing` within `ADHAN_PLAYBACK_TIMEOUT`. Confirm the speaker entity is correct and that the **Public Audio URL** is reachable from the speaker.
+
+If your integration does not support `announce`, set `ADHAN_USE_ANNOUNCE=false` to use plain `play_media` confirmed by state polling.
+
+You can also check whether the speaker fetched the file at all:
 
 ```bash
 docker exec -it adhan-manager tail -100 /data/adhan_access.log
 ```
 
-If you see:
-
-```json
-"event": "finish", "completed": true
-```
-
-Adhancron served the whole file. The issue is likely Cast/speaker playback state.
-
-If you see:
-
-```json
-"completed": false
-```
-
-The speaker started fetching the MP3 but disconnected before the full file was served. The retry sequence is intended to reduce this.
+Note that Cast devices stream in chunks via range requests, so a single request showing `"completed": false` is normal and not by itself a failure — rely on the trigger log's confirmation line instead.
 
 ### Home Assistant URL Does Not Resolve
 

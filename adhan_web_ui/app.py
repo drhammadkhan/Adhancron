@@ -67,7 +67,8 @@ def version() -> dict:
             "full_cron_command_normalization": True,
             "audio_stream_completion_logging": True,
             "cast_friendly_mp3": True,
-            "cast_playback_retry": True,
+            "announce_playback": True,
+            "state_confirmed_playback": True,
             "saved_home_assistant_token": True,
         },
     }

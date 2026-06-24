@@ -13,11 +13,30 @@ from adhan_config import SETTINGS_FILE
 
 DEFAULT_HA_BASE_URL = "http://homeassistant.local:8123"
 REQUEST_TIMEOUT = float(os.getenv("HA_REQUEST_TIMEOUT", "15"))
-PLAY_ATTEMPTS = int(os.getenv("ADHAN_PLAY_ATTEMPTS", "2"))
-PLAY_RETRY_DELAY = float(os.getenv("ADHAN_PLAY_RETRY_DELAY", "4"))
-PRE_PLAY_DELAY = float(os.getenv("ADHAN_PRE_PLAY_DELAY", "1"))
 MEDIA_CONTENT_TYPE = os.getenv("ADHAN_MEDIA_CONTENT_TYPE", "audio/mpeg")
-STOP_BEFORE_PLAY = os.getenv("ADHAN_STOP_BEFORE_PLAY", "true").strip().lower() in {"1", "true", "yes", "on"}
+
+
+def _is_truthy(value: str) -> bool:
+    return value.strip().lower() in {"1", "true", "yes", "on"}
+
+
+# Try Home Assistant's announcement semantics first. `announce: true` is the
+# idiomatic "play this sound now" call: it wakes the device, plays once, and
+# restores prior state, which is what we want for an adhan. Not every
+# integration supports it, so we fall back to a plain play_media below.
+USE_ANNOUNCE = _is_truthy(os.getenv("ADHAN_USE_ANNOUNCE", "true"))
+
+# Closed-loop playback confirmation. After asking Home Assistant to play, we
+# poll the media_player state until it actually reports playing rather than
+# blindly firing the command again. We only re-send play_media if the device
+# never reached a playing state, which avoids interrupting playback that has
+# already started (the old unconditional double-fire could restart Cast media
+# mid-stream and cause the "started then cut out" symptom).
+PLAY_ATTEMPTS = max(1, int(os.getenv("ADHAN_PLAY_ATTEMPTS", "2")))
+PLAYBACK_CONFIRM_TIMEOUT = float(os.getenv("ADHAN_PLAYBACK_TIMEOUT", "15"))
+PLAYBACK_POLL_INTERVAL = float(os.getenv("ADHAN_PLAYBACK_POLL_INTERVAL", "1"))
+
+PLAYING_STATES = {"playing", "buffering"}
 
 
 def _load_settings() -> dict:
@@ -68,13 +87,19 @@ def _load_ha_token() -> str:
         raise RuntimeError("Set HA_TOKEN or configure HA_CONFIG_FILE") from exc
 
 
-def _service_url(service: str) -> str:
+def _api_root() -> str:
     configured = _ha_base_url()
     if "/api/services/" in configured:
-        base = configured.split("/api/services/", 1)[0]
-    else:
-        base = configured
-    return f"{base}/api/services/media_player/{service}"
+        return configured.split("/api/services/", 1)[0]
+    return configured
+
+
+def _service_url(service: str) -> str:
+    return f"{_api_root()}/api/services/media_player/{service}"
+
+
+def _state_url(entity_id: str) -> str:
+    return f"{_api_root()}/api/states/{entity_id}"
 
 
 def _ha_base_url() -> str:
@@ -107,15 +132,50 @@ def _try_post_service(service: str, payload: dict) -> requests.Response | None:
         return _post_service(service, payload)
     except requests.HTTPError as exc:
         status_code = exc.response.status_code if exc.response is not None else "unknown"
-        _log(f"Ignoring {service} failure before playback: HTTP {status_code}: {exc}")
+        _log(f"Ignoring {service} failure: HTTP {status_code}: {exc}")
     except requests.RequestException as exc:
-        _log(f"Ignoring {service} network failure before playback: {exc}")
+        _log(f"Ignoring {service} network failure: {exc}")
     return None
+
+
+def _entity_state(entity_id: str) -> str | None:
+    headers = {"Authorization": f"Bearer {_load_ha_token()}"}
+    response = requests.get(_state_url(entity_id), headers=headers, timeout=REQUEST_TIMEOUT)
+    response.raise_for_status()
+    return response.json().get("state")
+
+
+def _wait_until_playing(entity_id: str) -> bool:
+    """Poll the media_player until it reports a playing state or we time out."""
+    deadline = time.monotonic() + PLAYBACK_CONFIRM_TIMEOUT
+    last_state = "unknown"
+    while True:
+        try:
+            last_state = _entity_state(entity_id) or "unknown"
+            if last_state in PLAYING_STATES:
+                return True
+        except requests.RequestException as exc:
+            last_state = "error"
+            _log(f"State poll error for {entity_id}: {exc}")
+        if time.monotonic() >= deadline:
+            _log(f"Playback not confirmed for {entity_id}; last state={last_state}")
+            return False
+        time.sleep(PLAYBACK_POLL_INTERVAL)
+
+
+def _play(entity_id: str, media_url: str, announce: bool) -> requests.Response:
+    payload = {
+        "entity_id": entity_id,
+        "media_content_id": media_url,
+        "media_content_type": MEDIA_CONTENT_TYPE,
+    }
+    if announce:
+        payload["announce"] = True
+    return _post_service("play_media", payload)
 
 
 def trigger(media_url: str, volume: float = 0.8) -> None:
     entity_id = _setting("ha_entity_id", "HA_ENTITY_ID", "media_player.bedroom_speaker")
-    attempts = max(1, PLAY_ATTEMPTS)
     _log(
         "Trigger start: "
         f"media_url={media_url}, volume={volume}, "
@@ -123,35 +183,37 @@ def trigger(media_url: str, volume: float = 0.8) -> None:
         f"entity_id={entity_id}, "
         f"token_source={_token_source()}, "
         f"settings_file={os.getenv('ADHAN_SETTINGS_FILE', str(SETTINGS_FILE))}, "
-        f"attempts={attempts}, retry_delay={PLAY_RETRY_DELAY}, "
-        f"media_content_type={MEDIA_CONTENT_TYPE}, stop_before_play={STOP_BEFORE_PLAY}"
+        f"use_announce={USE_ANNOUNCE}, attempts={PLAY_ATTEMPTS}, "
+        f"confirm_timeout={PLAYBACK_CONFIRM_TIMEOUT}, "
+        f"media_content_type={MEDIA_CONTENT_TYPE}"
     )
-    if STOP_BEFORE_PLAY:
-        _try_post_service("media_stop", {"entity_id": entity_id})
-        if PRE_PLAY_DELAY > 0:
-            time.sleep(PRE_PLAY_DELAY)
 
-    _post_service(
-        "volume_set",
-        {"entity_id": entity_id, "volume_level": volume},
-    )
-    response = None
-    for attempt in range(1, attempts + 1):
-        response = _post_service(
-            "play_media",
-            {
-                "entity_id": entity_id,
-                "media_content_id": media_url,
-                "media_content_type": MEDIA_CONTENT_TYPE,
-            },
-        )
-        _log(
-            f"Play media attempt {attempt}/{attempts}: "
-            f"media_url={media_url}, status={response.status_code}"
-        )
-        if attempt < attempts and PLAY_RETRY_DELAY > 0:
-            time.sleep(PLAY_RETRY_DELAY)
-    _log(f"Trigger complete: media_url={media_url}, status={response.status_code if response else 'unknown'}")
+    # Set the level first so the adhan plays at the configured volume. A volume
+    # failure should not abort playback, so it is best-effort.
+    _try_post_service("volume_set", {"entity_id": entity_id, "volume_level": volume})
+
+    # 1. Preferred path: a single announcement, confirmed by state.
+    if USE_ANNOUNCE:
+        try:
+            response = _play(entity_id, media_url, announce=True)
+            _log(f"play_media announce sent: status={response.status_code}")
+            if _wait_until_playing(entity_id):
+                _log("Trigger complete: playback confirmed (announce)")
+                return
+            _log("Announce did not reach a playing state; falling back to standard play")
+        except requests.HTTPError as exc:
+            status_code = exc.response.status_code if exc.response is not None else "unknown"
+            _log(f"Announce not supported (HTTP {status_code}); falling back to standard play")
+
+    # 2. Fallback: plain play_media, re-sent only when state never confirms.
+    for attempt in range(1, PLAY_ATTEMPTS + 1):
+        response = _play(entity_id, media_url, announce=False)
+        _log(f"play_media attempt {attempt}/{PLAY_ATTEMPTS}: status={response.status_code}")
+        if _wait_until_playing(entity_id):
+            _log(f"Trigger complete: playback confirmed (standard, attempt {attempt})")
+            return
+
+    _log("Trigger complete: playback could not be confirmed")
 
 
 def main(argv: list[str]) -> int:

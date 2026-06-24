@@ -2,7 +2,7 @@ FROM python:3.11-slim
 
 LABEL org.opencontainers.image.title="Adhancron" \
       org.opencontainers.image.source="https://github.com/drhammadkhan/Adhancron" \
-      org.opencontainers.image.version="2026.06.17-2"
+      org.opencontainers.image.version="2026.06.22"
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
@@ -14,11 +14,11 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     HA_ENTITY_ID=media_player.bedroom_speaker \
     ADHAN_AUDIO_FILE=adhan_final.mp3 \
     ADHAN_VOLUME=0.8 \
+    ADHAN_USE_ANNOUNCE=true \
     ADHAN_PLAY_ATTEMPTS=2 \
-    ADHAN_PLAY_RETRY_DELAY=4 \
-    ADHAN_PRE_PLAY_DELAY=1 \
-    ADHAN_MEDIA_CONTENT_TYPE=audio/mpeg \
-    ADHAN_STOP_BEFORE_PLAY=true
+    ADHAN_PLAYBACK_TIMEOUT=15 \
+    ADHAN_PLAYBACK_POLL_INTERVAL=1 \
+    ADHAN_MEDIA_CONTENT_TYPE=audio/mpeg
 
 RUN apt-get update \
     && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
