@@ -104,55 +104,61 @@ The token is saved to:
 
 The API does not echo the token back to the browser.
 
+## Before You Install
+
+You will need three things from your existing setup. Have them ready before you start:
+
+1. **Home Assistant URL** — the address of your Home Assistant, including the port. Prefer the IP address over `homeassistant.local`, because the container often cannot resolve `.local` names.
+
+   ```text
+   http://192.168.1.22:8123
+   ```
+
+2. **Media player entity ID** — the speaker you want the adhan to play on. Find it in Home Assistant under **Developer Tools → States** (or **Settings → Devices & Services → Entities**) and filter for `media_player.`.
+
+   ```text
+   media_player.bedroom_speaker
+   ```
+
+3. **Long-lived access token** — in Home Assistant, click your **user profile** (bottom-left), scroll to **Long-Lived Access Tokens**, and choose **Create Token**. Copy it somewhere safe; Home Assistant only shows it once.
+
+You will also need the **IP address of the machine that runs the container** (your CasaOS box or Docker host). Home Assistant and the speaker must be able to reach Adhancron at `http://THAT_IP:8090`, so `localhost` will not work here.
+
 ## CasaOS Install
 
 The CasaOS template builds the Docker image directly from this GitHub repository.
 
-1. Open:
+1. Open the compose template and copy its contents:
 
    ```text
    https://github.com/drhammadkhan/Adhancron/blob/main/casaos/docker-compose.yml
    ```
 
-2. Copy the compose file.
+2. In CasaOS, go to **App Store → Custom Install** (use Docker Compose mode if offered) and paste the compose text.
 
-3. In CasaOS, go to **App Store**.
+3. Edit these values in the pasted compose before installing:
 
-4. Choose **Custom Install** or **Manual Install**.
+   - `PUBLIC_BASE_URL` → `http://YOUR_CASAOS_HOST_IP:8090` (the template ships with a placeholder IP — you must change it).
+   - `HA_URL` → your Home Assistant address, e.g. `http://192.168.1.22:8123`.
+   - `HA_ENTITY_ID` → your speaker entity, e.g. `media_player.bedroom_speaker`.
 
-5. Use Docker Compose mode if offered.
+   You can leave `HA_TOKEN` empty and save it later in the web UI (recommended), or paste it here.
 
-6. Paste the compose text.
+4. Confirm the port mapping is `8090:8090` and the data volume maps to `/DATA/AppData/adhan-manager:/data`.
 
-7. Make sure the port is:
-
-   ```text
-   8090:8090
-   ```
-
-8. Make sure the persistent data volume maps to:
-
-   ```text
-   /DATA/AppData/adhan-manager:/data
-   ```
-
-9. Install the app.
-
-10. Open:
+5. Install the app, then open:
 
    ```text
    http://YOUR_CASAOS_HOST_IP:8090
    ```
 
-11. Save Home Assistant settings in the web UI.
-
-12. Press **Play Adhan Now** to test.
+6. Complete the [First-Run Setup](#first-run-setup) below.
 
 See `CASAOS.md` for a slower step-by-step CasaOS guide.
 
 ## Docker Compose Install
 
-Clone the repo:
+Clone the repo and create your environment file:
 
 ```bash
 git clone https://github.com/drhammadkhan/Adhancron.git
@@ -160,22 +166,24 @@ cd Adhancron
 cp .env.example .env
 ```
 
-Edit `.env`:
+Edit `.env` with the values from **Before You Install**:
 
 ```text
 HA_URL=http://YOUR_HOME_ASSISTANT_IP:8123
 HA_ENTITY_ID=media_player.bedroom_speaker
 PUBLIC_BASE_URL=http://YOUR_DOCKER_HOST_IP:8090
 ADHAN_VOLUME=0.8
+# Optional: you can paste the token here, or save it from the web UI later.
+HA_TOKEN=
 ```
 
-Start:
+Build and start:
 
 ```bash
 docker compose up -d --build
 ```
 
-Open:
+Open the dashboard, then complete the [First-Run Setup](#first-run-setup):
 
 ```text
 http://YOUR_DOCKER_HOST_IP:8090
@@ -195,6 +203,23 @@ docker run -d \
   -e PUBLIC_BASE_URL="http://YOUR_DOCKER_HOST_IP:8090" \
   adhan-manager
 ```
+
+Then open `http://YOUR_DOCKER_HOST_IP:8090` and complete the [First-Run Setup](#first-run-setup).
+
+## First-Run Setup
+
+However you installed, finish setup from the web dashboard at `http://YOUR_HOST_IP:8090`:
+
+1. In the **Home Assistant settings** panel, confirm or fill in:
+   - **Home Assistant URL** (e.g. `http://192.168.1.22:8123`)
+   - **Speaker Entity** (e.g. `media_player.bedroom_speaker`)
+   - **Public Audio URL** (e.g. `http://YOUR_HOST_IP:8090`)
+   - **Access Token** — paste your long-lived token here if you did not set `HA_TOKEN`.
+2. Click **Save Settings**. The token is written to `/data/adhan_settings.json` (owner-only) and is never shown back to the browser.
+3. Click **Play Adhan Now** to test. The speaker should play the adhan within a few seconds.
+4. Check that the prayer cards show today's times. The schedule auto-updates daily at `00:05`; you can also edit any time manually and toggle a **Manual** override so the daily update leaves it alone.
+
+If nothing plays, see [Troubleshooting](#troubleshooting) — the trigger log at `/data/adhan.log` will say whether playback was confirmed.
 
 ## Configuration
 
