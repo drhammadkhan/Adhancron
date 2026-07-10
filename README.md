@@ -8,7 +8,7 @@ The main supported use case is running this as a CasaOS or Docker container on a
 
 - Runs a web dashboard on port `8090`.
 - Creates and maintains cron jobs for Fajr, Dhuhr, Asr, Maghrib, and Isha.
-- Updates prayer times daily from `prayer_times.json`.
+- Generates official Alislam prayer times from the saved home latitude and longitude.
 - Lets you manually edit prayer times from the web UI.
 - Lets you disable or re-enable individual prayer jobs.
 - Supports manual overrides so auto-update does not overwrite a custom time.
@@ -31,8 +31,8 @@ Adhancron has four moving parts:
 2. **Cron scheduler**
    The container runs cron internally. Each prayer has a cron entry that calls `trigger_ha.py` with the public MP3 URL and volume.
 
-3. **Daily prayer-time updater**
-   At `00:05` every day, cron runs `update_adhan.py`. That script loads today’s times from `prayer_times.json` and updates the prayer cron entries. Manual overrides are preserved.
+3. **Location-based prayer-time updater**
+   The dashboard saves the home latitude and longitude, then asks Alislam for the official monthly timetable for that location and stores it in `/data/prayer_times.json`. At `00:05` every day, cron runs `update_adhan.py`, checks that the calendar covers the current and following year, and updates the prayer cron entries. Manual overrides are preserved.
 
 4. **Home Assistant trigger**
    `trigger_ha.py` calls the Home Assistant REST API. It sets the speaker volume, then sends `media_player.play_media` with `announce: true` — Home Assistant's purpose-built "play this sound now" mode, which wakes the device, plays once, and restores prior state. It then polls the media player's state until it reports `playing`. If the speaker never reaches a playing state (or the integration does not support `announce`), it falls back to a plain `play_media` and re-sends only while playback remains unconfirmed.
@@ -215,9 +215,11 @@ However you installed, finish setup from the web dashboard at `http://YOUR_HOST_
    - **Speaker Entity** (e.g. `media_player.bedroom_speaker`)
    - **Public Audio URL** (e.g. `http://YOUR_HOST_IP:8090`)
    - **Access Token** — paste your long-lived token here if you did not set `HA_TOKEN`.
-2. Click **Save Settings**. The token is written to `/data/adhan_settings.json` (owner-only) and is never shown back to the browser.
-3. Click **Play Adhan Now** to test. The speaker should play the adhan within a few seconds.
-4. Check that the prayer cards show today's times. The schedule auto-updates daily at `00:05`; you can also edit any time manually and toggle a **Manual** override so the daily update leaves it alone.
+   - **Latitude** and **Longitude** — enter these manually or choose **Use This Device's Location**.
+2. Click **Save Settings**. The token and location are written to `/data/adhan_settings.json` (owner-only); the app downloads and saves the official timetable at `/data/prayer_times.json`, then applies today's cron schedule.
+3. Ensure the container `TZ` value matches your home timezone. Cron uses this timezone when it runs the saved local times.
+4. Click **Play Adhan Now** to test. The speaker should play the adhan within a few seconds.
+5. Check that the prayer cards show today's times. The schedule auto-updates daily at `00:05`; you can also edit any time manually and toggle a **Manual** override so the daily update leaves it alone.
 
 If nothing plays, see [Troubleshooting](#troubleshooting) — the trigger log at `/data/adhan.log` will say whether playback was confirmed.
 
@@ -233,6 +235,8 @@ Environment variables:
 | `PUBLIC_BASE_URL` | Base URL where HA/speaker can reach Adhancron | empty |
 | `ADHAN_VOLUME` | Playback volume, `0.0` to `1.0` | `0.8` |
 | `ADHAN_AUDIO_FILE` | Audio file served from `/audio` | `adhan_final.mp3` |
+| `ADHAN_LATITUDE` | Home latitude when not saved through the web UI | empty |
+| `ADHAN_LONGITUDE` | Home longitude when not saved through the web UI | empty |
 | `ADHAN_USE_ANNOUNCE` | Use Home Assistant `announce: true` playback first | `true` |
 | `ADHAN_PLAY_ATTEMPTS` | Max fallback `play_media` attempts when playback is not confirmed | `2` |
 | `ADHAN_PLAYBACK_TIMEOUT` | Seconds to wait for the player to report `playing` | `15` |
@@ -240,7 +244,7 @@ Environment variables:
 | `ADHAN_MEDIA_CONTENT_TYPE` | Media type sent to Home Assistant | `audio/mpeg` |
 | `TZ` | Container timezone | `Europe/London` |
 
-Settings saved from the web UI take priority for Home Assistant URL, entity, token, and public audio URL.
+Settings saved from the web UI take priority for Home Assistant URL, entity, token, public audio URL, latitude, and longitude.
 
 ## Persistent Data
 
@@ -255,6 +259,7 @@ The `/data` volume contains:
 | `adhan_settings.json` | Saved Home Assistant settings and token |
 | `adhan_overrides.json` | Manual override flags |
 | `adhan_update_status.json` | Last updater status shown in the UI |
+| `prayer_times.json` | Alislam timetable generated for the saved location |
 
 Do not commit files from `/data`. They may contain local configuration or secrets.
 

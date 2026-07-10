@@ -15,6 +15,10 @@ const haSettingsBadge = document.getElementById("haSettingsBadge");
 const haUrlInput = document.getElementById("haUrlInput");
 const haEntityInput = document.getElementById("haEntityInput");
 const publicBaseUrlInput = document.getElementById("publicBaseUrlInput");
+const latitudeInput = document.getElementById("latitudeInput");
+const longitudeInput = document.getElementById("longitudeInput");
+const useLocationBtn = document.getElementById("useLocationBtn");
+const locationHint = document.getElementById("locationHint");
 const haTokenInput = document.getElementById("haTokenInput");
 const saveSettingsBtn = document.getElementById("saveSettingsBtn");
 
@@ -38,6 +42,9 @@ function renderSettings(settings, overrideMessage = null) {
   haUrlInput.value = settings.ha_url || "";
   haEntityInput.value = settings.ha_entity_id || "";
   if (publicBaseUrlInput) publicBaseUrlInput.value = settings.public_base_url || "";
+  if (latitudeInput) latitudeInput.value = settings.latitude || "";
+  if (longitudeInput) longitudeInput.value = settings.longitude || "";
+  if (locationHint) locationHint.textContent = `Timings are fetched from Alislam for this location. Container timezone: ${settings.timezone || "unknown"}.`;
   haTokenInput.value = "";
   const tokenStatus = settings.ha_token_source === "saved"
     ? "Token saved to /data"
@@ -200,6 +207,12 @@ async function saveSettings() {
     ha_entity_id: haEntityInput.value,
     public_base_url: publicBaseUrlInput ? publicBaseUrlInput.value : "",
   };
+  const latitude = latitudeInput ? latitudeInput.value.trim() : "";
+  const longitude = longitudeInput ? longitudeInput.value.trim() : "";
+  if (latitude || longitude) {
+    payload.latitude = latitude;
+    payload.longitude = longitude;
+  }
   if (haTokenInput.value.trim()) {
     payload.ha_token = haTokenInput.value;
   }
@@ -219,7 +232,7 @@ async function saveSettings() {
     if (!response.ok) {
       throw new Error(data.detail || "Failed to save settings");
     }
-    renderSettings(data, "Settings saved");
+    renderSettings(data, data.prayer_times_message || "Settings saved");
   } catch (error) {
     setSettingsStatus(error.message, "error");
   } finally {
@@ -336,6 +349,29 @@ refreshBtn.addEventListener("click", () => {
 });
 saveBtn.addEventListener("click", saveJobs);
 if (saveSettingsBtn) saveSettingsBtn.addEventListener("click", saveSettings);
+if (useLocationBtn) {
+  useLocationBtn.addEventListener("click", () => {
+    if (!navigator.geolocation) {
+      setSettingsStatus("This browser cannot provide a location", "error");
+      return;
+    }
+    useLocationBtn.disabled = true;
+    setSettingsStatus("Getting this device's location...", "ghost");
+    navigator.geolocation.getCurrentPosition(
+      (position) => {
+        if (latitudeInput) latitudeInput.value = position.coords.latitude.toFixed(5);
+        if (longitudeInput) longitudeInput.value = position.coords.longitude.toFixed(5);
+        setSettingsStatus("Location set. Save Settings to generate timings.", "success");
+        useLocationBtn.disabled = false;
+      },
+      (error) => {
+        setSettingsStatus(`Unable to get location: ${error.message}`, "error");
+        useLocationBtn.disabled = false;
+      },
+      { enableHighAccuracy: false, timeout: 10000, maximumAge: 86400000 },
+    );
+  });
+}
 
 loadJobs();
 loadSettings();

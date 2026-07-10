@@ -14,6 +14,8 @@ services:
       HA_ENTITY_ID: "${HA_ENTITY_ID:-media_player.bedroom_speaker}"
       PUBLIC_BASE_URL: "${PUBLIC_BASE_URL:-http://adhan-manager.local:8090}"
       ADHAN_VOLUME: "${ADHAN_VOLUME:-0.8}"
+      ADHAN_LATITUDE: "${ADHAN_LATITUDE:-}"
+      ADHAN_LONGITUDE: "${ADHAN_LONGITUDE:-}"
       ADHAN_USE_ANNOUNCE: "${ADHAN_USE_ANNOUNCE:-true}"
       ADHAN_PLAY_ATTEMPTS: "${ADHAN_PLAY_ATTEMPTS:-2}"
       ADHAN_PLAYBACK_TIMEOUT: "${ADHAN_PLAYBACK_TIMEOUT:-15}"

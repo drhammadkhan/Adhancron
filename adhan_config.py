@@ -11,7 +11,7 @@ DATA_DIR = Path(os.getenv("ADHAN_DATA_DIR", APP_DIR / "data")).resolve()
 ENV_FILE = DATA_DIR / "adhan.env"
 
 PRAYER_TIMES_FILE = Path(
-    os.getenv("PRAYER_TIMES_FILE", str(APP_DIR / "prayer_times.json"))
+    os.getenv("PRAYER_TIMES_FILE", str(DATA_DIR / "prayer_times.json"))
 ).resolve()
 OVERRIDE_FILE = Path(
     os.getenv("ADHAN_OVERRIDE_FILE", str(DATA_DIR / "adhan_overrides.json"))

@@ -10,7 +10,9 @@ from fastapi.responses import StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
-from adhan_config import APP_DIR, DATA_DIR, DEFAULT_VOLUME, OVERRIDE_FILE, PUBLIC_BASE_URL, SETTINGS_FILE, STATUS_FILE, default_audio_url, trigger_command
+from adhan_config import APP_DIR, DATA_DIR, DEFAULT_VOLUME, OVERRIDE_FILE, PRAYER_TIMES_FILE, PUBLIC_BASE_URL, SETTINGS_FILE, STATUS_FILE, default_audio_url, trigger_command
+from generate_prayer_times import generate_configured_times, location_from_values
+from apply_adhan_cron import apply_updates
 from trigger_ha import trigger
 try:
     from .cron_manager import AdhanCronManager, CronError
@@ -49,6 +51,8 @@ class SettingsUpdate(BaseModel):
     ha_url: str | None = None
     ha_entity_id: str | None = None
     public_base_url: str | None = None
+    latitude: str | None = None
+    longitude: str | None = None
 
 
 def _app_version() -> str:
@@ -70,6 +74,7 @@ def version() -> dict:
             "announce_playback": True,
             "state_confirmed_playback": True,
             "saved_home_assistant_token": True,
+            "location_based_alislam_timings": True,
         },
     }
 
@@ -88,6 +93,9 @@ def _settings_response() -> dict:
         "ha_url": current.get("ha_url") or os.getenv("HA_URL", "http://homeassistant.local:8123"),
         "ha_entity_id": current.get("ha_entity_id") or os.getenv("HA_ENTITY_ID", "media_player.bedroom_speaker"),
         "public_base_url": current.get("public_base_url") or PUBLIC_BASE_URL or "",
+        "latitude": current.get("latitude") or os.getenv("ADHAN_LATITUDE", ""),
+        "longitude": current.get("longitude") or os.getenv("ADHAN_LONGITUDE", ""),
+        "timezone": os.getenv("TZ", "UTC"),
         "audio_url": default_audio_url(),
     }
 
@@ -99,7 +107,22 @@ def get_settings() -> dict:
 
 @app.put("/api/settings")
 def update_settings(request: SettingsUpdate) -> dict:
+    if request.latitude is not None or request.longitude is not None:
+        current = settings.get_settings()
+        latitude = request.latitude if request.latitude is not None else current.get("latitude", "")
+        longitude = request.longitude if request.longitude is not None else current.get("longitude", "")
+        try:
+            location_from_values(latitude.strip(), longitude.strip())
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
     settings.update_settings(request.model_dump())
+    location_updated = request.latitude is not None or request.longitude is not None
+    if location_updated:
+        try:
+            generation = generate_configured_times()
+            apply_updates()
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
     try:
         audio_url = default_audio_url()
         manager.update_all_job_commands(
@@ -109,7 +132,10 @@ def update_settings(request: SettingsUpdate) -> dict:
         )
     except CronError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
-    return _settings_response()
+    response = _settings_response()
+    if location_updated:
+        response["prayer_times_message"] = generation.summary
+    return response
 
 
 @app.post("/api/play")
@@ -126,14 +152,11 @@ def play_adhan() -> dict:
 @app.get("/api/prayer-times")
 def get_prayer_times() -> dict:
     import json
-    from pathlib import Path
-    
-    json_path = Path(__file__).resolve().parent.parent / "prayer_times.json"
-    if not json_path.exists():
+    if not PRAYER_TIMES_FILE.exists():
         return {"error": "prayer_times.json not found"}
         
     try:
-        with open(json_path, "r") as f:
+        with open(PRAYER_TIMES_FILE, "r", encoding="utf-8") as f:
             return json.load(f)
     except Exception as exc:
         raise HTTPException(status_code=500, detail=str(exc)) from exc

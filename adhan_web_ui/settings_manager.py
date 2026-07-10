@@ -7,6 +7,15 @@ from pathlib import Path
 
 
 class SettingsManager:
+    SETTING_KEYS = {
+        "ha_token",
+        "ha_url",
+        "ha_entity_id",
+        "public_base_url",
+        "latitude",
+        "longitude",
+    }
+
     def __init__(self, path: str | Path) -> None:
         self.path = Path(path)
         self._lock = threading.Lock()
@@ -21,14 +30,14 @@ class SettingsManager:
         return {
             key: value
             for key, value in data.items()
-            if key in {"ha_token", "ha_url", "ha_entity_id", "public_base_url"} and isinstance(value, str)
+            if key in self.SETTING_KEYS and isinstance(value, str)
         }
 
     def update_settings(self, updates: dict[str, str | None]) -> dict[str, str]:
         with self._lock:
             data = self.get_settings()
             for key, value in updates.items():
-                if key not in {"ha_token", "ha_url", "ha_entity_id", "public_base_url"}:
+                if key not in self.SETTING_KEYS:
                     continue
                 if value is None:
                     continue

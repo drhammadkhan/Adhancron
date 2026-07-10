@@ -2,7 +2,7 @@ FROM python:3.11-slim
 
 LABEL org.opencontainers.image.title="Adhancron" \
       org.opencontainers.image.source="https://github.com/drhammadkhan/Adhancron" \
-      org.opencontainers.image.version="2026.06.22"
+      org.opencontainers.image.version="2026.07.10"
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
