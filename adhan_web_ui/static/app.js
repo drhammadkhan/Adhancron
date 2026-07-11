@@ -59,7 +59,7 @@ function renderSettings(settings, overrideMessage = null) {
   syncPlaybackMethod(settings.playback_method || "home_assistant");
   if (latitudeInput) latitudeInput.value = settings.latitude || "";
   if (longitudeInput) longitudeInput.value = settings.longitude || "";
-  if (locationHint) locationHint.textContent = `Timings are calculated locally. Container timezone: ${settings.timezone || "unknown"}.`;
+  if (locationHint) locationHint.textContent = `Timings are calculated locally from the saved coordinates and update each day. Container timezone: ${settings.timezone || "unknown"}.`;
   haTokenInput.value = "";
   if (settings.playback_method === "google_cast") {
     const configured = Boolean(settings.google_cast_host);

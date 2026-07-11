@@ -144,6 +144,7 @@
           </details>
           <details class="rounded-lg border border-slate-200 bg-white/45 px-4 py-3">
             <summary class="cursor-pointer text-sm font-medium text-slate-600">Location and prayer times</summary>
+            <p class="mt-3 text-sm text-slate-600">Set your home's location once so Adhancron can calculate and update the five daily prayer times for you. Use this device's location while you are at home, or enter the coordinates manually.</p>
             <div class="mt-3 grid gap-4 lg:grid-cols-[1fr_1fr_auto] lg:items-end">
               <label class="form-control">
                 <div class="label">
@@ -159,7 +160,7 @@
               </label>
               <button id="useLocationBtn" type="button" class="btn btn-outline btn-success w-full lg:w-auto">Use This Device's Location</button>
             </div>
-            <p id="locationHint" class="mt-3 text-sm text-slate-500">Timings are calculated locally for the location shown above. Set the container timezone to match your home.</p>
+            <p id="locationHint" class="mt-3 text-sm text-slate-500">Timings are calculated locally from the saved coordinates and update each day. Ensure the container timezone matches your home.</p>
           </details>
           <div id="homeAssistantTokenFields" class="grid gap-4 lg:grid-cols-[1fr_auto] lg:items-end">
             <label class="form-control">
@@ -271,6 +272,6 @@
         return false;
       }
     </script>
-    <script src="static/app.js?v=11"></script>
+    <script src="static/app.js?v=12"></script>
   </body>
 </html>
