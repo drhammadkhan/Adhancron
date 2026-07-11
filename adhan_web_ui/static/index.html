@@ -93,11 +93,12 @@
       </section>
 
       <section class="mt-6 rounded-[2rem] border border-white/60 bg-white/40 p-6 shadow-glow sm:p-8">
-        <div class="flex flex-col gap-5">
-          <div class="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-            <h2 class="font-display text-2xl sm:text-3xl">Playback</h2>
+        <details>
+          <summary class="flex cursor-pointer list-none flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+            <span class="font-display text-2xl sm:text-3xl">Settings</span>
             <span id="haSettingsBadge" class="badge badge-ghost px-4 py-3 text-xs sm:text-sm">Checking settings...</span>
-          </div>
+          </summary>
+          <div class="mt-5 flex flex-col gap-5">
           <label class="form-control max-w-md">
             <div class="label">
               <span class="label-text text-sm font-medium">Playback Method</span>
@@ -169,7 +170,8 @@
             </label>
             <button id="saveSettingsBtn" type="button" class="btn btn-success w-full lg:w-auto">Save Settings</button>
           </div>
-        </div>
+          </div>
+        </details>
       </section>
 
       <section class="mt-6 grid gap-3 sm:gap-4 sm:grid-cols-2 xl:grid-cols-3" id="jobGrid"></section>
@@ -269,6 +271,6 @@
         return false;
       }
     </script>
-    <script src="static/app.js?v=10"></script>
+    <script src="static/app.js?v=11"></script>
   </body>
 </html>
