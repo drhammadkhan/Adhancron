@@ -121,18 +121,12 @@
               <input id="haEntityInput" type="text" class="input input-bordered w-full bg-white/80" placeholder="media_player.bedroom_speaker" />
             </label>
           </div>
-          <div id="googleCastFields" class="hidden grid gap-4 lg:grid-cols-[1fr_160px]">
+          <div id="googleCastFields" class="hidden">
             <label class="form-control">
               <div class="label">
                 <span class="label-text text-sm font-medium">Google Cast Speaker IP or Hostname</span>
               </div>
               <input id="googleCastHostInput" type="text" class="input input-bordered w-full bg-white/80" placeholder="192.168.1.24" />
-            </label>
-            <label class="form-control">
-              <div class="label">
-                <span class="label-text text-sm font-medium">Cast Port</span>
-              </div>
-              <input id="googleCastPortInput" type="number" min="1" max="65535" class="input input-bordered w-full bg-white/80" value="8009" />
             </label>
           </div>
           <details class="rounded-lg border border-slate-200 bg-white/45 px-4 py-3">
@@ -243,7 +237,6 @@
           const playbackMethod = document.getElementById("playbackMethodInput")?.value;
           if (playbackMethod === "google_cast") {
             const host = document.getElementById("googleCastHostInput")?.value.trim();
-            const port = document.getElementById("googleCastPortInput")?.value.trim() || "8009";
             if (!host) throw new Error("Enter the Google Cast speaker IP address or hostname first");
 
             // Persist the direct-Cast choice before the trigger. This keeps the
@@ -254,7 +247,6 @@
               body: JSON.stringify({
                 playback_method: "google_cast",
                 google_cast_host: host,
-                google_cast_port: port,
                 public_base_url: document.getElementById("publicBaseUrlInput")?.value.trim() || null,
               }),
             });
@@ -274,6 +266,6 @@
         return false;
       }
     </script>
-    <script src="static/app.js?v=8"></script>
+    <script src="static/app.js?v=9"></script>
   </body>
 </html>

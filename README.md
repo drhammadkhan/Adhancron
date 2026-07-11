@@ -110,8 +110,6 @@ This does not need a Home Assistant URL, entity ID, or token. Save:
 
 - **Google Cast Speaker IP or Hostname**
   Example: `192.168.1.24`
-- **Cast Port**
-  Normally leave this as `8009`.
 Use the speaker's stable LAN IP address where possible. You can find it in your router's device list or in the Google Home app's device information. The Google speaker must be able to reach the public audio URL directly.
 
 Adhancron automatically uses the address you used to open its dashboard, for example `http://192.168.1.16:8090`. Only use **Advanced audio address** in the dashboard if that address is not reachable by the speaker.
@@ -251,7 +249,7 @@ Environment variables:
 | `HA_TOKEN` | Optional Home Assistant token | empty |
 | `ADHAN_PLAYBACK_METHOD` | `home_assistant` or `google_cast` | `home_assistant` |
 | `GOOGLE_CAST_HOST` | Google Cast speaker IP address or hostname | empty |
-| `GOOGLE_CAST_PORT` | Google Cast control port | `8009` |
+| `GOOGLE_CAST_PORT` | Advanced Google Cast control-port override | `8009` |
 | `PUBLIC_BASE_URL` | Optional advanced audio URL override | automatic dashboard URL |
 | `ADHAN_VOLUME` | Playback volume, `0.0` to `1.0` | `0.8` |
 | `ADHAN_AUDIO_FILE` | Audio file served from `/audio` | `adhan_final.mp3` |

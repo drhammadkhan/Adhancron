@@ -17,7 +17,6 @@ const haEntityInput = document.getElementById("haEntityInput");
 const publicBaseUrlInput = document.getElementById("publicBaseUrlInput");
 const playbackMethodInput = document.getElementById("playbackMethodInput");
 const googleCastHostInput = document.getElementById("googleCastHostInput");
-const googleCastPortInput = document.getElementById("googleCastPortInput");
 const homeAssistantFields = document.getElementById("homeAssistantFields");
 const homeAssistantTokenFields = document.getElementById("homeAssistantTokenFields");
 const googleCastFields = document.getElementById("googleCastFields");
@@ -57,7 +56,6 @@ function renderSettings(settings, overrideMessage = null) {
   if (publicBaseUrlInput) publicBaseUrlInput.value = settings.public_base_url || "";
   if (playbackMethodInput) playbackMethodInput.value = settings.playback_method || "home_assistant";
   if (googleCastHostInput) googleCastHostInput.value = settings.google_cast_host || "";
-  if (googleCastPortInput) googleCastPortInput.value = settings.google_cast_port || "8009";
   syncPlaybackMethod(settings.playback_method || "home_assistant");
   if (latitudeInput) latitudeInput.value = settings.latitude || "";
   if (longitudeInput) longitudeInput.value = settings.longitude || "";
@@ -235,7 +233,6 @@ async function saveSettings() {
   if (publicBaseUrlInput?.value.trim()) payload.public_base_url = publicBaseUrlInput.value.trim();
   if (payload.playback_method === "google_cast") {
     payload.google_cast_host = googleCastHostInput ? googleCastHostInput.value.trim() : "";
-    payload.google_cast_port = googleCastPortInput ? googleCastPortInput.value.trim() : "8009";
   }
   const latitude = latitudeInput ? latitudeInput.value.trim() : "";
   const longitude = longitudeInput ? longitudeInput.value.trim() : "";
