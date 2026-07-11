@@ -91,13 +91,10 @@ In the web UI, save:
 - **Speaker Entity**
   Example: `media_player.bedroom_speaker`
 
-- **Public Audio URL**
-  Example: `http://192.168.1.16:8090`
-
 - **Access Token**
   A Home Assistant long-lived access token.
 
-The public audio URL must be reachable by Home Assistant and by the speaker integration. Avoid `localhost` here unless Home Assistant is running inside the same container, which is not the normal setup.
+The automatically selected audio URL must be reachable by Home Assistant and the speaker. Avoid opening the dashboard through `localhost` on the machine that runs Docker; use that machine's LAN IP instead.
 
 The token is saved to:
 
@@ -115,10 +112,9 @@ This does not need a Home Assistant URL, entity ID, or token. Save:
   Example: `192.168.1.24`
 - **Cast Port**
   Normally leave this as `8009`.
-- **Public Audio URL**
-  Example: `http://192.168.1.16:8090`
-
 Use the speaker's stable LAN IP address where possible. You can find it in your router's device list or in the Google Home app's device information. The Google speaker must be able to reach the public audio URL directly.
+
+Adhancron automatically uses the address you used to open its dashboard, for example `http://192.168.1.16:8090`. Only use **Advanced audio address** in the dashboard if that address is not reachable by the speaker.
 
 Direct Google Cast starts a normal media session. It will interrupt existing audio on that speaker and does not restore previous playback afterwards. Choose Home Assistant when you specifically want its `announce` behavior or want to target Home Assistant speaker groups.
 
@@ -156,8 +152,6 @@ The CasaOS template builds the Docker image directly from this GitHub repository
 
 3. Edit these values in the pasted compose before installing:
 
-   - `PUBLIC_BASE_URL` → `http://YOUR_CASAOS_HOST_IP:8090` (the template ships with a placeholder IP — you must change it).
-   - `PUBLIC_BASE_URL` must be set to the CasaOS server address, e.g. `http://192.168.1.16:8090`.
    - For Home Assistant playback, set `HA_URL` and `HA_ENTITY_ID`.
    - For direct Google Cast playback, set `ADHAN_PLAYBACK_METHOD` to `google_cast` and `GOOGLE_CAST_HOST` to the speaker's LAN IP address. These can also be set later in the web UI.
 
@@ -193,7 +187,8 @@ HA_ENTITY_ID=media_player.bedroom_speaker
 ADHAN_PLAYBACK_METHOD=home_assistant
 # For direct Google Cast instead: ADHAN_PLAYBACK_METHOD=google_cast
 # GOOGLE_CAST_HOST=192.168.1.24
-PUBLIC_BASE_URL=http://YOUR_DOCKER_HOST_IP:8090
+# Optional advanced override. Normally captured automatically from the dashboard URL.
+PUBLIC_BASE_URL=
 ADHAN_VOLUME=0.8
 # Optional: you can paste the token here, or save it from the web UI later.
 HA_TOKEN=
@@ -222,7 +217,6 @@ docker run -d \
   -v adhan-data:/data \
   -e HA_URL="http://YOUR_HOME_ASSISTANT_IP:8123" \
   -e HA_ENTITY_ID="media_player.bedroom_speaker" \
-  -e PUBLIC_BASE_URL="http://YOUR_DOCKER_HOST_IP:8090" \
   adhan-manager
 ```
 
@@ -236,10 +230,9 @@ However you installed, finish setup from the web dashboard at `http://YOUR_HOST_
 2. For **Home Assistant**, fill in:
    - **Home Assistant URL** (e.g. `http://192.168.1.22:8123`)
    - **Speaker Entity** (e.g. `media_player.bedroom_speaker`)
-   - **Public Audio URL** (e.g. `http://YOUR_HOST_IP:8090`)
    - **Access Token** — paste your long-lived token here if you did not set `HA_TOKEN`.
    - **Latitude** and **Longitude** — enter these manually or choose **Use This Device's Location**.
-3. For **Direct Google Cast**, fill in the speaker IP/hostname, leave the port at `8009`, and set the public audio URL. The Home Assistant fields are not needed.
+3. For **Direct Google Cast**, fill in the speaker IP/hostname and leave the port at `8009`. The Home Assistant fields are not needed.
 4. Click **Save Settings**. The playback settings and location are written to `/data/adhan_settings.json` (owner-only); the app calculates and saves the timetable at `/data/prayer_times.json`, then applies today's cron schedule.
 5. Ensure the container `TZ` value matches your home timezone. Cron uses this timezone when it runs the saved local times.
 6. Click **Play Adhan Now** to test. The speaker should play the adhan within a few seconds.
@@ -259,7 +252,7 @@ Environment variables:
 | `ADHAN_PLAYBACK_METHOD` | `home_assistant` or `google_cast` | `home_assistant` |
 | `GOOGLE_CAST_HOST` | Google Cast speaker IP address or hostname | empty |
 | `GOOGLE_CAST_PORT` | Google Cast control port | `8009` |
-| `PUBLIC_BASE_URL` | Base URL where HA/speaker can reach Adhancron | empty |
+| `PUBLIC_BASE_URL` | Optional advanced audio URL override | automatic dashboard URL |
 | `ADHAN_VOLUME` | Playback volume, `0.0` to `1.0` | `0.8` |
 | `ADHAN_AUDIO_FILE` | Audio file served from `/audio` | `adhan_final.mp3` |
 | `ADHAN_LATITUDE` | Home latitude when not saved through the web UI | empty |
@@ -271,7 +264,7 @@ Environment variables:
 | `ADHAN_MEDIA_CONTENT_TYPE` | Media type sent to Home Assistant | `audio/mpeg` |
 | `TZ` | Container timezone | `Europe/London` |
 
-Settings saved from the web UI take priority for the playback method, Home Assistant URL/entity/token, Google Cast host/port, public audio URL, latitude, and longitude.
+Settings saved from the web UI take priority for the playback method, Home Assistant URL/entity/token, Google Cast host/port, audio URL override, latitude, and longitude.
 
 ## Persistent Data
 
@@ -410,7 +403,7 @@ docker exec -it adhan-manager tail -100 /data/adhan.log
 `trigger_ha.py` logs whether playback was confirmed:
 
 - `Trigger complete: playback confirmed (announce)` — the speaker reported a playing state. If you still heard nothing, the issue is downstream of Home Assistant (speaker volume, the speaker could not reach the audio URL, or a Cast app problem).
-- `Trigger complete: playback could not be confirmed` — the speaker never reported `playing` within `ADHAN_PLAYBACK_TIMEOUT`. Confirm the speaker entity is correct and that the **Public Audio URL** is reachable from the speaker.
+- `Trigger complete: playback could not be confirmed` — the speaker never reported `playing` within `ADHAN_PLAYBACK_TIMEOUT`. Confirm the speaker entity is correct and that the automatically selected dashboard address is reachable from the speaker.
 
 If your integration does not support `announce`, set `ADHAN_USE_ANNOUNCE=false` to use plain `play_media` confirmed by state polling.
 
@@ -446,9 +439,9 @@ The token saved in the web UI is not written back into CasaOS environment variab
 
 The web UI should show whether the token source is saved settings, environment, or missing.
 
-### Public Audio URL Is Wrong
+### Audio URL Is Wrong
 
-Set **Public Audio URL** to the address Home Assistant and the speaker can reach:
+Adhancron normally captures the dashboard address automatically. If the speaker cannot reach it, open **Advanced audio address** and set an override that Home Assistant and the speaker can reach:
 
 ```text
 http://YOUR_DOCKER_HOST_IP:8090

@@ -231,8 +231,8 @@ async function saveSettings() {
     playback_method: playbackMethodInput ? playbackMethodInput.value : "home_assistant",
     ha_url: haUrlInput.value,
     ha_entity_id: haEntityInput.value,
-    public_base_url: publicBaseUrlInput ? publicBaseUrlInput.value : "",
   };
+  if (publicBaseUrlInput?.value.trim()) payload.public_base_url = publicBaseUrlInput.value.trim();
   if (payload.playback_method === "google_cast") {
     payload.google_cast_host = googleCastHostInput ? googleCastHostInput.value.trim() : "";
     payload.google_cast_port = googleCastPortInput ? googleCastPortInput.value.trim() : "8009";

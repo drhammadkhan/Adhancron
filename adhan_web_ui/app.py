@@ -83,7 +83,12 @@ def version() -> dict:
     }
 
 
-def _settings_response() -> dict:
+def _request_base_url(request: Request) -> str:
+    """Return the LAN dashboard URL that the browser used to reach this app."""
+    return str(request.base_url).rstrip("/")
+
+
+def _settings_response(request: Request | None = None) -> dict:
     import os
 
     current = settings.get_settings()
@@ -99,28 +104,30 @@ def _settings_response() -> dict:
         "playback_method": current.get("playback_method") or os.getenv("ADHAN_PLAYBACK_METHOD", "home_assistant"),
         "google_cast_host": current.get("google_cast_host") or os.getenv("GOOGLE_CAST_HOST", ""),
         "google_cast_port": current.get("google_cast_port") or os.getenv("GOOGLE_CAST_PORT", "8009"),
-        "public_base_url": current.get("public_base_url") or PUBLIC_BASE_URL or "",
+        "public_base_url": current.get("public_base_url") or PUBLIC_BASE_URL or (
+            _request_base_url(request) if request is not None else ""
+        ),
         "latitude": current.get("latitude") or os.getenv("ADHAN_LATITUDE", ""),
         "longitude": current.get("longitude") or os.getenv("ADHAN_LONGITUDE", ""),
         "timezone": os.getenv("TZ", "UTC"),
-        "audio_url": default_audio_url(),
+        "audio_url": default_audio_url(_request_base_url(request) if request is not None else ""),
     }
 
 
 @app.get("/api/settings")
-def get_settings() -> dict:
-    return _settings_response()
+def get_settings(request: Request) -> dict:
+    return _settings_response(request)
 
 
 @app.put("/api/settings")
-def update_settings(request: SettingsUpdate) -> dict:
+def update_settings(payload: SettingsUpdate, request: Request) -> dict:
     current = settings.get_settings()
-    playback_method = request.playback_method or current.get("playback_method") or os.getenv("ADHAN_PLAYBACK_METHOD", "home_assistant")
+    playback_method = payload.playback_method or current.get("playback_method") or os.getenv("ADHAN_PLAYBACK_METHOD", "home_assistant")
     if playback_method not in {"home_assistant", "google_cast"}:
         raise HTTPException(status_code=400, detail="Playback method must be Home Assistant or Google Cast")
     if playback_method == "google_cast":
-        cast_host = request.google_cast_host if request.google_cast_host is not None else current.get("google_cast_host", "")
-        cast_port = request.google_cast_port if request.google_cast_port is not None else current.get("google_cast_port", "8009")
+        cast_host = payload.google_cast_host if payload.google_cast_host is not None else current.get("google_cast_host", "")
+        cast_port = payload.google_cast_port if payload.google_cast_port is not None else current.get("google_cast_port", "8009")
         if not cast_host.strip():
             raise HTTPException(status_code=400, detail="Set a Google Cast speaker IP address or hostname")
         try:
@@ -128,15 +135,20 @@ def update_settings(request: SettingsUpdate) -> dict:
                 raise ValueError
         except ValueError as exc:
             raise HTTPException(status_code=400, detail="Google Cast port must be between 1 and 65535") from exc
-    if request.latitude is not None or request.longitude is not None:
-        latitude = request.latitude if request.latitude is not None else current.get("latitude", "")
-        longitude = request.longitude if request.longitude is not None else current.get("longitude", "")
+    if payload.latitude is not None or payload.longitude is not None:
+        latitude = payload.latitude if payload.latitude is not None else current.get("latitude", "")
+        longitude = payload.longitude if payload.longitude is not None else current.get("longitude", "")
         try:
             location_from_values(latitude.strip(), longitude.strip())
         except ValueError as exc:
             raise HTTPException(status_code=400, detail=str(exc)) from exc
-    settings.update_settings(request.model_dump())
-    location_updated = request.latitude is not None or request.longitude is not None
+    updates = payload.model_dump()
+    if updates["public_base_url"] is None and not current.get("public_base_url") and not PUBLIC_BASE_URL:
+        # Persist the dashboard LAN address once so cron can use it without a
+        # browser request context. An explicit advanced override still wins.
+        updates["public_base_url"] = _request_base_url(request)
+    settings.update_settings(updates)
+    location_updated = payload.latitude is not None or payload.longitude is not None
     if location_updated:
         try:
             generation = generate_configured_times()
@@ -152,15 +164,15 @@ def update_settings(request: SettingsUpdate) -> dict:
         )
     except CronError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
-    response = _settings_response()
+    response = _settings_response(request)
     if location_updated:
         response["prayer_times_message"] = generation.summary
     return response
 
 
 @app.post("/api/play")
-def play_adhan() -> dict:
-    audio_url = default_audio_url()
+def play_adhan(request: Request) -> dict:
+    audio_url = default_audio_url(_request_base_url(request))
 
     try:
         trigger(audio_url, float(DEFAULT_VOLUME))

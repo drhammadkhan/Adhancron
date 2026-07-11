@@ -17,7 +17,6 @@ services:
       ADHAN_PLAYBACK_METHOD: "home_assistant"
       GOOGLE_CAST_HOST: ""
       GOOGLE_CAST_PORT: "8009"
-      PUBLIC_BASE_URL: "http://192.168.1.16:8090"
       ADHAN_VOLUME: "0.8"
       ADHAN_LATITUDE: ""
       ADHAN_LONGITUDE: ""

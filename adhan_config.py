@@ -41,7 +41,7 @@ def saved_setting(name: str) -> str:
     return value.strip() if isinstance(value, str) else ""
 
 
-def default_audio_url() -> str:
+def default_audio_url(request_base_url: str = "") -> str:
     explicit_url = os.getenv("ADHAN_AUDIO_URL")
     if explicit_url:
         return explicit_url
@@ -52,6 +52,8 @@ def default_audio_url() -> str:
         return f"{saved_public_base_url}/audio/{DEFAULT_AUDIO_FILE}"
     if PUBLIC_BASE_URL:
         return f"{PUBLIC_BASE_URL}/audio/{DEFAULT_AUDIO_FILE}"
+    if request_base_url:
+        return f"{request_base_url.rstrip('/')}/audio/{DEFAULT_AUDIO_FILE}"
     return f"http://127.0.0.1:8090/audio/{DEFAULT_AUDIO_FILE}"
 
 

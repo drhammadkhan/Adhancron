@@ -135,15 +135,18 @@
               <input id="googleCastPortInput" type="number" min="1" max="65535" class="input input-bordered w-full bg-white/80" value="8009" />
             </label>
           </div>
-          <label class="form-control">
-            <div class="label">
-              <span class="label-text text-sm font-medium">Public Audio URL</span>
-            </div>
-            <input id="publicBaseUrlInput" type="url" class="input input-bordered w-full bg-white/80" placeholder="http://192.168.1.16:8090" />
-            <div class="label">
-              <span class="label-text-alt text-slate-500">Use the CasaOS URL Home Assistant can reach.</span>
-            </div>
-          </label>
+          <details class="rounded-lg border border-slate-200 bg-white/45 px-4 py-3">
+            <summary class="cursor-pointer text-sm font-medium text-slate-600">Advanced audio address</summary>
+            <label class="form-control mt-3">
+              <div class="label">
+                <span class="label-text text-sm font-medium">Audio URL Override</span>
+              </div>
+              <input id="publicBaseUrlInput" type="url" class="input input-bordered w-full bg-white/80" placeholder="Uses the address you opened this dashboard with" />
+              <div class="label">
+                <span class="label-text-alt text-slate-500">Only change this when the speaker cannot reach the dashboard address automatically.</span>
+              </div>
+            </label>
+          </details>
           <div class="grid gap-4 lg:grid-cols-[1fr_1fr_auto] lg:items-end">
             <label class="form-control">
               <div class="label">
@@ -241,9 +244,7 @@
           if (playbackMethod === "google_cast") {
             const host = document.getElementById("googleCastHostInput")?.value.trim();
             const port = document.getElementById("googleCastPortInput")?.value.trim() || "8009";
-            const publicBaseUrl = document.getElementById("publicBaseUrlInput")?.value.trim();
             if (!host) throw new Error("Enter the Google Cast speaker IP address or hostname first");
-            if (!publicBaseUrl) throw new Error("Enter the public audio URL first");
 
             // Persist the direct-Cast choice before the trigger. This keeps the
             // test button and the scheduled cron command on the same route.
@@ -254,7 +255,7 @@
                 playback_method: "google_cast",
                 google_cast_host: host,
                 google_cast_port: port,
-                public_base_url: publicBaseUrl,
+                public_base_url: document.getElementById("publicBaseUrlInput")?.value.trim() || null,
               }),
             });
             const settingsPayload = await settingsResponse.json();
@@ -273,6 +274,6 @@
         return false;
       }
     </script>
-    <script src="static/app.js?v=7"></script>
+    <script src="static/app.js?v=8"></script>
   </body>
 </html>
