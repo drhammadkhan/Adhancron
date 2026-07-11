@@ -55,12 +55,6 @@
           line-height: 1.35rem;
         }
 
-        .job-meta {
-          letter-spacing: 0.08em;
-          word-break: break-word;
-          text-transform: none;
-        }
-
         .toggle {
           transform: scale(0.9);
           transform-origin: right center;
@@ -81,14 +75,32 @@
           </div>
           <div class="flex w-full flex-col gap-3 sm:flex-row sm:items-center">
             <button id="refreshBtn" type="button" class="btn btn-outline btn-success w-full sm:w-auto">Refresh</button>
-            <button id="saveBtn" type="button" class="btn btn-success w-full sm:w-auto">Apply Changes</button>
-            <button id="playBtn" type="button" onclick="handlePlay(event)" class="btn btn-info w-full sm:w-auto">Play Adhan Now</button>
+            <button id="saveBtn" type="button" class="btn btn-success w-full sm:w-auto" disabled>Save Schedule</button>
+            <button id="playBtn" type="button" onclick="handlePlay(event)" class="btn btn-info w-full sm:w-auto">Test Adhan</button>
             <span id="statusBadge" class="badge badge-ghost px-4 py-3 text-xs sm:text-sm">Loading jobs...</span>
             <span id="versionBadge" class="badge badge-outline px-4 py-3 text-xs sm:text-sm">Version unknown</span>
           </div>
           <div id="fajrRunStatus" class="mt-3 rounded-xl bg-white/70 border border-white/80 px-4 py-3 text-sm text-slate-700">
             Checking last Fajr auto-update run...
           </div>
+        </div>
+      </section>
+
+      <section class="mt-6 grid gap-4 lg:grid-cols-[1.25fr_1fr]">
+        <div class="rounded-2xl border border-emerald-700/20 bg-emerald-950 px-6 py-5 text-emerald-50 shadow-glow">
+          <p class="text-xs font-semibold uppercase tracking-[0.24em] text-emerald-200">Next Adhan</p>
+          <div class="mt-3 flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
+            <div>
+              <h2 id="nextAdhanTitle" class="font-display text-3xl">Checking schedule...</h2>
+              <p id="nextAdhanDetail" class="mt-1 text-sm text-emerald-100">Your next scheduled adhan will appear here.</p>
+            </div>
+            <p id="nextAdhanCountdown" class="text-lg font-semibold text-emerald-100"></p>
+          </div>
+        </div>
+        <div class="rounded-2xl border border-white/70 bg-white/55 px-6 py-5 shadow-glow">
+          <p class="text-xs font-semibold uppercase tracking-[0.24em] text-slate-500">Setup Status</p>
+          <div id="setupStatus" class="mt-3 flex flex-wrap gap-2" aria-live="polite"></div>
+          <p id="setupHint" class="mt-3 text-sm text-slate-600"></p>
         </div>
       </section>
 
@@ -181,9 +193,9 @@
         <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <h2 class="font-display text-2xl sm:text-3xl">Prayer Times</h2>
-            <p class="mt-2 text-sm text-slate-600">Monthly timings have moved to a dedicated page for a cleaner dashboard.</p>
+            <p class="mt-2 text-sm text-slate-600">View the full year of daily prayer times calculated for your saved home location.</p>
           </div>
-          <a href="/static/prayer-times.html" class="btn btn-outline btn-success w-full sm:w-auto">Open Prayer Times Page</a>
+          <a href="/static/prayer-times.html" class="btn btn-outline btn-success w-full sm:w-auto">View Prayer Times</a>
         </div>
       </section>
 
@@ -193,30 +205,26 @@
             <div class="flex items-start justify-between gap-3">
               <div>
                 <h2 class="card-title text-2xl"></h2>
-                <p class="job-meta mt-1 text-xs uppercase tracking-[0.24em] text-slate-500"></p>
               </div>
-              <span class="badge badge-outline badge-lg badge-success job-state">Enabled</span>
+              <span class="badge badge-outline badge-lg badge-success job-state">Adhan on</span>
             </div>
             <label class="form-control mt-3">
               <div class="label">
-                <span class="label-text text-sm font-medium">Time</span>
+                <span class="label-text text-sm font-medium">Adhan time</span>
               </div>
               <input type="time" class="input input-bordered w-full bg-white/80" />
             </label>
             <div class="mt-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between rounded-2xl bg-slate-100 px-4 py-3 text-slate-800 border border-slate-200">
               <div>
-                <p class="text-xs uppercase tracking-[0.28em] text-slate-500">Manual Override</p>
-                <div class="flex items-center gap-2 mt-1">
-                  <span class="badge badge-sm override-status-badge">Auto</span>
-                  <p class="text-sm font-medium">Prevent auto-updates</p>
-                </div>
+                <p class="text-sm font-medium">Keep this custom time</p>
+                <p class="mt-1 text-sm text-slate-600 override-description">Daily updates can adjust this time automatically.</p>
               </div>
               <input type="checkbox" class="toggle toggle-warning toggle-lg override-toggle" />
             </div>
             <div class="mt-3 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between rounded-2xl bg-emerald-950/90 px-4 py-3 text-emerald-50">
               <div>
-                <p class="text-xs uppercase tracking-[0.28em] text-emerald-200">Job status</p>
-                <p class="text-sm font-medium">Use the switch to comment or uncomment the cron line.</p>
+                <p class="text-sm font-medium">Adhan enabled</p>
+                <p class="mt-1 text-sm text-emerald-100">Play the adhan at the time above.</p>
               </div>
               <input type="checkbox" class="toggle toggle-success toggle-lg" />
             </div>
@@ -228,7 +236,7 @@
         <div class="mx-auto max-w-lg rounded-[2rem] border border-dashed border-emerald-700/20 bg-white/50 px-6 py-10">
           <p class="text-lg font-semibold">No adhan cron jobs found.</p>
           <p class="mt-2 text-sm text-slate-600">
-            Add cron entries that call `projects/ramadhan_esp32/trigger_ha.py`, then refresh this page.
+            Save your location in Settings to create today's prayer schedule.
           </p>
         </div>
       </div>
@@ -272,6 +280,6 @@
         return false;
       }
     </script>
-    <script src="static/app.js?v=13"></script>
+    <script src="static/app.js?v=14"></script>
   </body>
 </html>

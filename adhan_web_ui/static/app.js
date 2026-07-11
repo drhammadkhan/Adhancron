@@ -11,6 +11,11 @@ const refreshBtn = document.getElementById("refreshBtn");
 const saveBtn = document.getElementById("saveBtn");
 const template = document.getElementById("jobCardTemplate");
 const fajrRunStatus = document.getElementById("fajrRunStatus");
+const nextAdhanTitle = document.getElementById("nextAdhanTitle");
+const nextAdhanDetail = document.getElementById("nextAdhanDetail");
+const nextAdhanCountdown = document.getElementById("nextAdhanCountdown");
+const setupStatus = document.getElementById("setupStatus");
+const setupHint = document.getElementById("setupHint");
 const haSettingsBadge = document.getElementById("haSettingsBadge");
 const haUrlInput = document.getElementById("haUrlInput");
 const haEntityInput = document.getElementById("haEntityInput");
@@ -30,10 +35,6 @@ const saveSettingsBtn = document.getElementById("saveSettingsBtn");
 function setStatus(message, type = "ghost") {
   statusBadge.className = `badge badge-${type} px-4 py-3 text-xs sm:text-sm`;
   statusBadge.textContent = message;
-}
-
-function prayerMeta(job) {
-  return `${job.audio_url} • volume ${job.volume}`;
 }
 
 function setSettingsStatus(message, type = "ghost") {
@@ -85,39 +86,34 @@ function renderJobs() {
     const node = template.content.cloneNode(true);
     const card = node.querySelector("article");
     const title = node.querySelector(".card-title");
-    const meta = node.querySelector(".job-meta");
     const timeInput = node.querySelector('input[type="time"]');
     const toggle = node.querySelector('.toggle-success');
     const overrideToggle = node.querySelector('.override-toggle');
-    const overrideBadge = node.querySelector('.override-status-badge');
+    const overrideDescription = node.querySelector('.override-description');
     const stateBadge = node.querySelector(".job-state");
 
     title.textContent = job.label;
-    meta.textContent = prayerMeta(job);
     timeInput.value = job.time;
     toggle.checked = job.enabled;
     overrideToggle.checked = job.manual_override || false;
     syncStateBadge(stateBadge, toggle.checked);
-    syncOverrideBadge(overrideBadge, overrideToggle.checked);
+    syncOverrideDescription(overrideDescription, overrideToggle.checked);
 
     timeInput.addEventListener("input", () => {
       job.time = timeInput.value;
-      state.dirty.add(job.id);
-      setStatus(`${state.dirty.size} change(s) pending`, "warning");
+      markJobDirty(job.id);
     });
 
     toggle.addEventListener("change", () => {
       job.enabled = toggle.checked;
-      state.dirty.add(job.id);
       syncStateBadge(stateBadge, toggle.checked);
-      setStatus(`${state.dirty.size} change(s) pending`, "warning");
+      markJobDirty(job.id);
     });
 
     overrideToggle.addEventListener("change", () => {
       job.manual_override = overrideToggle.checked;
-      state.dirty.add(job.id);
-      syncOverrideBadge(overrideBadge, overrideToggle.checked);
-      setStatus(`${state.dirty.size} change(s) pending`, "warning");
+      syncOverrideDescription(overrideDescription, overrideToggle.checked);
+      markJobDirty(job.id);
     });
 
     if (state.dirty.has(job.id)) {
@@ -126,16 +122,30 @@ function renderJobs() {
 
     jobGrid.appendChild(node);
   });
+  updateSaveButton();
+}
+
+function markJobDirty(jobId) {
+  state.dirty.add(jobId);
+  updateSaveButton();
+  setStatus(`${state.dirty.size} schedule change${state.dirty.size === 1 ? "" : "s"} to save`, "warning");
+}
+
+function updateSaveButton() {
+  if (!saveBtn) return;
+  saveBtn.disabled = state.dirty.size === 0;
 }
 
 function syncStateBadge(node, enabled) {
-  node.textContent = enabled ? "Enabled" : "Disabled";
+  node.textContent = enabled ? "Adhan on" : "Adhan off";
   node.className = `badge badge-outline badge-lg ${enabled ? "badge-success" : "badge-error"} job-state`;
 }
 
-function syncOverrideBadge(node, manual) {
-  node.textContent = manual ? "Manual" : "Auto";
-  node.className = `badge badge-sm ${manual ? "badge-warning" : "badge-ghost opacity-50"} override-status-badge`;
+function syncOverrideDescription(node, manual) {
+  if (!node) return;
+  node.textContent = manual
+    ? "Daily updates will leave this time unchanged."
+    : "Daily updates can adjust this time automatically.";
 }
 
 async function loadJobs() {
@@ -149,7 +159,7 @@ async function loadJobs() {
     state.jobs = payload.jobs;
     state.dirty.clear();
     renderJobs();
-    setStatus(`Loaded ${payload.jobs.length} job(s)`, "success");
+    setStatus("Schedule ready", "success");
   } catch (error) {
     setStatus(error.message, "error");
   }
@@ -161,11 +171,11 @@ async function saveJobs() {
     .map(({ id, enabled, time, manual_override }) => ({ id, enabled, time, manual_override }));
 
   if (dirtyJobs.length === 0) {
-    setStatus("No changes to apply", "info");
+    setStatus("No schedule changes to save", "info");
     return;
   }
 
-  setStatus("Applying changes...", "ghost");
+  setStatus("Saving schedule...", "ghost");
   saveBtn.disabled = true;
 
   try {
@@ -183,7 +193,9 @@ async function saveJobs() {
     state.jobs = payload.jobs;
     state.dirty.clear();
     renderJobs();
-    setStatus("Crontab updated", "success");
+    updateSaveButton();
+    loadDashboardStatus();
+    setStatus("Schedule saved", "success");
   } catch (error) {
     setStatus(error.message, "error");
   } finally {
@@ -260,6 +272,7 @@ async function saveSettings() {
       throw new Error(data.detail || "Failed to save settings");
     }
     renderSettings(data, data.prayer_times_message || "Settings saved");
+    loadDashboardStatus();
   } catch (error) {
     setSettingsStatus(error.message, "error");
   } finally {
@@ -280,7 +293,7 @@ async function loadFajrStatus() {
 
     if (!data.lastRun) {
       fajrRunStatus.className = "mt-3 rounded-xl bg-warning/15 border border-warning/30 px-4 py-3 text-sm text-warning-content";
-      fajrRunStatus.textContent = "Fajr auto-update has not run yet (no status file found).";
+      fajrRunStatus.textContent = "Prayer-time updates have not run yet. Save your location in Settings to create the schedule.";
       return;
     }
 
@@ -289,9 +302,12 @@ async function loadFajrStatus() {
     const ageMs = Date.now() - lastRunDate.getTime();
     const stale = Number.isFinite(ageMs) && ageMs > 24 * 60 * 60 * 1000;
 
-    const icon = !data.ok ? "🚨" : stale ? "⚠️" : "✅";
-    const stateText = !data.ok ? "Failed" : stale ? "Success (stale)" : "Success";
-    const summary = data.summary ? ` — ${data.summary.split("\n")[0]}` : "";
+    const icon = !data.ok ? "⚠️" : stale ? "⚠️" : "✓";
+    const stateText = !data.ok
+      ? "Prayer-time update needs attention"
+      : stale
+      ? "Prayer times need an update"
+      : "Prayer times are up to date";
 
     const styleClass = !data.ok
       ? "bg-error/15 border-error/30 text-slate-800"
@@ -300,10 +316,65 @@ async function loadFajrStatus() {
       : "bg-success/15 border-success/30 text-slate-800";
 
     fajrRunStatus.className = `mt-3 rounded-xl px-4 py-3 text-sm border ${styleClass}`;
-    fajrRunStatus.textContent = `${icon} Last Fajr auto-update: ${stateText} at ${localTime}${summary}`;
+    fajrRunStatus.textContent = `${icon} ${stateText} — last checked ${localTime}.`;
   } catch (error) {
     fajrRunStatus.className = "mt-3 rounded-xl bg-error/15 border border-error/30 px-4 py-3 text-sm text-slate-800";
-    fajrRunStatus.textContent = `Unable to load Fajr run status: ${error.message}`;
+    fajrRunStatus.textContent = `Unable to check prayer-time updates: ${error.message}`;
+  }
+}
+
+function setupChip(label, ready) {
+  const chip = document.createElement("span");
+  chip.className = `badge px-3 py-3 text-sm ${ready ? "badge-success" : "badge-warning"}`;
+  chip.textContent = `${ready ? "Ready" : "Needs setup"}: ${label}`;
+  return chip;
+}
+
+function formatCountdown(when) {
+  const remainingMs = new Date(when).getTime() - Date.now();
+  if (!Number.isFinite(remainingMs) || remainingMs <= 0) return "Soon";
+  const totalMinutes = Math.ceil(remainingMs / 60000);
+  const hours = Math.floor(totalMinutes / 60);
+  const minutes = totalMinutes % 60;
+  if (hours === 0) return `in ${minutes} min`;
+  return `in ${hours}h ${minutes}m`;
+}
+
+async function loadDashboardStatus() {
+  if (!nextAdhanTitle || !setupStatus) return;
+  try {
+    const response = await fetch("api/dashboard-status");
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.detail || "Unable to load dashboard status");
+
+    const next = data.next_adhan;
+    if (next) {
+      nextAdhanTitle.textContent = `${next.label} at ${next.time}`;
+      nextAdhanDetail.textContent = `${next.is_tomorrow ? "Tomorrow" : "Today"} on your configured speaker.`;
+      nextAdhanCountdown.textContent = formatCountdown(next.when);
+    } else {
+      nextAdhanTitle.textContent = "No adhan is scheduled";
+      nextAdhanDetail.textContent = "Turn on at least one prayer in the schedule below.";
+      nextAdhanCountdown.textContent = "";
+    }
+
+    const setup = data.setup;
+    setupStatus.innerHTML = "";
+    setupStatus.append(
+      setupChip("Location", setup.location_ready),
+      setupChip(setup.playback_label, setup.playback_ready),
+      setupChip("Prayer schedule", setup.schedule_ready),
+    );
+    const ready = setup.location_ready && setup.playback_ready && setup.schedule_ready;
+    setupHint.textContent = ready
+      ? `${setup.enabled_prayers} daily adhans are enabled.`
+      : "Open Settings to finish the items marked Needs setup.";
+  } catch (error) {
+    nextAdhanTitle.textContent = "Schedule status unavailable";
+    nextAdhanDetail.textContent = error.message;
+    nextAdhanCountdown.textContent = "";
+    setupStatus.innerHTML = "";
+    setupHint.textContent = "Refresh the dashboard to try again.";
   }
 }
 
@@ -373,6 +444,7 @@ refreshBtn.addEventListener("click", () => {
   loadVersion();
   loadPrayerTimes();
   loadFajrStatus();
+  loadDashboardStatus();
 });
 saveBtn.addEventListener("click", saveJobs);
 if (saveSettingsBtn) saveSettingsBtn.addEventListener("click", saveSettings);
@@ -413,3 +485,4 @@ loadSettings();
 loadVersion();
 loadPrayerTimes();
 loadFajrStatus();
+loadDashboardStatus();

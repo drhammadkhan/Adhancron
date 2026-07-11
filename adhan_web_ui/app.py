@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import mimetypes
+import os
+from datetime import datetime, timedelta
 from pathlib import Path
 
 from fastapi import FastAPI, HTTPException, Request
@@ -185,7 +187,7 @@ def play_adhan(request: Request) -> dict:
 def get_prayer_times() -> dict:
     import json
     if not PRAYER_TIMES_FILE.exists():
-        return {"error": "prayer_times.json not found"}
+        return {"error": "Prayer times are not available yet. Save your location in Settings to create them."}
         
     try:
         with open(PRAYER_TIMES_FILE, "r", encoding="utf-8") as f:
@@ -380,6 +382,69 @@ def list_jobs() -> dict:
             }
             for job in jobs
         ]
+    }
+
+
+def _next_enabled_job(jobs: list) -> dict | None:
+    now = datetime.now()
+    candidates = []
+    for job in jobs:
+        if not job.enabled or not job.label:
+            continue
+        try:
+            hour, minute = (int(part) for part in job.time.split(":"))
+            candidate = now.replace(hour=hour, minute=minute, second=0, microsecond=0)
+        except (TypeError, ValueError):
+            continue
+        if candidate <= now:
+            candidate += timedelta(days=1)
+        candidates.append((candidate, job))
+
+    if not candidates:
+        return None
+    when, job = min(candidates, key=lambda item: item[0])
+    return {
+        "label": job.label,
+        "time": job.time,
+        "when": when.isoformat(),
+        "is_tomorrow": when.date() != now.date(),
+    }
+
+
+@app.get("/api/dashboard-status")
+def dashboard_status() -> dict:
+    try:
+        jobs = manager.list_jobs()
+    except CronError as exc:
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
+
+    current = settings.get_settings()
+    method = current.get("playback_method") or os.getenv("ADHAN_PLAYBACK_METHOD", "home_assistant")
+    latitude = current.get("latitude") or os.getenv("ADHAN_LATITUDE", "")
+    longitude = current.get("longitude") or os.getenv("ADHAN_LONGITUDE", "")
+    location_ready = bool(latitude and longitude)
+
+    if method == "google_cast":
+        playback_ready = bool(current.get("google_cast_host") or os.getenv("GOOGLE_CAST_HOST"))
+        playback_label = "Google Cast speaker"
+    else:
+        playback_ready = bool(
+            (current.get("ha_url") or os.getenv("HA_URL"))
+            and (current.get("ha_entity_id") or os.getenv("HA_ENTITY_ID"))
+            and (current.get("ha_token") or os.getenv("HA_TOKEN"))
+        )
+        playback_label = "Home Assistant speaker"
+
+    enabled_count = sum(1 for job in jobs if job.enabled)
+    return {
+        "next_adhan": _next_enabled_job(jobs),
+        "setup": {
+            "location_ready": location_ready,
+            "playback_ready": playback_ready,
+            "playback_label": playback_label,
+            "schedule_ready": enabled_count > 0,
+            "enabled_prayers": enabled_count,
+        },
     }
 
 

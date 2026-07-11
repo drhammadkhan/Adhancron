@@ -16,7 +16,7 @@
       <div class="mb-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 class="text-3xl font-bold">Prayer Times</h1>
-          <p class="text-sm text-slate-600">Loaded from <code>prayer_times.json</code></p>
+          <p class="text-sm text-slate-600">Daily prayer times calculated for your saved home location.</p>
         </div>
         <div class="flex gap-2">
           <a href="/" class="btn btn-outline">Back to Dashboard</a>
@@ -30,6 +30,8 @@
           <div class="join" id="yearFilters"></div>
         </div>
       </div>
+
+      <p id="selectionSummary" class="mb-4 text-sm font-medium text-slate-600" aria-live="polite"></p>
 
       <div class="mb-6 flex flex-wrap items-center gap-4 border-t border-slate-200 pt-4">
         <div class="flex items-center gap-2">
@@ -99,7 +101,7 @@
         // Month Filters
         monthContainer.innerHTML = '';
         const allBtn = document.createElement('button');
-        allBtn.textContent = 'All';
+        allBtn.textContent = 'Full year';
         allBtn.className = `btn btn-sm ${!selectedMonth ? 'btn-success' : 'btn-outline'}`;
         allBtn.onclick = () => {
           selectedMonth = null;
@@ -132,6 +134,10 @@
 
         let hasData = false;
         const yearData = prayerData[selectedYear] || {};
+        const summary = document.getElementById('selectionSummary');
+        summary.textContent = selectedMonth
+          ? `Showing ${selectedMonth} ${selectedYear}`
+          : `Showing every day in ${selectedYear}`;
         
         monthsOrder.forEach(month => {
           if (!yearData[month] || (selectedMonth && month !== selectedMonth)) return;
