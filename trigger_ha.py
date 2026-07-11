@@ -4,6 +4,7 @@ import json
 import os
 import sys
 import time
+import uuid
 from datetime import datetime
 
 import requests
@@ -37,6 +38,8 @@ PLAYBACK_CONFIRM_TIMEOUT = float(os.getenv("ADHAN_PLAYBACK_TIMEOUT", "15"))
 PLAYBACK_POLL_INTERVAL = float(os.getenv("ADHAN_PLAYBACK_POLL_INTERVAL", "1"))
 
 PLAYING_STATES = {"playing", "buffering"}
+PLAYBACK_METHOD_HOME_ASSISTANT = "home_assistant"
+PLAYBACK_METHOD_GOOGLE_CAST = "google_cast"
 
 
 def _load_settings() -> dict:
@@ -112,6 +115,26 @@ def _token_source() -> str:
     return "missing"
 
 
+def _playback_method() -> str:
+    method = _setting("playback_method", "ADHAN_PLAYBACK_METHOD", PLAYBACK_METHOD_HOME_ASSISTANT)
+    return method.strip().lower()
+
+
+def _google_cast_host() -> str:
+    return _setting("google_cast_host", "GOOGLE_CAST_HOST")
+
+
+def _google_cast_port() -> int:
+    raw_port = _setting("google_cast_port", "GOOGLE_CAST_PORT", "8009")
+    try:
+        port = int(raw_port)
+    except ValueError as exc:
+        raise RuntimeError("Google Cast port must be a number") from exc
+    if not 1 <= port <= 65535:
+        raise RuntimeError("Google Cast port must be between 1 and 65535")
+    return port
+
+
 def _post_service(service: str, payload: dict) -> requests.Response:
     headers = {
         "Authorization": f"Bearer {_load_ha_token()}",
@@ -174,11 +197,55 @@ def _play(entity_id: str, media_url: str, announce: bool) -> requests.Response:
     return _post_service("play_media", payload)
 
 
+def _trigger_google_cast(media_url: str, volume: float) -> None:
+    host = _google_cast_host()
+    if not host:
+        raise RuntimeError("Set a Google Cast speaker IP address or hostname")
+    port = _google_cast_port()
+    try:
+        import pychromecast
+    except ImportError as exc:
+        raise RuntimeError("PyChromecast is not installed") from exc
+
+    cast = None
+    try:
+        cast = pychromecast.get_chromecast_from_host(
+            (host, port, uuid.uuid4(), None, None),
+            tries=1,
+            timeout=REQUEST_TIMEOUT,
+        )
+        cast.wait(timeout=REQUEST_TIMEOUT)
+        cast.set_volume(volume, timeout=REQUEST_TIMEOUT)
+        media = cast.media_controller
+        media.play_media(media_url, MEDIA_CONTENT_TYPE, stream_type="BUFFERED")
+        media.block_until_active(timeout=REQUEST_TIMEOUT)
+        _log(
+            "Trigger complete: direct Google Cast playback active "
+            f"host={host}, port={port}, media_url={media_url}"
+        )
+    finally:
+        if cast is not None:
+            cast.disconnect(timeout=1)
+
+
 def trigger(media_url: str, volume: float = 0.8) -> None:
+    playback_method = _playback_method()
+    if playback_method == PLAYBACK_METHOD_GOOGLE_CAST:
+        _log(
+            "Trigger start: "
+            f"method=google_cast, media_url={media_url}, volume={volume}, "
+            f"host={_google_cast_host() or 'missing'}, settings_file="
+            f"{os.getenv('ADHAN_SETTINGS_FILE', str(SETTINGS_FILE))}"
+        )
+        _trigger_google_cast(media_url, volume)
+        return
+    if playback_method != PLAYBACK_METHOD_HOME_ASSISTANT:
+        raise RuntimeError(f"Unsupported playback method: {playback_method}")
+
     entity_id = _setting("ha_entity_id", "HA_ENTITY_ID", "media_player.bedroom_speaker")
     _log(
         "Trigger start: "
-        f"media_url={media_url}, volume={volume}, "
+        f"method=home_assistant, media_url={media_url}, volume={volume}, "
         f"ha_url={_ha_base_url()}, "
         f"entity_id={entity_id}, "
         f"token_source={_token_source()}, "

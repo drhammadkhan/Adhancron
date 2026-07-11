@@ -53,6 +53,9 @@ class SettingsUpdate(BaseModel):
     public_base_url: str | None = None
     latitude: str | None = None
     longitude: str | None = None
+    playback_method: str | None = None
+    google_cast_host: str | None = None
+    google_cast_port: str | None = None
 
 
 def _app_version() -> str:
@@ -75,6 +78,7 @@ def version() -> dict:
             "state_confirmed_playback": True,
             "saved_home_assistant_token": True,
             "local_location_based_timings": True,
+            "direct_google_cast": True,
         },
     }
 
@@ -92,6 +96,9 @@ def _settings_response() -> dict:
         "settings_file_exists": SETTINGS_FILE.exists(),
         "ha_url": current.get("ha_url") or os.getenv("HA_URL", "http://homeassistant.local:8123"),
         "ha_entity_id": current.get("ha_entity_id") or os.getenv("HA_ENTITY_ID", "media_player.bedroom_speaker"),
+        "playback_method": current.get("playback_method") or os.getenv("ADHAN_PLAYBACK_METHOD", "home_assistant"),
+        "google_cast_host": current.get("google_cast_host") or os.getenv("GOOGLE_CAST_HOST", ""),
+        "google_cast_port": current.get("google_cast_port") or os.getenv("GOOGLE_CAST_PORT", "8009"),
         "public_base_url": current.get("public_base_url") or PUBLIC_BASE_URL or "",
         "latitude": current.get("latitude") or os.getenv("ADHAN_LATITUDE", ""),
         "longitude": current.get("longitude") or os.getenv("ADHAN_LONGITUDE", ""),
@@ -107,8 +114,21 @@ def get_settings() -> dict:
 
 @app.put("/api/settings")
 def update_settings(request: SettingsUpdate) -> dict:
+    current = settings.get_settings()
+    playback_method = request.playback_method or current.get("playback_method") or os.getenv("ADHAN_PLAYBACK_METHOD", "home_assistant")
+    if playback_method not in {"home_assistant", "google_cast"}:
+        raise HTTPException(status_code=400, detail="Playback method must be Home Assistant or Google Cast")
+    if playback_method == "google_cast":
+        cast_host = request.google_cast_host if request.google_cast_host is not None else current.get("google_cast_host", "")
+        cast_port = request.google_cast_port if request.google_cast_port is not None else current.get("google_cast_port", "8009")
+        if not cast_host.strip():
+            raise HTTPException(status_code=400, detail="Set a Google Cast speaker IP address or hostname")
+        try:
+            if not 1 <= int(cast_port) <= 65535:
+                raise ValueError
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail="Google Cast port must be between 1 and 65535") from exc
     if request.latitude is not None or request.longitude is not None:
-        current = settings.get_settings()
         latitude = request.latitude if request.latitude is not None else current.get("latitude", "")
         longitude = request.longitude if request.longitude is not None else current.get("longitude", "")
         try:

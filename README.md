@@ -1,6 +1,6 @@
 # Adhancron
 
-Adhancron is a Dockerized adhan scheduler for Home Assistant. It keeps daily prayer-time cron jobs up to date, serves the adhan MP3 over HTTP, and asks Home Assistant to play that audio on a configured media player.
+Adhancron is a Dockerized adhan scheduler. It keeps daily prayer-time cron jobs up to date, serves the adhan MP3 over HTTP, and plays it through either Home Assistant or a Google Cast speaker directly.
 
 The main supported use case is running this as a CasaOS or Docker container on a home server, then playing adhan through Home Assistant speakers such as Google Cast speakers.
 
@@ -12,12 +12,13 @@ The main supported use case is running this as a CasaOS or Docker container on a
 - Lets you manually edit prayer times from the web UI.
 - Lets you disable or re-enable individual prayer jobs.
 - Supports manual overrides so auto-update does not overwrite a custom time.
-- Saves Home Assistant settings from the web UI.
+- Saves Home Assistant or direct Google Cast settings from the web UI.
 - Stores the Home Assistant long-lived access token in `/data`, not in the GitHub repo.
 - Serves `adhan_final.mp3` at `/audio/adhan_final.mp3`.
 - Supports byte-range and `HEAD` requests for Cast/media-player playback.
 - Logs playback triggers and audio fetches for troubleshooting.
 - Uses Home Assistant's `announce` playback and confirms playback by polling the speaker's state.
+- Can bypass Home Assistant and send the MP3 directly to a Google Cast speaker by IP address or hostname.
 
 Older ESP32, MAX7219, Wi-Fi, and hardware test files are still present from earlier experiments, but they are not required for the Docker/Home Assistant workflow.
 
@@ -34,8 +35,8 @@ Adhancron has four moving parts:
 3. **Location-based prayer-time updater**
    The dashboard saves the home latitude and longitude, then calculates a local timetable and stores it in `/data/prayer_times.json`. It uses Fajr 90 minutes before sunrise, Zuhr five minutes after solar noon, standard Asr, Maghrib one minute after sunset, and the Moonsighting Committee seasonal Isha adjustment. The solar-position library can differ from Alislam by up to two minutes. At `00:05` every day, cron runs `update_adhan.py`, checks that the calendar covers the current and following year, and updates the prayer cron entries. Manual overrides are preserved.
 
-4. **Home Assistant trigger**
-   `trigger_ha.py` calls the Home Assistant REST API. It sets the speaker volume, then sends `media_player.play_media` with `announce: true` — Home Assistant's purpose-built "play this sound now" mode, which wakes the device, plays once, and restores prior state. It then polls the media player's state until it reports `playing`. If the speaker never reaches a playing state (or the integration does not support `announce`), it falls back to a plain `play_media` and re-sends only while playback remains unconfirmed.
+4. **Playback trigger**
+   `trigger_ha.py` uses the saved playback method. With **Home Assistant**, it calls the REST API, sets volume, sends `media_player.play_media` with `announce: true`, and polls the speaker state until it reports `playing`. If the speaker never reaches a playing state (or the integration does not support `announce`), it falls back to a plain `play_media`. With **Direct Google Cast**, it connects directly to the configured Google Cast device on its local IP/hostname and port `8009`, sets volume, and sends it the public MP3 URL.
 
 ## Playback Flow
 
@@ -49,15 +50,13 @@ At prayer time:
 
 2. `trigger_ha.py` loads saved settings from `/data/adhan_settings.json`.
 
-3. It contacts Home Assistant at the configured `HA_URL`.
+3. With Home Assistant selected, it contacts Home Assistant at the configured `HA_URL`, which tells the configured `media_player` entity to play the public audio URL using `announce: true`.
 
-4. Home Assistant tells the configured `media_player` entity to play the public audio URL using `announce: true`.
+4. With Direct Google Cast selected, it contacts the Google Cast speaker directly at its configured IP address or hostname.
 
-5. The speaker or Cast device fetches the MP3 from Adhancron’s `/audio/adhan_final.mp3` endpoint.
+5. The speaker fetches the MP3 from Adhancron’s `/audio/adhan_final.mp3` endpoint.
 
-6. `trigger_ha.py` polls the media player's state to confirm it actually started playing, and only re-sends the command if it did not.
-
-7. Adhancron logs both the Home Assistant trigger and the speaker’s audio request.
+6. Adhancron logs the playback trigger and the speaker’s audio request.
 
 ## Web UI
 
@@ -78,7 +77,11 @@ The dashboard includes:
 - A visible app version badge.
 - A Fajr auto-update status panel.
 
-## Home Assistant Settings
+## Playback Settings
+
+Choose one method in the web UI:
+
+### Home Assistant
 
 In the web UI, save:
 
@@ -103,6 +106,21 @@ The token is saved to:
 ```
 
 The API does not echo the token back to the browser.
+
+### Direct Google Cast
+
+This does not need a Home Assistant URL, entity ID, or token. Save:
+
+- **Google Cast Speaker IP or Hostname**
+  Example: `192.168.1.24`
+- **Cast Port**
+  Normally leave this as `8009`.
+- **Public Audio URL**
+  Example: `http://192.168.1.16:8090`
+
+Use the speaker's stable LAN IP address where possible. You can find it in your router's device list or in the Google Home app's device information. The Google speaker must be able to reach the public audio URL directly.
+
+Direct Google Cast starts a normal media session. It will interrupt existing audio on that speaker and does not restore previous playback afterwards. Choose Home Assistant when you specifically want its `announce` behavior or want to target Home Assistant speaker groups.
 
 ## Before You Install
 
@@ -139,8 +157,9 @@ The CasaOS template builds the Docker image directly from this GitHub repository
 3. Edit these values in the pasted compose before installing:
 
    - `PUBLIC_BASE_URL` → `http://YOUR_CASAOS_HOST_IP:8090` (the template ships with a placeholder IP — you must change it).
-   - `HA_URL` → your Home Assistant address, e.g. `http://192.168.1.22:8123`.
-   - `HA_ENTITY_ID` → your speaker entity, e.g. `media_player.bedroom_speaker`.
+   - `PUBLIC_BASE_URL` must be set to the CasaOS server address, e.g. `http://192.168.1.16:8090`.
+   - For Home Assistant playback, set `HA_URL` and `HA_ENTITY_ID`.
+   - For direct Google Cast playback, set `ADHAN_PLAYBACK_METHOD` to `google_cast` and `GOOGLE_CAST_HOST` to the speaker's LAN IP address. These can also be set later in the web UI.
 
    You can leave `HA_TOKEN` empty and save it later in the web UI (recommended), or paste it here.
 
@@ -171,6 +190,9 @@ Edit `.env` with the values from **Before You Install**:
 ```text
 HA_URL=http://YOUR_HOME_ASSISTANT_IP:8123
 HA_ENTITY_ID=media_player.bedroom_speaker
+ADHAN_PLAYBACK_METHOD=home_assistant
+# For direct Google Cast instead: ADHAN_PLAYBACK_METHOD=google_cast
+# GOOGLE_CAST_HOST=192.168.1.24
 PUBLIC_BASE_URL=http://YOUR_DOCKER_HOST_IP:8090
 ADHAN_VOLUME=0.8
 # Optional: you can paste the token here, or save it from the web UI later.
@@ -210,16 +232,18 @@ Then open `http://YOUR_DOCKER_HOST_IP:8090` and complete the [First-Run Setup](#
 
 However you installed, finish setup from the web dashboard at `http://YOUR_HOST_IP:8090`:
 
-1. In the **Home Assistant settings** panel, confirm or fill in:
+1. In the **Playback** panel, choose either **Home Assistant** or **Direct Google Cast**.
+2. For **Home Assistant**, fill in:
    - **Home Assistant URL** (e.g. `http://192.168.1.22:8123`)
    - **Speaker Entity** (e.g. `media_player.bedroom_speaker`)
    - **Public Audio URL** (e.g. `http://YOUR_HOST_IP:8090`)
    - **Access Token** — paste your long-lived token here if you did not set `HA_TOKEN`.
    - **Latitude** and **Longitude** — enter these manually or choose **Use This Device's Location**.
-2. Click **Save Settings**. The token and location are written to `/data/adhan_settings.json` (owner-only); the app calculates and saves the timetable at `/data/prayer_times.json`, then applies today's cron schedule.
-3. Ensure the container `TZ` value matches your home timezone. Cron uses this timezone when it runs the saved local times.
-4. Click **Play Adhan Now** to test. The speaker should play the adhan within a few seconds.
-5. Check that the prayer cards show today's times. The schedule auto-updates daily at `00:05`; you can also edit any time manually and toggle a **Manual** override so the daily update leaves it alone.
+3. For **Direct Google Cast**, fill in the speaker IP/hostname, leave the port at `8009`, and set the public audio URL. The Home Assistant fields are not needed.
+4. Click **Save Settings**. The playback settings and location are written to `/data/adhan_settings.json` (owner-only); the app calculates and saves the timetable at `/data/prayer_times.json`, then applies today's cron schedule.
+5. Ensure the container `TZ` value matches your home timezone. Cron uses this timezone when it runs the saved local times.
+6. Click **Play Adhan Now** to test. The speaker should play the adhan within a few seconds.
+7. Check that the prayer cards show today's times. The schedule auto-updates daily at `00:05`; you can also edit any time manually and toggle a **Manual** override so the daily update leaves it alone.
 
 If nothing plays, see [Troubleshooting](#troubleshooting) — the trigger log at `/data/adhan.log` will say whether playback was confirmed.
 
@@ -232,6 +256,9 @@ Environment variables:
 | `HA_URL` | Home Assistant base URL | `http://homeassistant.local:8123` |
 | `HA_ENTITY_ID` | Target media player entity | `media_player.bedroom_speaker` |
 | `HA_TOKEN` | Optional Home Assistant token | empty |
+| `ADHAN_PLAYBACK_METHOD` | `home_assistant` or `google_cast` | `home_assistant` |
+| `GOOGLE_CAST_HOST` | Google Cast speaker IP address or hostname | empty |
+| `GOOGLE_CAST_PORT` | Google Cast control port | `8009` |
 | `PUBLIC_BASE_URL` | Base URL where HA/speaker can reach Adhancron | empty |
 | `ADHAN_VOLUME` | Playback volume, `0.0` to `1.0` | `0.8` |
 | `ADHAN_AUDIO_FILE` | Audio file served from `/audio` | `adhan_final.mp3` |
@@ -244,7 +271,7 @@ Environment variables:
 | `ADHAN_MEDIA_CONTENT_TYPE` | Media type sent to Home Assistant | `audio/mpeg` |
 | `TZ` | Container timezone | `Europe/London` |
 
-Settings saved from the web UI take priority for Home Assistant URL, entity, token, public audio URL, latitude, and longitude.
+Settings saved from the web UI take priority for the playback method, Home Assistant URL/entity/token, Google Cast host/port, public audio URL, latitude, and longitude.
 
 ## Persistent Data
 
@@ -394,6 +421,10 @@ docker exec -it adhan-manager tail -100 /data/adhan_access.log
 ```
 
 Note that Cast devices stream in chunks via range requests, so a single request showing `"completed": false` is normal and not by itself a failure — rely on the trigger log's confirmation line instead.
+
+### Direct Google Cast Cannot Connect
+
+Check that the saved Google Cast IP address is the current address of the speaker and that the CasaOS host can reach port `8009` on it. Give the speaker a DHCP reservation in your router so its address remains stable. The speaker, the CasaOS server, and the public audio URL must all be on reachable network paths.
 
 ### Home Assistant URL Does Not Resolve
 

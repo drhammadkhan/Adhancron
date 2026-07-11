@@ -1,5 +1,6 @@
 import os
 import sys
+import types
 import unittest
 from pathlib import Path
 from unittest import mock
@@ -126,6 +127,58 @@ class TriggerHATests(unittest.TestCase):
         fake = FakeHA(states=["idle", "idle"])
         self._run(fake)
         self.assertEqual(len(fake.play_calls), trigger_ha.PLAY_ATTEMPTS)
+
+    def test_direct_google_cast_bypasses_home_assistant(self):
+        with mock.patch.object(trigger_ha, "_playback_method", return_value="google_cast"), \
+             mock.patch.object(trigger_ha, "_google_cast_host", return_value="192.168.1.24"), \
+             mock.patch.object(trigger_ha, "_trigger_google_cast") as direct_cast:
+            trigger_ha.trigger("http://host/audio/adhan_final.mp3", 0.8)
+        direct_cast.assert_called_once_with("http://host/audio/adhan_final.mp3", 0.8)
+
+    def test_direct_google_cast_connects_and_starts_buffered_audio(self):
+        calls = []
+
+        class FakeMediaController:
+            def play_media(self, url, content_type, stream_type=None):
+                calls.append(("play_media", url, content_type, stream_type))
+
+            def block_until_active(self, timeout=None):
+                calls.append(("block_until_active", timeout))
+
+        class FakeCast:
+            media_controller = FakeMediaController()
+
+            def wait(self, timeout=None):
+                calls.append(("wait", timeout))
+
+            def set_volume(self, volume, timeout=None):
+                calls.append(("set_volume", volume, timeout))
+
+            def disconnect(self, timeout=None):
+                calls.append(("disconnect", timeout))
+
+        fake_cast = FakeCast()
+
+        def get_chromecast_from_host(host, **kwargs):
+            calls.append(("connect", host, kwargs))
+            return fake_cast
+
+        fake_pychromecast = types.SimpleNamespace(
+            get_chromecast_from_host=get_chromecast_from_host,
+        )
+        with mock.patch.object(trigger_ha, "_google_cast_host", return_value="192.168.1.24"), \
+             mock.patch.object(trigger_ha, "_google_cast_port", return_value=8009), \
+             mock.patch.dict(sys.modules, {"pychromecast": fake_pychromecast}):
+            trigger_ha._trigger_google_cast("http://host/audio/adhan_final.mp3", 0.8)
+
+        self.assertEqual(calls[0][0], "connect")
+        self.assertEqual(calls[0][1][0:2], ("192.168.1.24", 8009))
+        self.assertIn(("set_volume", 0.8, trigger_ha.REQUEST_TIMEOUT), calls)
+        self.assertIn(
+            ("play_media", "http://host/audio/adhan_final.mp3", "audio/mpeg", "BUFFERED"),
+            calls,
+        )
+        self.assertIn(("disconnect", 1), calls)
 
 
 if __name__ == "__main__":

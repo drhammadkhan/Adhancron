@@ -15,6 +15,12 @@ const haSettingsBadge = document.getElementById("haSettingsBadge");
 const haUrlInput = document.getElementById("haUrlInput");
 const haEntityInput = document.getElementById("haEntityInput");
 const publicBaseUrlInput = document.getElementById("publicBaseUrlInput");
+const playbackMethodInput = document.getElementById("playbackMethodInput");
+const googleCastHostInput = document.getElementById("googleCastHostInput");
+const googleCastPortInput = document.getElementById("googleCastPortInput");
+const homeAssistantFields = document.getElementById("homeAssistantFields");
+const homeAssistantTokenFields = document.getElementById("homeAssistantTokenFields");
+const googleCastFields = document.getElementById("googleCastFields");
 const latitudeInput = document.getElementById("latitudeInput");
 const longitudeInput = document.getElementById("longitudeInput");
 const useLocationBtn = document.getElementById("useLocationBtn");
@@ -37,11 +43,22 @@ function setSettingsStatus(message, type = "ghost") {
   haSettingsBadge.textContent = message;
 }
 
+function syncPlaybackMethod(method) {
+  const directCast = method === "google_cast";
+  if (homeAssistantFields) homeAssistantFields.classList.toggle("hidden", directCast);
+  if (homeAssistantTokenFields) homeAssistantTokenFields.classList.toggle("hidden", directCast);
+  if (googleCastFields) googleCastFields.classList.toggle("hidden", !directCast);
+}
+
 function renderSettings(settings, overrideMessage = null) {
   if (!haUrlInput || !haEntityInput || !haTokenInput) return;
   haUrlInput.value = settings.ha_url || "";
   haEntityInput.value = settings.ha_entity_id || "";
   if (publicBaseUrlInput) publicBaseUrlInput.value = settings.public_base_url || "";
+  if (playbackMethodInput) playbackMethodInput.value = settings.playback_method || "home_assistant";
+  if (googleCastHostInput) googleCastHostInput.value = settings.google_cast_host || "";
+  if (googleCastPortInput) googleCastPortInput.value = settings.google_cast_port || "8009";
+  syncPlaybackMethod(settings.playback_method || "home_assistant");
   if (latitudeInput) latitudeInput.value = settings.latitude || "";
   if (longitudeInput) longitudeInput.value = settings.longitude || "";
   if (locationHint) locationHint.textContent = `Timings are calculated locally. Container timezone: ${settings.timezone || "unknown"}.`;
@@ -203,10 +220,15 @@ async function saveSettings() {
   if (!haUrlInput || !haEntityInput || !haTokenInput || !saveSettingsBtn) return;
 
   const payload = {
+    playback_method: playbackMethodInput ? playbackMethodInput.value : "home_assistant",
     ha_url: haUrlInput.value,
     ha_entity_id: haEntityInput.value,
     public_base_url: publicBaseUrlInput ? publicBaseUrlInput.value : "",
   };
+  if (payload.playback_method === "google_cast") {
+    payload.google_cast_host = googleCastHostInput ? googleCastHostInput.value.trim() : "";
+    payload.google_cast_port = googleCastPortInput ? googleCastPortInput.value.trim() : "8009";
+  }
   const latitude = latitudeInput ? latitudeInput.value.trim() : "";
   const longitude = longitudeInput ? longitudeInput.value.trim() : "";
   if (latitude || longitude) {
@@ -349,6 +371,9 @@ refreshBtn.addEventListener("click", () => {
 });
 saveBtn.addEventListener("click", saveJobs);
 if (saveSettingsBtn) saveSettingsBtn.addEventListener("click", saveSettings);
+if (playbackMethodInput) {
+  playbackMethodInput.addEventListener("change", () => syncPlaybackMethod(playbackMethodInput.value));
+}
 if (useLocationBtn) {
   useLocationBtn.addEventListener("click", () => {
     if (!navigator.geolocation) {

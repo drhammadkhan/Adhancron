@@ -14,6 +14,9 @@ class SettingsManager:
         "public_base_url",
         "latitude",
         "longitude",
+        "playback_method",
+        "google_cast_host",
+        "google_cast_port",
     }
 
     def __init__(self, path: str | Path) -> None:
