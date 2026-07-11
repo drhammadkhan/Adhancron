@@ -5,6 +5,7 @@ import os
 from datetime import datetime, timedelta
 from pathlib import Path
 
+import requests
 from fastapi import FastAPI, HTTPException, Request
 from fastapi import Response
 from fastapi.responses import FileResponse
@@ -58,6 +59,10 @@ class SettingsUpdate(BaseModel):
     playback_method: str | None = None
     google_cast_host: str | None = None
     google_cast_port: str | None = None
+
+
+class LocationSearchRequest(BaseModel):
+    query: str
 
 
 def _app_version() -> str:
@@ -119,6 +124,39 @@ def _settings_response(request: Request | None = None) -> dict:
 @app.get("/api/settings")
 def get_settings(request: Request) -> dict:
     return _settings_response(request)
+
+
+@app.post("/api/location-search")
+def search_location(payload: LocationSearchRequest) -> dict:
+    query = payload.query.strip()
+    if len(query) < 2:
+        raise HTTPException(status_code=400, detail="Enter a postcode, town, or address to search")
+    if len(query) > 160:
+        raise HTTPException(status_code=400, detail="Location search is too long")
+
+    try:
+        response = requests.get(
+            "https://nominatim.openstreetmap.org/search",
+            params={"q": query, "format": "jsonv2", "limit": 5, "addressdetails": 1},
+            headers={"User-Agent": "Adhancron/1.0 (self-hosted prayer-time scheduler)"},
+            timeout=10,
+        )
+        response.raise_for_status()
+    except requests.RequestException as exc:
+        raise HTTPException(status_code=502, detail="Location search is unavailable. Enter coordinates manually instead.") from exc
+
+    results = response.json()
+    return {
+        "results": [
+            {
+                "name": item.get("display_name", "Unknown location"),
+                "latitude": item.get("lat", ""),
+                "longitude": item.get("lon", ""),
+            }
+            for item in results
+            if item.get("lat") and item.get("lon")
+        ]
+    }
 
 
 @app.put("/api/settings")

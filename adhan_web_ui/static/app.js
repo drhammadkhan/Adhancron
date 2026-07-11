@@ -27,7 +27,9 @@ const homeAssistantTokenFields = document.getElementById("homeAssistantTokenFiel
 const googleCastFields = document.getElementById("googleCastFields");
 const latitudeInput = document.getElementById("latitudeInput");
 const longitudeInput = document.getElementById("longitudeInput");
-const useLocationBtn = document.getElementById("useLocationBtn");
+const locationSearchInput = document.getElementById("locationSearchInput");
+const searchLocationBtn = document.getElementById("searchLocationBtn");
+const locationResults = document.getElementById("locationResults");
 const locationHint = document.getElementById("locationHint");
 const haTokenInput = document.getElementById("haTokenInput");
 const saveSettingsBtn = document.getElementById("saveSettingsBtn");
@@ -60,7 +62,7 @@ function renderSettings(settings, overrideMessage = null) {
   syncPlaybackMethod(settings.playback_method || "home_assistant");
   if (latitudeInput) latitudeInput.value = settings.latitude || "";
   if (longitudeInput) longitudeInput.value = settings.longitude || "";
-  if (locationHint) locationHint.textContent = `Timings are calculated locally from the saved coordinates and update each day. Container timezone: ${settings.timezone || "unknown"}.`;
+  if (locationHint) locationHint.textContent = `Timings are calculated locally from the saved coordinates and update each day. Container timezone: ${settings.timezone || "unknown"}. Location searches use OpenStreetMap; you can also enter coordinates directly.`;
   haTokenInput.value = "";
   if (settings.playback_method === "google_cast") {
     const configured = Boolean(settings.google_cast_host);
@@ -456,27 +458,68 @@ if (playbackMethodInput) {
     }
   });
 }
-if (useLocationBtn) {
-  useLocationBtn.addEventListener("click", () => {
-    if (!navigator.geolocation) {
-      setSettingsStatus("This browser cannot provide a location", "error");
-      return;
+function chooseLocation(result) {
+  if (latitudeInput) latitudeInput.value = Number(result.latitude).toFixed(5);
+  if (longitudeInput) longitudeInput.value = Number(result.longitude).toFixed(5);
+  if (locationResults) {
+    locationResults.innerHTML = "";
+    locationResults.classList.add("hidden");
+  }
+  setSettingsStatus("Location selected. Save Settings to generate timings.", "success");
+}
+
+function showLocationResults(results) {
+  if (!locationResults) return;
+  locationResults.innerHTML = "";
+  locationResults.classList.remove("hidden");
+  if (results.length === 0) {
+    locationResults.textContent = "No matching location found. Try a more specific search or enter coordinates directly.";
+    return;
+  }
+  results.forEach((result) => {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "btn btn-outline h-auto min-h-12 w-full justify-start whitespace-normal px-3 py-2 text-left text-sm normal-case";
+    button.textContent = result.name;
+    button.addEventListener("click", () => chooseLocation(result));
+    locationResults.appendChild(button);
+  });
+}
+
+async function searchLocation() {
+  const query = locationSearchInput?.value.trim() || "";
+  if (query.length < 2) {
+    setSettingsStatus("Enter a postcode, town, or address to search", "warning");
+    locationSearchInput?.focus();
+    return;
+  }
+  if (!searchLocationBtn) return;
+  searchLocationBtn.disabled = true;
+  setSettingsStatus("Finding locations...", "ghost");
+  try {
+    const response = await fetch("api/location-search", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ query }),
+    });
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.detail || "Unable to search for a location");
+    showLocationResults(data.results || []);
+    setSettingsStatus(data.results?.length ? "Choose the matching location" : "No matching location found", data.results?.length ? "success" : "warning");
+  } catch (error) {
+    setSettingsStatus(error.message, "error");
+  } finally {
+    searchLocationBtn.disabled = false;
+  }
+}
+
+if (searchLocationBtn) searchLocationBtn.addEventListener("click", searchLocation);
+if (locationSearchInput) {
+  locationSearchInput.addEventListener("keydown", (event) => {
+    if (event.key === "Enter") {
+      event.preventDefault();
+      searchLocation();
     }
-    useLocationBtn.disabled = true;
-    setSettingsStatus("Getting this device's location...", "ghost");
-    navigator.geolocation.getCurrentPosition(
-      (position) => {
-        if (latitudeInput) latitudeInput.value = position.coords.latitude.toFixed(5);
-        if (longitudeInput) longitudeInput.value = position.coords.longitude.toFixed(5);
-        setSettingsStatus("Location set. Save Settings to generate timings.", "success");
-        useLocationBtn.disabled = false;
-      },
-      (error) => {
-        setSettingsStatus(`Unable to get location: ${error.message}`, "error");
-        useLocationBtn.disabled = false;
-      },
-      { enableHighAccuracy: false, timeout: 10000, maximumAge: 86400000 },
-    );
   });
 }
 
