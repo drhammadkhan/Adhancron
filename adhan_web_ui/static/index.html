@@ -237,6 +237,30 @@
         const button = document.getElementById("playBtn");
         button.disabled = true;
         try {
+          const playbackMethod = document.getElementById("playbackMethodInput")?.value;
+          if (playbackMethod === "google_cast") {
+            const host = document.getElementById("googleCastHostInput")?.value.trim();
+            const port = document.getElementById("googleCastPortInput")?.value.trim() || "8009";
+            const publicBaseUrl = document.getElementById("publicBaseUrlInput")?.value.trim();
+            if (!host) throw new Error("Enter the Google Cast speaker IP address or hostname first");
+            if (!publicBaseUrl) throw new Error("Enter the public audio URL first");
+
+            // Persist the direct-Cast choice before the trigger. This keeps the
+            // test button and the scheduled cron command on the same route.
+            const settingsResponse = await fetch("api/settings", {
+              method: "PUT",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                playback_method: "google_cast",
+                google_cast_host: host,
+                google_cast_port: port,
+                public_base_url: publicBaseUrl,
+              }),
+            });
+            const settingsPayload = await settingsResponse.json();
+            if (!settingsResponse.ok) throw new Error(settingsPayload.detail || "Unable to save Google Cast settings");
+            if (typeof renderSettings === "function") renderSettings(settingsPayload, "Direct Google Cast saved");
+          }
           const response = await fetch("api/play", { method: "POST" });
           const payload = await response.json();
           if (!response.ok) throw new Error(payload.detail || "Unable to trigger adhan");
@@ -249,6 +273,6 @@
         return false;
       }
     </script>
-    <script src="static/app.js?v=6"></script>
+    <script src="static/app.js?v=7"></script>
   </body>
 </html>

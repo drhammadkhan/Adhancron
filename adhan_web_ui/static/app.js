@@ -63,6 +63,14 @@ function renderSettings(settings, overrideMessage = null) {
   if (longitudeInput) longitudeInput.value = settings.longitude || "";
   if (locationHint) locationHint.textContent = `Timings are calculated locally. Container timezone: ${settings.timezone || "unknown"}.`;
   haTokenInput.value = "";
+  if (settings.playback_method === "google_cast") {
+    const configured = Boolean(settings.google_cast_host);
+    setSettingsStatus(
+      overrideMessage || (configured ? "Direct Google Cast ready" : "Set Google Cast speaker address"),
+      configured ? "success" : "warning",
+    );
+    return;
+  }
   const tokenStatus = settings.ha_token_source === "saved"
     ? "Token saved to /data"
     : settings.ha_token_source === "environment"
@@ -372,7 +380,12 @@ refreshBtn.addEventListener("click", () => {
 saveBtn.addEventListener("click", saveJobs);
 if (saveSettingsBtn) saveSettingsBtn.addEventListener("click", saveSettings);
 if (playbackMethodInput) {
-  playbackMethodInput.addEventListener("change", () => syncPlaybackMethod(playbackMethodInput.value));
+  playbackMethodInput.addEventListener("change", () => {
+    syncPlaybackMethod(playbackMethodInput.value);
+    if (playbackMethodInput.value === "google_cast") {
+      setSettingsStatus("Save the Google Cast speaker address before testing", "warning");
+    }
+  });
 }
 if (useLocationBtn) {
   useLocationBtn.addEventListener("click", () => {
