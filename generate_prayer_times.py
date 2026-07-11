@@ -1,32 +1,36 @@
 from __future__ import annotations
 
 import json
+import math
 import os
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import date, datetime, timedelta
 from pathlib import Path
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
-import requests
+from astral import Observer, SunDirection
+from astral.sun import (
+    julianday,
+    julianday_to_juliancentury,
+    noon,
+    sun_declination,
+    sunrise,
+    sunset,
+    time_at_elevation,
+)
 
 from adhan_config import PRAYER_TIMES_FILE, SETTINGS_FILE
 
-ALISLAM_MONTHLY_TIMINGS_URL = "https://www.alislam.org/adhan/api/timings/month"
-REQUEST_TIMEOUT = float(os.getenv("ADHAN_TIMINGS_REQUEST_TIMEOUT", "20"))
-PRAYER_NAME_MAP = {
-    "Fajr": "Fajr",
-    "Zuhr": "Dhuhr",
-    "Asr": "Asr",
-    "Maghrib": "Maghrib",
-    "Isha": "Isha",
-}
-PRAYER_NAMES = set(PRAYER_NAME_MAP.values())
+FAJR_OFFSET = timedelta(minutes=90)
+DHUHR_OFFSET = timedelta(minutes=5)
+MAGHRIB_OFFSET = timedelta(minutes=1)
 
 
 @dataclass(frozen=True)
 class Location:
     latitude: float
     longitude: float
+    timezone: ZoneInfo
 
 
 @dataclass(frozen=True)
@@ -46,6 +50,14 @@ def _load_saved_settings() -> dict[str, str]:
     return {key: value for key, value in data.items() if isinstance(value, str)}
 
 
+def _configured_timezone() -> ZoneInfo:
+    timezone_name = os.getenv("TZ", "UTC")
+    try:
+        return ZoneInfo(timezone_name)
+    except ZoneInfoNotFoundError as exc:
+        raise ValueError(f"Invalid timezone: {timezone_name}") from exc
+
+
 def location_from_values(latitude: str, longitude: str) -> Location:
     try:
         parsed_latitude = float(latitude)
@@ -54,7 +66,7 @@ def location_from_values(latitude: str, longitude: str) -> Location:
         raise ValueError("Latitude and longitude must be numbers") from exc
     if not -90 <= parsed_latitude <= 90 or not -180 <= parsed_longitude <= 180:
         raise ValueError("Latitude must be between -90 and 90 and longitude between -180 and 180")
-    return Location(parsed_latitude, parsed_longitude)
+    return Location(parsed_latitude, parsed_longitude, _configured_timezone())
 
 
 def configured_location() -> Location:
@@ -67,73 +79,95 @@ def configured_location() -> Location:
     return location_from_values(latitude, longitude)
 
 
-def _format_month(payload: dict) -> tuple[dict[str, dict[str, dict[str, str]]], str]:
-    location_info = payload.get("locationInfo", {})
-    timezone_name = location_info.get("timezone")
-    if not isinstance(timezone_name, str):
-        raise ValueError("Alislam did not return a timezone for this location")
+def _round_to_minute(value: datetime) -> datetime:
+    return (value + timedelta(seconds=30)).replace(second=0, microsecond=0)
+
+
+def _days_since_solstice(day: date, latitude: float) -> int:
+    day_of_year = day.timetuple().tm_yday
+    days_in_year = 366 if day.year % 4 == 0 and (day.year % 100 != 0 or day.year % 400 == 0) else 365
+    if latitude >= 0:
+        return (day_of_year + 10) % days_in_year
+    southern_offset = 173 if days_in_year == 366 else 172
+    return (day_of_year - southern_offset) % days_in_year
+
+
+def _linear_seasonal_value(days: int, a: float, b: float, c: float, d: float) -> float:
+    if days < 91:
+        return a + ((b - a) / 91.0) * days
+    if days < 137:
+        return b + ((c - b) / 46.0) * (days - 91)
+    if days < 183:
+        return c + ((d - c) / 46.0) * (days - 137)
+    if days < 229:
+        return d + ((c - d) / 46.0) * (days - 183)
+    if days < 275:
+        return c + ((b - c) / 46.0) * (days - 229)
+    return b + ((a - b) / 91.0) * (days - 275)
+
+
+def _isha_offset_seconds(day: date, latitude: float) -> int:
+    """Moonsighting Committee's seasonal evening-twilight adjustment."""
+    absolute_latitude = abs(latitude)
+    a = 75 + (25.6 / 55.0) * absolute_latitude
+    b = 75 + (2.05 / 55.0) * absolute_latitude
+    c = 75 - (9.21 / 55.0) * absolute_latitude
+    d = 75 + (6.14 / 55.0) * absolute_latitude
+    return round(_linear_seasonal_value(_days_since_solstice(day, latitude), a, b, c, d) * 60)
+
+
+def _asr_elevation(day: date, latitude: float) -> float:
+    """Solar elevation for standard Asr (shadow factor 1)."""
+    century = julianday_to_juliancentury(julianday(day))
+    declination = sun_declination(century)
+    noon_shadow = math.tan(math.radians(abs(latitude - declination)))
+    return math.degrees(math.atan(1 / (1 + noon_shadow)))
+
+
+def calculate_day(day: date, location: Location) -> dict[str, str]:
+    """Calculate local Alislam-compatible prayer times for one Gregorian day."""
+    observer = Observer(latitude=location.latitude, longitude=location.longitude)
     try:
-        timezone = ZoneInfo(timezone_name)
-    except ZoneInfoNotFoundError as exc:
-        raise ValueError(f"Alislam returned an invalid timezone: {timezone_name}") from exc
+        local_sunrise = sunrise(observer, date=day, tzinfo=location.timezone)
+        local_sunset = sunset(observer, date=day, tzinfo=location.timezone)
+    except ValueError as exc:
+        raise ValueError("Sunrise and sunset are unavailable for this date and location") from exc
 
-    result: dict[str, dict[str, dict[str, str]]] = {}
-    for day in payload.get("multiDayTimings", []):
-        prayers = day.get("prayers", [])
-        prayer_values = {
-            PRAYER_NAME_MAP[prayer.get("name")]: prayer.get("time")
-            for prayer in prayers
-            if prayer.get("name") in PRAYER_NAME_MAP
-        }
-        if set(prayer_values) != PRAYER_NAMES:
-            raise ValueError("Alislam returned incomplete prayer times")
-        times = {}
-        for name, timestamp in prayer_values.items():
-            if not isinstance(timestamp, (int, float)):
-                raise ValueError(f"Alislam returned an invalid {name} timestamp")
-            times[name] = datetime.fromtimestamp(timestamp / 1000, tz=timezone).strftime("%H:%M")
-        fajr_timestamp = prayer_values["Fajr"]
-        local_day = datetime.fromtimestamp(fajr_timestamp / 1000, tz=timezone)
-        result.setdefault(str(local_day.year), {}).setdefault(local_day.strftime("%B"), {})[
-            str(local_day.day)
-        ] = times
-    return result, timezone_name
+    asr = time_at_elevation(
+        observer,
+        elevation=_asr_elevation(day, location.latitude),
+        date=day,
+        direction=SunDirection.SETTING,
+        tzinfo=location.timezone,
+    )
+    values = {
+        "Fajr": local_sunrise - FAJR_OFFSET,
+        "Dhuhr": noon(observer, date=day, tzinfo=location.timezone) + DHUHR_OFFSET,
+        "Asr": asr,
+        "Maghrib": local_sunset + MAGHRIB_OFFSET,
+        "Isha": local_sunset + timedelta(seconds=_isha_offset_seconds(day, location.latitude)),
+    }
+    return {name: _round_to_minute(value).strftime("%H:%M") for name, value in values.items()}
 
 
-def _fetch_month(year: int, month: int, location: Location) -> tuple[dict, str]:
-    try:
-        response = requests.get(
-            ALISLAM_MONTHLY_TIMINGS_URL,
-            params={
-                "year": year,
-                "month": month,
-                "lat": format(location.latitude, ".8f"),
-                "lng": format(location.longitude, ".8f"),
-            },
-            timeout=REQUEST_TIMEOUT,
-        )
-        response.raise_for_status()
-        return _format_month(response.json())
-    except requests.RequestException as exc:
-        raise ValueError(f"Unable to fetch prayer times from Alislam: {exc}") from exc
+def calculate_year(year: int, location: Location) -> dict[str, dict[str, dict[str, str]]]:
+    result: dict[str, dict[str, dict[str, str]]] = {str(year): {}}
+    current = date(year, 1, 1)
+    while current.year == year:
+        month = current.strftime("%B")
+        result[str(year)].setdefault(month, {})[str(current.day)] = calculate_day(current, location)
+        current += timedelta(days=1)
+    return result
 
 
 def generate_configured_times(now: datetime | None = None) -> GenerationResult:
-    """Fetch the official Alislam timetable and save it in Adhancron's JSON format."""
+    """Generate the current and following year's timetable without a network request."""
     now = now or datetime.now()
     location = configured_location()
     years = (now.year, now.year + 1)
     timetable: dict[str, dict] = {}
-    returned_timezone = ""
-
     for year in years:
-        timetable[str(year)] = {}
-        for month in range(1, 13):
-            month_data, timezone_name = _fetch_month(year, month, location)
-            returned_timezone = returned_timezone or timezone_name
-            if timezone_name != returned_timezone:
-                raise ValueError("Alislam returned inconsistent timezones for this location")
-            timetable[str(year)].update(month_data.get(str(year), {}))
+        timetable.update(calculate_year(year, location))
 
     PRAYER_TIMES_FILE.parent.mkdir(parents=True, exist_ok=True)
     temp_file = PRAYER_TIMES_FILE.with_suffix(".tmp")
@@ -144,10 +178,10 @@ def generate_configured_times(now: datetime | None = None) -> GenerationResult:
     return GenerationResult(
         years=years,
         output_file=PRAYER_TIMES_FILE,
-        timezone=returned_timezone,
+        timezone=location.timezone.key,
         summary=(
-            f"Generated official Alislam times for {years[0]} and {years[1]} at "
-            f"{location.latitude:.5f}, {location.longitude:.5f} ({returned_timezone})"
+            f"Generated local prayer times for {years[0]} and {years[1]} at "
+            f"{location.latitude:.5f}, {location.longitude:.5f} ({location.timezone.key})"
         ),
     )
 

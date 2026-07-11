@@ -44,7 +44,7 @@ function renderSettings(settings, overrideMessage = null) {
   if (publicBaseUrlInput) publicBaseUrlInput.value = settings.public_base_url || "";
   if (latitudeInput) latitudeInput.value = settings.latitude || "";
   if (longitudeInput) longitudeInput.value = settings.longitude || "";
-  if (locationHint) locationHint.textContent = `Timings are fetched from Alislam for this location. Container timezone: ${settings.timezone || "unknown"}.`;
+  if (locationHint) locationHint.textContent = `Timings are calculated locally. Container timezone: ${settings.timezone || "unknown"}.`;
   haTokenInput.value = "";
   const tokenStatus = settings.ha_token_source === "saved"
     ? "Token saved to /data"

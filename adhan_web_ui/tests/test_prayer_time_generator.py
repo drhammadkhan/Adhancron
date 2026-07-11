@@ -1,11 +1,23 @@
 from __future__ import annotations
 
+import os
 import unittest
+from datetime import date
 
-from generate_prayer_times import _format_month, location_from_values
+from generate_prayer_times import _isha_offset_seconds, calculate_day, location_from_values
 
 
 class PrayerTimeGeneratorTests(unittest.TestCase):
+    def setUp(self):
+        self.previous_timezone = os.environ.get("TZ")
+        os.environ["TZ"] = "Europe/London"
+
+    def tearDown(self):
+        if self.previous_timezone is None:
+            os.environ.pop("TZ", None)
+        else:
+            os.environ["TZ"] = self.previous_timezone
+
     def test_location_validation(self):
         location = location_from_values("51.5074", "-0.1278")
         self.assertEqual(location.latitude, 51.5074)
@@ -13,27 +25,19 @@ class PrayerTimeGeneratorTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             location_from_values("91", "0")
 
-    def test_al_islam_response_is_written_in_existing_json_shape(self):
-        payload = {
-            "locationInfo": {"timezone": "Europe/London"},
-            "multiDayTimings": [
-                {
-                    "date": 1782937121011,
-                    "prayers": [
-                        {"name": "Fajr", "time": 1782872280000},
-                        {"name": "Sunrise", "time": 1782877680000},
-                        {"name": "Zuhr", "time": 1782907740000},
-                        {"name": "Asr", "time": 1782923160000},
-                        {"name": "Sunset", "time": 1782937260000},
-                        {"name": "Maghrib", "time": 1782937320000},
-                        {"name": "Isha", "time": 1782941940000},
-                    ],
-                }
-            ],
-        }
-        data, timezone = _format_month(payload)
-        self.assertEqual(timezone, "Europe/London")
+    def test_london_summer_times_match_the_alislam_calendar(self):
+        location = location_from_values("51.5074", "-0.1278")
+        times = calculate_day(date(2026, 7, 1), location)
         self.assertEqual(
-            data["2026"]["July"]["1"],
-            {"Fajr": "03:18", "Dhuhr": "13:09", "Asr": "17:26", "Maghrib": "21:22", "Isha": "22:39"},
+            {name: times[name] for name in ("Fajr", "Dhuhr", "Asr", "Maghrib")},
+            {"Fajr": "03:18", "Dhuhr": "13:09", "Asr": "17:26", "Maghrib": "21:22"},
         )
+        # Astral and Alislam use different solar-position engines; both place
+        # this seasonal Isha value within a minute of 22:39.
+        self.assertIn(times["Isha"], {"22:38", "22:39"})
+
+    def test_seasonal_isha_adjustment_matches_london_samples(self):
+        self.assertEqual(_isha_offset_seconds(date(2026, 1, 1), 51.5074), 5_779)
+        self.assertEqual(_isha_offset_seconds(date(2026, 5, 1), 51.5074), 4_065)
+        self.assertEqual(_isha_offset_seconds(date(2026, 6, 22), 51.5074), 4_845)
+        self.assertEqual(_isha_offset_seconds(date(2026, 12, 22), 51.5074), 5_924)

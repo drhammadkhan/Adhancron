@@ -8,7 +8,7 @@ The main supported use case is running this as a CasaOS or Docker container on a
 
 - Runs a web dashboard on port `8090`.
 - Creates and maintains cron jobs for Fajr, Dhuhr, Asr, Maghrib, and Isha.
-- Generates official Alislam prayer times from the saved home latitude and longitude.
+- Calculates prayer times locally from the saved home latitude and longitude.
 - Lets you manually edit prayer times from the web UI.
 - Lets you disable or re-enable individual prayer jobs.
 - Supports manual overrides so auto-update does not overwrite a custom time.
@@ -32,7 +32,7 @@ Adhancron has four moving parts:
    The container runs cron internally. Each prayer has a cron entry that calls `trigger_ha.py` with the public MP3 URL and volume.
 
 3. **Location-based prayer-time updater**
-   The dashboard saves the home latitude and longitude, then asks Alislam for the official monthly timetable for that location and stores it in `/data/prayer_times.json`. At `00:05` every day, cron runs `update_adhan.py`, checks that the calendar covers the current and following year, and updates the prayer cron entries. Manual overrides are preserved.
+   The dashboard saves the home latitude and longitude, then calculates a local timetable and stores it in `/data/prayer_times.json`. It uses Fajr 90 minutes before sunrise, Zuhr five minutes after solar noon, standard Asr, Maghrib one minute after sunset, and the Moonsighting Committee seasonal Isha adjustment. The solar-position library can differ from Alislam by up to two minutes. At `00:05` every day, cron runs `update_adhan.py`, checks that the calendar covers the current and following year, and updates the prayer cron entries. Manual overrides are preserved.
 
 4. **Home Assistant trigger**
    `trigger_ha.py` calls the Home Assistant REST API. It sets the speaker volume, then sends `media_player.play_media` with `announce: true` — Home Assistant's purpose-built "play this sound now" mode, which wakes the device, plays once, and restores prior state. It then polls the media player's state until it reports `playing`. If the speaker never reaches a playing state (or the integration does not support `announce`), it falls back to a plain `play_media` and re-sends only while playback remains unconfirmed.
@@ -216,7 +216,7 @@ However you installed, finish setup from the web dashboard at `http://YOUR_HOST_
    - **Public Audio URL** (e.g. `http://YOUR_HOST_IP:8090`)
    - **Access Token** — paste your long-lived token here if you did not set `HA_TOKEN`.
    - **Latitude** and **Longitude** — enter these manually or choose **Use This Device's Location**.
-2. Click **Save Settings**. The token and location are written to `/data/adhan_settings.json` (owner-only); the app downloads and saves the official timetable at `/data/prayer_times.json`, then applies today's cron schedule.
+2. Click **Save Settings**. The token and location are written to `/data/adhan_settings.json` (owner-only); the app calculates and saves the timetable at `/data/prayer_times.json`, then applies today's cron schedule.
 3. Ensure the container `TZ` value matches your home timezone. Cron uses this timezone when it runs the saved local times.
 4. Click **Play Adhan Now** to test. The speaker should play the adhan within a few seconds.
 5. Check that the prayer cards show today's times. The schedule auto-updates daily at `00:05`; you can also edit any time manually and toggle a **Manual** override so the daily update leaves it alone.
@@ -259,7 +259,7 @@ The `/data` volume contains:
 | `adhan_settings.json` | Saved Home Assistant settings and token |
 | `adhan_overrides.json` | Manual override flags |
 | `adhan_update_status.json` | Last updater status shown in the UI |
-| `prayer_times.json` | Alislam timetable generated for the saved location |
+| `prayer_times.json` | Locally calculated timetable for the saved location |
 
 Do not commit files from `/data`. They may contain local configuration or secrets.
 

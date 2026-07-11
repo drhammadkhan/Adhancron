@@ -74,7 +74,7 @@ def version() -> dict:
             "announce_playback": True,
             "state_confirmed_playback": True,
             "saved_home_assistant_token": True,
-            "location_based_alislam_timings": True,
+            "local_location_based_timings": True,
         },
     }
 
