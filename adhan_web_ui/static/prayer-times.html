@@ -3,46 +3,80 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Prayer Times</title>
+    <title>Prayer Times | Adhancron</title>
+    <link rel="icon" type="image/jpeg" href="/static/icon.jpg" />
     <link
       href="https://cdn.jsdelivr.net/npm/daisyui@4.12.23/dist/full.min.css"
       rel="stylesheet"
       type="text/css"
     />
     <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+      :root { --ink: #1b2942; --stone: #f7f3ea; --paper: #fffdf8; --line: #d8dfd9; --gold: #d7a34e; --leaf: #167062; }
+      body { background-color: var(--stone); background-image: linear-gradient(90deg, rgba(27,41,66,.035) 1px, transparent 1px), linear-gradient(rgba(27,41,66,.035) 1px, transparent 1px); background-size: 28px 28px; }
+      .page-shell { max-width: 1180px; }
+      .brand-mark { box-shadow: 0 10px 28px rgba(27,41,66,.22); }
+      .surface { background: rgba(255,253,248,.9); border: 1px solid var(--line); box-shadow: 0 18px 50px rgba(27,41,66,.08); }
+      .timetable-hero { background: var(--ink); color: white; overflow: hidden; }
+      .timetable-hero::after { content: ""; position: absolute; inset: 0 0 0 auto; width: min(42%, 360px); background: url('/static/icon.jpg') center/cover no-repeat; opacity: .72; }
+      .hero-content { position: relative; z-index: 1; }
+      .eyebrow { color: #f1dfb6; letter-spacing: .18em; }
+      .filter-label { color: #6b756f; letter-spacing: .13em; }
+      #yearFilters .btn, #monthFilters .btn { border-radius: .55rem; }
+      #prayerTable thead { background: #e5eee8; color: var(--ink); }
+      #prayerTable tbody tr { border-color: #e5e7df; }
+      #prayerTable tbody tr:hover { background: #fff9eb; }
+      .mobile-prayer-card { background: var(--paper); border: 1px solid var(--line); box-shadow: 0 10px 24px rgba(16,47,50,.06); }
+      @media (max-width: 640px) { .timetable-hero::after { width: 34%; opacity: .45; } }
+    </style>
   </head>
-  <body class="min-h-screen bg-slate-50 text-slate-800">
-    <main class="mx-auto max-w-6xl px-4 py-6 sm:px-6 lg:px-8">
-      <div class="mb-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+  <body class="min-h-screen text-slate-800">
+    <main class="page-shell mx-auto px-4 py-5 sm:px-6 sm:py-8 lg:px-8">
+      <header class="mb-5 flex items-center justify-between">
+        <a href="/" class="flex items-center gap-3" aria-label="Adhancron dashboard">
+          <img src="/static/icon.jpg" alt="Adhancron" class="brand-mark h-11 w-11 rounded-xl object-cover" />
+          <div>
+            <p class="font-serif text-xl leading-none text-[var(--ink)]">Adhancron</p>
+            <p class="mt-1 text-[10px] font-semibold uppercase tracking-[.16em] text-slate-500">Prayer at home</p>
+          </div>
+        </a>
+        <a href="/" class="btn btn-ghost btn-sm text-[var(--ink)]">Dashboard</a>
+      </header>
+
+      <section class="timetable-hero relative rounded-[1.8rem] px-6 py-8 sm:px-9 sm:py-10">
+        <div class="hero-content max-w-xl">
+          <p class="eyebrow text-xs font-bold uppercase">Your annual timetable</p>
+          <h1 class="mt-3 font-serif text-4xl leading-tight sm:text-5xl">Prayer times, at a glance.</h1>
+          <p class="mt-3 max-w-lg text-sm leading-6 text-emerald-50 sm:text-base">Daily timings calculated for your saved home location, ready to review whenever you need them.</p>
+        </div>
+      </section>
+
+      <section class="surface mt-5 rounded-2xl p-5 sm:p-7">
+      <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1 class="text-3xl font-bold">Prayer Times</h1>
-          <p class="text-sm text-slate-600">Daily prayer times calculated for your saved home location.</p>
+          <p class="filter-label text-xs font-semibold uppercase">Browse the timetable</p>
+          <p id="selectionSummary" class="mt-1 text-sm font-medium text-slate-600" aria-live="polite"></p>
         </div>
-        <div class="flex gap-2">
-          <a href="/" class="btn btn-outline">Back to Dashboard</a>
-          <button id="refreshBtn" class="btn btn-success">Refresh</button>
-        </div>
+        <button id="refreshBtn" class="btn btn-outline border-[var(--leaf)] text-[var(--leaf)] hover:bg-[var(--leaf)] hover:text-white">Refresh</button>
       </div>
 
-      <div class="mb-4 flex flex-wrap items-center gap-4">
+      <div class="mt-6 flex flex-wrap items-center gap-4">
         <div class="flex items-center gap-2">
-          <span class="text-sm font-semibold text-slate-500 uppercase tracking-wider">Year:</span>
+          <span class="filter-label text-xs font-semibold uppercase">Year</span>
           <div class="join" id="yearFilters"></div>
         </div>
       </div>
 
-      <p id="selectionSummary" class="mb-4 text-sm font-medium text-slate-600" aria-live="polite"></p>
-
-      <div class="mb-6 flex flex-wrap items-center gap-4 border-t border-slate-200 pt-4">
+      <div class="mt-5 flex flex-wrap items-center gap-4 border-t border-[var(--line)] pt-5">
         <div class="flex items-center gap-2">
-          <span class="text-sm font-semibold text-slate-500 uppercase tracking-wider">Month:</span>
+          <span class="filter-label text-xs font-semibold uppercase">Month</span>
           <div class="flex flex-wrap gap-2" id="monthFilters"></div>
         </div>
       </div>
 
-      <div id="prayerCards" class="grid gap-3 sm:hidden"></div>
+      <div id="prayerCards" class="mt-6 grid gap-3 sm:hidden"></div>
 
-      <div class="hidden overflow-x-auto rounded-2xl bg-white p-4 shadow sm:block">
+      <div class="mt-6 hidden overflow-x-auto rounded-xl border border-[var(--line)] bg-[var(--paper)] p-2 sm:block">
         <table class="table table-zebra w-full" id="prayerTable">
           <thead>
             <tr class="text-slate-500 uppercase tracking-wider text-xs">
@@ -61,6 +95,7 @@
           </tbody>
         </table>
       </div>
+      </section>
     </main>
 
     <script>
@@ -159,7 +194,7 @@
             fragmentTable.appendChild(row);
 
             const card = document.createElement('article');
-            card.className = 'rounded-2xl border border-white/70 bg-white p-4 shadow';
+            card.className = 'mobile-prayer-card rounded-xl p-4';
             card.innerHTML = `
               <h3 class="font-semibold text-slate-800 mb-2">${day} ${month} ${selectedYear}</h3>
               <div class="grid grid-cols-2 gap-y-1 text-sm">

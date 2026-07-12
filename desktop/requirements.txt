@@ -1,0 +1,4 @@
+-r ../requirements.txt
+pywebview>=5.4,<6
+pyinstaller>=6.10,<7
+tzlocal>=5.2,<6

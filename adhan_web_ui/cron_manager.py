@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 import hashlib
+import os
 import re
 import subprocess
 import threading
@@ -113,7 +114,15 @@ class FileCrontabBackend(CrontabBackend):
         return self.path.read_text(encoding="utf-8")
 
     def write(self, content: str) -> None:
+        self.path.parent.mkdir(parents=True, exist_ok=True)
         self.path.write_text(content, encoding="utf-8")
+
+
+def create_runtime_manager(data_dir: str | Path) -> "AdhanCronManager":
+    """Use a local schedule file for desktop builds and crontab everywhere else."""
+    if os.getenv("ADHAN_RUNTIME") == "desktop":
+        return AdhanCronManager(FileCrontabBackend(Path(data_dir) / "desktop_schedule.crontab"))
+    return AdhanCronManager()
 
 
 class AdhanCronManager:

@@ -18,11 +18,11 @@ from generate_prayer_times import generate_configured_times, location_from_value
 from apply_adhan_cron import apply_updates
 from trigger_ha import trigger
 try:
-    from .cron_manager import AdhanCronManager, CronError
+    from .cron_manager import AdhanCronManager, CronError, create_runtime_manager
     from .override_manager import OverrideManager
     from .settings_manager import SettingsManager
 except ImportError:
-    from cron_manager import AdhanCronManager, CronError
+    from cron_manager import AdhanCronManager, CronError, create_runtime_manager
     from override_manager import OverrideManager
     from settings_manager import SettingsManager
 
@@ -33,7 +33,7 @@ VERSION_FILE = APP_DIR / "VERSION"
 app = FastAPI(title="Adhan Cron Manager")
 app.mount("/static", StaticFiles(directory=BASE_DIR / "static"), name="static")
 
-manager = AdhanCronManager()
+manager = create_runtime_manager(DATA_DIR)
 overrides = OverrideManager(OVERRIDE_FILE)
 settings = SettingsManager(SETTINGS_FILE)
 

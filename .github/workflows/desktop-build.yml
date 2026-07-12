@@ -1,0 +1,39 @@
+name: Build desktop apps
+
+on:
+  workflow_dispatch:
+  push:
+    tags:
+      - "desktop-v*"
+
+jobs:
+  package:
+    name: ${{ matrix.name }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: macOS
+            os: macos-latest
+            artifact: Adhancron-macOS
+            path: dist/Adhancron.app
+          - name: Windows
+            os: windows-latest
+            artifact: Adhancron-Windows
+            path: dist/Adhancron
+
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install desktop build dependencies
+        run: python -m pip install -r desktop/requirements.txt
+      - name: Build native application
+        run: pyinstaller --noconfirm --clean desktop/Adhancron.spec
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact }}
+          path: ${{ matrix.path }}
+          if-no-files-found: error

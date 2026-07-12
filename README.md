@@ -1,8 +1,27 @@
 # Adhancron
 
-Adhancron is a Dockerized adhan scheduler. It keeps daily prayer-time cron jobs up to date, serves the adhan MP3 over HTTP, and plays it through either Home Assistant or a Google Cast speaker directly.
+Adhancron is an adhan scheduler available as a Docker home-server service and a native desktop application. It keeps daily prayer times up to date, serves the adhan MP3 over HTTP, and plays it through either Home Assistant or a Google Cast speaker directly.
 
 The main supported use case is running this as a CasaOS or Docker container on a home server, then playing adhan through Home Assistant speakers such as Google Cast speakers.
+
+## Editions
+
+### Home Server: Docker and CasaOS
+
+The Docker edition is designed for an always-on machine. It runs cron inside the container, so scheduled adhans continue even when no one has the dashboard open.
+
+### Desktop: macOS and Windows
+
+The desktop edition is an optional companion for people who prefer a native application instead of Docker. It opens the same dashboard in a native window, stores settings in the user's application-data folder, and uses an internal cross-platform scheduler instead of changing the machine's crontab.
+
+Build the desktop edition on the target operating system:
+
+```bash
+python -m pip install -r desktop/requirements.txt
+pyinstaller desktop/Adhancron.spec
+```
+
+On macOS this creates `dist/Adhancron.app`; on Windows it creates a `dist/Adhancron` application folder. The desktop app must stay open for scheduled adhans. See [desktop/README.md](desktop/README.md) for development, firewall, code-signing, and packaging details.
 
 ## What It Does
 

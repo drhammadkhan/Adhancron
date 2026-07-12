@@ -16,7 +16,7 @@ from adhan_config import (
 )
 
 sys.path.insert(0, str(Path(__file__).resolve().parent / "adhan_web_ui"))
-from cron_manager import AdhanCronManager, CronError  # noqa: E402
+from cron_manager import AdhanCronManager, CronError, create_runtime_manager  # noqa: E402
 
 
 def _load_json(path: Path) -> dict:
@@ -93,7 +93,7 @@ def apply_updates(now: datetime | None = None) -> int:
         _write_status(False, "missing_today", message)
         return 0
 
-    manager = AdhanCronManager()
+    manager = create_runtime_manager(PRAYER_TIMES_FILE.parent)
     _seed_jobs(manager, day_times)
     current_audio_url = default_audio_url()
     overrides = _load_overrides()

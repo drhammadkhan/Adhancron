@@ -3,7 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Adhan Cron Manager</title>
+    <title>Adhancron | Prayer at Home</title>
     <link rel="icon" type="image/jpeg" href="/static/icon.jpg" />
     <link
       href="https://cdn.jsdelivr.net/npm/daisyui@4.12.23/dist/full.min.css"
@@ -26,69 +26,100 @@
       };
     </script>
     <style>
-      body {
-        background:
-          radial-gradient(circle at top, rgba(255, 245, 204, 0.9), transparent 32%),
-          linear-gradient(135deg, #f8f5ea 0%, #e5efe7 42%, #c5dfd1 100%);
+      :root {
+        --ink: #1b2942;
+        --ink-soft: #294661;
+        --stone: #f7f3ea;
+        --paper: #fffdf8;
+        --line: #d8dfd9;
+        --gold: #d7a34e;
+        --gold-pale: #f5dfaf;
+        --mint: #d7ebe4;
+        --leaf: #167062;
+        --coral: #c96858;
       }
 
-      .glass-card {
-        background: rgba(255, 255, 255, 0.72);
-        backdrop-filter: blur(16px);
+      body {
+        background-color: var(--stone);
+        background-image: linear-gradient(90deg, rgba(27, 41, 66, .035) 1px, transparent 1px), linear-gradient(rgba(27, 41, 66, .035) 1px, transparent 1px);
+        background-size: 28px 28px;
+        font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
       }
+
+      .app-shell { max-width: 1180px; }
+      .brand-mark { box-shadow: 0 10px 28px rgba(27, 41, 66, .22); }
+      .eyebrow { color: var(--gold); letter-spacing: .18em; }
+      .surface { background: rgba(255, 253, 248, .9); border: 1px solid var(--line); box-shadow: 0 18px 50px rgba(27, 41, 66, .08); }
+      .hero-shell { background: var(--ink); box-shadow: 0 22px 60px rgba(27, 41, 66, .25); }
+      .hero-copy { position: relative; z-index: 1; }
+      .hero-image { background-image: url('/static/icon.jpg'); background-size: cover; background-position: center; min-height: 260px; }
+      .hero-image::after { content: ""; display: block; min-height: 260px; background: rgba(27, 41, 66, .18); }
+      .quiet-label { color: #6b756f; letter-spacing: .14em; }
+      .next-panel { background: #155a57; border: 1px solid rgba(245, 223, 175, .5); box-shadow: inset 0 1px 0 rgba(255, 255, 255, .1); }
+      .setup-panel { background: #fff9ef; }
+      .action-bar { border-top: 1px solid rgba(255, 255, 255, .15); }
+      .action-bar .btn { min-height: 2.8rem; }
+      .settings-panel summary::-webkit-details-marker, .settings-panel summary::marker { display: none; }
+      .settings-panel[open] summary { border-bottom: 1px solid var(--line); padding-bottom: 1.1rem; }
+      .settings-panel summary span:first-child { color: var(--ink); }
+      .settings-panel .input, .settings-panel .select { background: #fffefa; border-color: #ced5cc; }
+      .location-result { border-color: #d5ded6; background: #fbfcf8; }
+      .schedule-heading { color: var(--ink); }
+      .prayer-card { background: var(--paper); border: 1px solid var(--line); box-shadow: 0 12px 30px rgba(27, 41, 66, .07); }
+      .prayer-card:hover { transform: translateY(-3px); border-color: rgba(201, 138, 57, .75); }
+      .prayer-card .card-title { color: var(--ink); font-family: Georgia, ui-serif, serif; }
+      .prayer-card .input { background: #fffefa; border-color: #cfd7cd; color: var(--ink); }
+      .custom-time { background: #f8eee2; border-color: #ebd5be; }
+      .enabled-panel { background: var(--ink); }
+      .annual-panel { background: #e2f0e9; border-color: #b4d5c9; }
+      .annual-panel .btn { border-color: var(--leaf); color: var(--leaf); }
+      .annual-panel .btn:hover { background: var(--leaf); color: white; }
+      .status-line { background: rgba(255, 253, 248, .8); border-color: var(--line); }
+      .badge { letter-spacing: .02em; }
 
       @media (max-width: 640px) {
-        .hero {
-          border-radius: 1.25rem;
-        }
-
-        .glass-card {
-          border-radius: 1rem;
-        }
-
-        .card .card-body {
-          padding: 1rem;
-        }
-
-        .card-title {
-          font-size: 1.1rem;
-          line-height: 1.35rem;
-        }
-
-        .toggle {
-          transform: scale(0.9);
-          transform-origin: right center;
-        }
+        .hero-shell, .surface { border-radius: 1.25rem; }
+        .hero-image, .hero-image::after { min-height: 170px; }
+        .hero-copy { padding: 1.5rem; }
+        .prayer-card .card-body { padding: 1.1rem; }
+        .toggle { transform: scale(.9); transform-origin: right center; }
       }
     </style>
   </head>
   <body class="min-h-screen text-slate-800">
-    <main class="mx-auto flex min-h-screen max-w-6xl flex-col px-4 py-6 sm:px-6 lg:px-8">
-      <section class="hero rounded-[2rem] border border-white/60 bg-white/40 px-4 py-6 shadow-glow sm:px-8 sm:py-8">
-        <div class="hero-content w-full flex-col items-start gap-6 p-0">
-          <div class="max-w-2xl">
-            <p class="mb-3 text-xs sm:text-sm font-semibold uppercase tracking-[0.2em] sm:tracking-[0.3em] text-emerald-700">Prayer Times and Home Audio</p>
-            <h1 class="font-display text-3xl leading-tight sm:text-5xl">Adhancron</h1>
-            <p class="mt-4 max-w-xl text-sm text-slate-600 sm:text-base">
-              Automatically calculate daily prayer times and play the adhan through your chosen home speaker.
-            </p>
+    <main class="app-shell mx-auto flex min-h-screen flex-col px-4 py-5 sm:px-6 sm:py-8 lg:px-8">
+      <header class="mb-5 flex items-center justify-between">
+        <a href="/" class="flex items-center gap-3" aria-label="Adhancron dashboard">
+          <img src="/static/icon.jpg" alt="Adhancron" class="brand-mark h-11 w-11 rounded-xl object-cover" />
+          <div>
+            <p class="font-display text-xl leading-none text-[var(--ink)]">Adhancron</p>
+            <p class="mt-1 text-[10px] font-semibold uppercase tracking-[.16em] text-slate-500">Prayer at home</p>
           </div>
-          <div class="flex w-full flex-col gap-3 sm:flex-row sm:items-center">
-            <button id="refreshBtn" type="button" class="btn btn-outline btn-success w-full sm:w-auto">Refresh</button>
-            <button id="saveBtn" type="button" class="btn btn-success w-full sm:w-auto" disabled>Save Schedule</button>
-            <button id="playBtn" type="button" onclick="handlePlay(event)" class="btn btn-info w-full sm:w-auto">Test Adhan</button>
-            <span id="statusBadge" class="badge badge-ghost px-4 py-3 text-xs sm:text-sm">Loading jobs...</span>
-            <span id="versionBadge" class="badge badge-outline px-4 py-3 text-xs sm:text-sm">Version unknown</span>
-          </div>
-          <div id="fajrRunStatus" class="mt-3 rounded-xl bg-white/70 border border-white/80 px-4 py-3 text-sm text-slate-700">
-            Checking last Fajr auto-update run...
+        </a>
+        <span id="versionBadge" class="badge border-0 bg-white/70 px-3 py-3 text-[11px] text-slate-500">Version unknown</span>
+      </header>
+
+      <section class="hero-shell overflow-hidden rounded-[1.8rem] lg:grid lg:grid-cols-[1.25fr_.75fr]">
+        <div class="hero-copy px-6 py-8 sm:px-9 sm:py-10">
+          <p class="eyebrow text-xs font-bold uppercase">Daily prayer times and adhan playback</p>
+          <h1 class="mt-4 max-w-xl font-display text-4xl leading-[1.05] text-white sm:text-5xl">Your home prayer schedule.</h1>
+          <p class="mt-4 max-w-xl text-sm leading-6 text-emerald-50 sm:text-base">Adhancron calculates daily prayer times for your location and plays the adhan through your chosen home speaker.</p>
+          <div class="action-bar mt-7 flex flex-col gap-2 pt-5 sm:flex-row sm:flex-wrap">
+            <button id="playBtn" type="button" onclick="handlePlay(event)" class="btn border-0 bg-[var(--gold)] text-[var(--ink)] hover:bg-[#ddb062]">Test Adhan</button>
+            <button id="saveBtn" type="button" class="btn btn-outline border-white/30 bg-transparent text-white hover:border-white hover:bg-white hover:text-[var(--ink)]" disabled>Save Schedule</button>
+            <button id="refreshBtn" type="button" class="btn btn-ghost text-emerald-50 hover:bg-white/10">Refresh</button>
           </div>
         </div>
+        <div class="hero-image hidden lg:block" role="img" aria-label="Mosque at sunset"></div>
       </section>
 
-      <section class="mt-6 grid gap-4 lg:grid-cols-[1.25fr_1fr]">
-        <div class="rounded-2xl border border-emerald-700/20 bg-emerald-950 px-6 py-5 text-emerald-50 shadow-glow">
-          <p class="text-xs font-semibold uppercase tracking-[0.24em] text-emerald-200">Next Adhan</p>
+      <div class="status-line mt-4 rounded-xl border px-4 py-3">
+        <div id="fajrRunStatus" class="text-sm text-slate-700">Checking prayer-time updates...</div>
+      </div>
+
+      <section class="mt-5 grid gap-4 lg:grid-cols-[1.25fr_1fr]">
+        <div class="next-panel rounded-2xl px-6 py-6 text-emerald-50 sm:px-7">
+          <p class="text-xs font-semibold uppercase tracking-[0.2em] text-[var(--gold-pale)]">Next adhan</p>
           <div class="mt-3 flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
             <div>
               <h2 id="nextAdhanTitle" class="font-display text-3xl">Checking schedule...</h2>
@@ -97,14 +128,14 @@
             <p id="nextAdhanCountdown" class="text-lg font-semibold text-emerald-100"></p>
           </div>
         </div>
-        <div class="rounded-2xl border border-white/70 bg-white/55 px-6 py-5 shadow-glow">
-          <p class="text-xs font-semibold uppercase tracking-[0.24em] text-slate-500">Setup Status</p>
+        <div class="setup-panel surface rounded-2xl px-6 py-6 sm:px-7">
+          <p class="quiet-label text-xs font-semibold uppercase">Setup status</p>
           <div id="setupStatus" class="mt-3 flex flex-wrap gap-2" aria-live="polite"></div>
           <p id="setupHint" class="mt-3 text-sm text-slate-600"></p>
         </div>
       </section>
 
-      <section class="mt-6 rounded-[2rem] border border-white/60 bg-white/40 p-6 shadow-glow sm:p-8">
+      <section class="settings-panel surface mt-5 rounded-2xl p-5 sm:p-7">
         <details>
           <summary class="flex cursor-pointer list-none flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
             <span class="font-display text-2xl sm:text-3xl">Settings</span>
@@ -198,9 +229,18 @@
         </details>
       </section>
 
-      <section class="mt-6 grid gap-3 sm:gap-4 sm:grid-cols-2 xl:grid-cols-3" id="jobGrid"></section>
+      <section class="mt-8">
+        <div class="mb-4 flex items-end justify-between gap-4">
+          <div>
+            <p class="quiet-label text-xs font-semibold uppercase">Daily schedule</p>
+            <h2 class="schedule-heading mt-1 font-display text-3xl">Your prayer times</h2>
+          </div>
+          <span id="statusBadge" class="badge border-0 bg-white/70 px-4 py-3 text-xs text-slate-600">Loading schedule...</span>
+        </div>
+        <div class="grid gap-3 sm:gap-4 sm:grid-cols-2 xl:grid-cols-3" id="jobGrid"></div>
+      </section>
 
-      <section class="mt-8 rounded-[2rem] border border-white/60 bg-white/40 p-6 shadow-glow sm:p-8">
+      <section class="annual-panel mt-8 rounded-2xl border p-6 sm:p-7">
         <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <h2 class="font-display text-2xl sm:text-3xl">Prayer Times</h2>
@@ -211,7 +251,7 @@
       </section>
 
       <template id="jobCardTemplate">
-        <article class="glass-card card border border-white/70 shadow-xl transition-transform duration-200 hover:-translate-y-1">
+        <article class="prayer-card card transition-transform duration-200">
           <div class="card-body">
             <div class="flex items-start justify-between gap-3">
               <div>
@@ -225,14 +265,14 @@
               </div>
               <input type="time" class="input input-bordered w-full bg-white/80" />
             </label>
-            <div class="mt-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between rounded-2xl bg-slate-100 px-4 py-3 text-slate-800 border border-slate-200">
+            <div class="custom-time mt-4 flex flex-col gap-3 rounded-xl border px-4 py-3 text-slate-800 sm:flex-row sm:items-center sm:justify-between">
               <div>
                 <p class="text-sm font-medium">Keep this custom time</p>
                 <p class="mt-1 text-sm text-slate-600 override-description">Daily updates can adjust this time automatically.</p>
               </div>
               <input type="checkbox" class="toggle toggle-warning toggle-lg override-toggle" />
             </div>
-            <div class="mt-3 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between rounded-2xl bg-emerald-950/90 px-4 py-3 text-emerald-50">
+            <div class="enabled-panel mt-3 flex flex-col gap-3 rounded-xl px-4 py-3 text-emerald-50 sm:flex-row sm:items-center sm:justify-between">
               <div>
                 <p class="text-sm font-medium">Adhan enabled</p>
                 <p class="mt-1 text-sm text-emerald-100">Play the adhan at the time above.</p>
@@ -244,7 +284,7 @@
       </template>
 
       <div id="emptyState" class="hidden py-16 text-center">
-        <div class="mx-auto max-w-lg rounded-[2rem] border border-dashed border-emerald-700/20 bg-white/50 px-6 py-10">
+        <div class="surface mx-auto max-w-lg rounded-2xl border border-dashed px-6 py-10">
           <p class="text-lg font-semibold">No adhan cron jobs found.</p>
           <p class="mt-2 text-sm text-slate-600">
             Save your location in Settings to create today's prayer schedule.
@@ -291,6 +331,6 @@
         return false;
       }
     </script>
-    <script src="static/app.js?v=17"></script>
+    <script src="static/app.js?v=19"></script>
   </body>
 </html>
