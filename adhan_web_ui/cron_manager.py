@@ -19,7 +19,7 @@ DISABLED_CRON_PATTERN = re.compile(
     r"(?P<dom>\S+)\s+(?P<month>\S+)\s+(?P<dow>\S+)\s+(?P<command>.+?)\s*$"
 )
 TRIGGER_PATTERN = re.compile(
-    r"trigger_ha\.py\s+(?P<audio_url>\S+)(?:\s+(?P<volume>\S+))?"
+    r"trigger_ha\.py(?:['\"])?\s+(?P<audio_url>\S+)(?:\s+(?P<volume>\S+))?"
 )
 
 PRAYER_ORDER = ["Fajr", "Dhuhr", "Asr", "Maghrib", "Isha"]

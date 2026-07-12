@@ -37,6 +37,25 @@ class CronManagerTests(unittest.TestCase):
         finally:
             tempdir.cleanup()
 
+    def test_list_jobs_accepts_quoted_macos_desktop_script_path(self):
+        manager, path, tempdir = self.make_manager(
+            """
+            # [Adhan: Fajr]
+            13 3 * * * cd '/private/var/folders/example/AppTranslocation/Adhancron 2.app/Contents/Resources' && . '/Users/example/Library/Application Support/Adhancron/adhan.env' && /usr/local/bin/python '/private/var/folders/example/AppTranslocation/Adhancron 2.app/Contents/Resources/trigger_ha.py' http://192.168.1.52:8090/audio/adhan_final.mp3 0.8 >> '/Users/example/Library/Application Support/Adhancron/adhan.log' 2>&1
+            """
+        )
+        try:
+            jobs = manager.list_jobs()
+            self.assertEqual(len(jobs), 1)
+            self.assertEqual(jobs[0].label, "Fajr")
+            self.assertEqual(
+                jobs[0].audio_url,
+                "http://192.168.1.52:8090/audio/adhan_final.mp3",
+            )
+            self.assertEqual(jobs[0].volume, "0.8")
+        finally:
+            tempdir.cleanup()
+
     def test_update_jobs_changes_time_and_toggle(self):
         manager, path, tempdir = self.make_manager(
             """
