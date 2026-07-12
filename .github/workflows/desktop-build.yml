@@ -14,11 +14,15 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - name: macOS
+          - name: macOS Apple Silicon
             os: macos-latest
-            artifact: Adhancron-macOS
+            artifact: Adhancron-macOS-Apple-Silicon
             # Upload the parent folder so the downloaded artifact retains the
             # Adhancron.app bundle rather than exposing only Contents/.
+            path: dist
+          - name: macOS Intel
+            os: macos-15-intel
+            artifact: Adhancron-macOS-Intel
             path: dist
           - name: Windows
             os: windows-latest

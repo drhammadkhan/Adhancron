@@ -26,6 +26,8 @@ pyinstaller desktop/Adhancron.spec
 
 This produces an application bundle in `dist/`. macOS distribution requires Apple code signing and notarization; Windows distribution should be code signed to avoid SmartScreen warnings.
 
+GitHub Actions produces separate `Adhancron-macOS-Apple-Silicon` and `Adhancron-macOS-Intel` artifacts. Download the artifact that matches the Mac's processor. Until the project is signed and notarized with an Apple Developer ID, macOS will require the first launch to use Control-click **Open** from Finder.
+
 ## Local-network playback
 
 For Google Cast playback, the desktop app automatically uses the computer's LAN address to serve the audio file. Allow Adhancron through the operating system firewall when prompted so the speaker can reach it.
