@@ -17,7 +17,9 @@ jobs:
           - name: macOS
             os: macos-latest
             artifact: Adhancron-macOS
-            path: dist/Adhancron.app
+            # Upload the parent folder so the downloaded artifact retains the
+            # Adhancron.app bundle rather than exposing only Contents/.
+            path: dist
           - name: Windows
             os: windows-latest
             artifact: Adhancron-Windows
