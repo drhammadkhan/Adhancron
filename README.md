@@ -23,6 +23,15 @@ pyinstaller desktop/Adhancron.spec
 
 On macOS this creates `dist/Adhancron.app`; on Windows it creates a `dist/Adhancron` application folder. The desktop app must stay open for scheduled adhans. See [desktop/README.md](desktop/README.md) for development, firewall, code-signing, and packaging details.
 
+### ESP32-S3 Prayer Clock
+
+`firmware/esp32-s3-prayer-clock` is a standalone appliance edition for the
+LCDWIKI ES3N28P board: an ESP32-S3 with a 240x320 display, speaker, and
+microSD slot. It will calculate and display local prayer times, play the adhan
+from its own speaker, and later offer network playback as an optional companion
+feature. It is developed independently from the Docker and desktop editions;
+see [firmware/esp32-s3-prayer-clock/README.md](firmware/esp32-s3-prayer-clock/README.md).
+
 ## What It Does
 
 - Runs a web dashboard on port `8090`.
