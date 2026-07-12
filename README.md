@@ -277,6 +277,7 @@ Environment variables:
 | `ADHAN_USE_ANNOUNCE` | Use Home Assistant `announce: true` playback first | `true` |
 | `ADHAN_PLAY_ATTEMPTS` | Max fallback `play_media` attempts when playback is not confirmed | `2` |
 | `ADHAN_PLAYBACK_TIMEOUT` | Seconds to wait for the player to report `playing` | `15` |
+| `ADHAN_CAST_CONNECT_TIMEOUT` | Seconds to wait for a direct Google Cast speaker connection | `30` |
 | `ADHAN_PLAYBACK_POLL_INTERVAL` | Seconds between player state polls | `1` |
 | `ADHAN_MEDIA_CONTENT_TYPE` | Media type sent to Home Assistant | `audio/mpeg` |
 | `TZ` | Container timezone | `Europe/London` |

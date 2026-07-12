@@ -23,6 +23,7 @@ services:
       ADHAN_USE_ANNOUNCE: "true"
       ADHAN_PLAY_ATTEMPTS: "2"
       ADHAN_PLAYBACK_TIMEOUT: "15"
+      ADHAN_CAST_CONNECT_TIMEOUT: "30"
       ADHAN_PLAYBACK_POLL_INTERVAL: "1"
       ADHAN_MEDIA_CONTENT_TYPE: "audio/mpeg"
       TZ: "Europe/London"

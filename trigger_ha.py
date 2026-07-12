@@ -14,6 +14,7 @@ from adhan_config import SETTINGS_FILE
 
 DEFAULT_HA_BASE_URL = "http://homeassistant.local:8123"
 REQUEST_TIMEOUT = float(os.getenv("HA_REQUEST_TIMEOUT", "15"))
+CAST_CONNECT_TIMEOUT = float(os.getenv("ADHAN_CAST_CONNECT_TIMEOUT", "30"))
 MEDIA_CONTENT_TYPE = os.getenv("ADHAN_MEDIA_CONTENT_TYPE", "audio/mpeg")
 
 
@@ -212,9 +213,16 @@ def _trigger_google_cast(media_url: str, volume: float) -> None:
         cast = pychromecast.get_chromecast_from_host(
             (host, port, uuid.uuid4(), None, None),
             tries=1,
-            timeout=REQUEST_TIMEOUT,
+            timeout=CAST_CONNECT_TIMEOUT,
         )
-        cast.wait(timeout=REQUEST_TIMEOUT)
+        try:
+            cast.wait(timeout=CAST_CONNECT_TIMEOUT)
+        except TimeoutError as exc:
+            raise RuntimeError(
+                f"Could not connect to Google Cast speaker at {host}:{port} within "
+                f"{CAST_CONNECT_TIMEOUT:g} seconds. Confirm this is the current IP "
+                "address of an individual speaker, not a speaker group."
+            ) from exc
         cast.set_volume(volume, timeout=REQUEST_TIMEOUT)
         media = cast.media_controller
         media.play_media(media_url, MEDIA_CONTENT_TYPE, stream_type="BUFFERED")

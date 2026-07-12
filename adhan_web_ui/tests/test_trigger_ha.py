@@ -180,6 +180,26 @@ class TriggerHATests(unittest.TestCase):
         )
         self.assertIn(("disconnect", 1), calls)
 
+    def test_direct_google_cast_reports_connection_timeout_clearly(self):
+        class FakeCast:
+            def wait(self, timeout=None):
+                raise TimeoutError("execution of wait timed out")
+
+            def disconnect(self, timeout=None):
+                pass
+
+        fake_pychromecast = types.SimpleNamespace(
+            get_chromecast_from_host=lambda *args, **kwargs: FakeCast(),
+        )
+        with mock.patch.object(trigger_ha, "_google_cast_host", return_value="192.168.1.24"), \
+             mock.patch.object(trigger_ha, "_google_cast_port", return_value=8009), \
+             mock.patch.dict(sys.modules, {"pychromecast": fake_pychromecast}):
+            with self.assertRaisesRegex(
+                RuntimeError,
+                "Could not connect to Google Cast speaker at 192.168.1.24:8009",
+            ):
+                trigger_ha._trigger_google_cast("http://host/audio/adhan_final.mp3", 0.8)
+
 
 if __name__ == "__main__":
     unittest.main()
