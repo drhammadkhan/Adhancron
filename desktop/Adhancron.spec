@@ -20,6 +20,7 @@ a = Analysis(
         "uvicorn.protocols.http.auto",
         "webview.platforms.cocoa",
         "webview.platforms.winforms",
+        "timezonefinder",
     ],
 )
 pyz = PYZ(a.pure)

@@ -58,6 +58,22 @@ def _configured_timezone() -> ZoneInfo:
         raise ValueError(f"Invalid timezone: {timezone_name}") from exc
 
 
+def _timezone_for_coordinates(latitude: float, longitude: float) -> ZoneInfo:
+    """Resolve the prayer location's IANA timezone, independent of the host."""
+    try:
+        from timezonefinder import timezone_at
+    except ImportError as exc:
+        raise ValueError("Timezone lookup support is not installed") from exc
+
+    timezone_name = timezone_at(lng=longitude, lat=latitude)
+    if not timezone_name:
+        raise ValueError("Unable to determine a timezone for this location")
+    try:
+        return ZoneInfo(timezone_name)
+    except ZoneInfoNotFoundError as exc:
+        raise ValueError(f"Invalid timezone for this location: {timezone_name}") from exc
+
+
 def location_from_values(latitude: str, longitude: str) -> Location:
     try:
         parsed_latitude = float(latitude)
@@ -66,7 +82,11 @@ def location_from_values(latitude: str, longitude: str) -> Location:
         raise ValueError("Latitude and longitude must be numbers") from exc
     if not -90 <= parsed_latitude <= 90 or not -180 <= parsed_longitude <= 180:
         raise ValueError("Latitude must be between -90 and 90 and longitude between -180 and 180")
-    return Location(parsed_latitude, parsed_longitude, _configured_timezone())
+    return Location(
+        parsed_latitude,
+        parsed_longitude,
+        _timezone_for_coordinates(parsed_latitude, parsed_longitude),
+    )
 
 
 def configured_location() -> Location:

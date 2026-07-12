@@ -3,6 +3,9 @@ from __future__ import annotations
 import os
 import unittest
 from datetime import date
+import sys
+import types
+from unittest import mock
 
 from generate_prayer_times import _isha_offset_seconds, calculate_day, location_from_values
 
@@ -19,14 +22,30 @@ class PrayerTimeGeneratorTests(unittest.TestCase):
             os.environ["TZ"] = self.previous_timezone
 
     def test_location_validation(self):
-        location = location_from_values("51.5074", "-0.1278")
-        self.assertEqual(location.latitude, 51.5074)
-        self.assertEqual(location.longitude, -0.1278)
-        with self.assertRaises(ValueError):
-            location_from_values("91", "0")
+        with mock.patch.dict(
+            sys.modules,
+            {"timezonefinder": types.SimpleNamespace(timezone_at=lambda **_: "Europe/London")},
+        ):
+            location = location_from_values("51.5074", "-0.1278")
+            self.assertEqual(location.latitude, 51.5074)
+            self.assertEqual(location.longitude, -0.1278)
+            with self.assertRaises(ValueError):
+                location_from_values("91", "0")
+
+    def test_location_timezone_comes_from_coordinates_not_host_timezone(self):
+        with mock.patch.dict(
+            sys.modules,
+            {"timezonefinder": types.SimpleNamespace(timezone_at=lambda **_: "America/Chicago")},
+        ):
+            location = location_from_values("44.0247", "-88.5426")
+        self.assertEqual(location.timezone.key, "America/Chicago")
 
     def test_london_summer_times_match_the_alislam_calendar(self):
-        location = location_from_values("51.5074", "-0.1278")
+        with mock.patch.dict(
+            sys.modules,
+            {"timezonefinder": types.SimpleNamespace(timezone_at=lambda **_: "Europe/London")},
+        ):
+            location = location_from_values("51.5074", "-0.1278")
         times = calculate_day(date(2026, 7, 1), location)
         self.assertEqual(
             {name: times[name] for name in ("Fajr", "Dhuhr", "Asr", "Maghrib")},
