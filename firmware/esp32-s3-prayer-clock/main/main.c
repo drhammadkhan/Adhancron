@@ -30,8 +30,11 @@
 #include "mdns.h"
 #include "nvs_flash.h"
 #include "sdmmc_cmd.h"
+#include "wear_levelling.h"
 
+#include "audio_storage.h"
 #include "board_config.h"
+#include "cast_sender.h"
 #include "display_ui.h"
 #include "prayer_times.h"
 #include "settings.h"
@@ -46,12 +49,16 @@ static esp_codec_dev_handle_t audio;
 static int audio_sample_rate;
 static bool i2s_output_enabled;
 static bool sd_mounted;
+static bool storage_mounted;
+static wl_handle_t storage_wl_handle = WL_INVALID_HANDLE;
 static bool adhan_audio_available;
 static adhan_settings_t settings;
 static bool ntp_started;
 static bool wifi_connected;
 static bool setup_ap_started;
+static bool wifi_fallback_pending;
 static SemaphoreHandle_t audio_mutex;
+static SemaphoreHandle_t playback_mutex;
 
 static void start_setup_access_point(void) {
     if (setup_ap_started) return;
@@ -75,7 +82,17 @@ static void wifi_fallback_task(void *unused) {
         ESP_LOGW(TAG, "Home Wi-Fi unavailable; enabling recovery setup network");
         start_setup_access_point();
     }
+    wifi_fallback_pending = false;
     vTaskDelete(NULL);
+}
+
+static void schedule_wifi_fallback(void) {
+    if (wifi_connected || setup_ap_started || wifi_fallback_pending) return;
+    wifi_fallback_pending = true;
+    if (xTaskCreate(wifi_fallback_task, "wifi_fallback", 3072, NULL, 2, NULL) != pdPASS) {
+        wifi_fallback_pending = false;
+        ESP_LOGE(TAG, "Could not start Wi-Fi recovery timer");
+    }
 }
 
 static void wifi_event_handler(void *argument, esp_event_base_t base, int32_t event_id, void *event_data) {
@@ -83,6 +100,7 @@ static void wifi_event_handler(void *argument, esp_event_base_t base, int32_t ev
         wifi_connected = false;
         ESP_LOGW(TAG, "Wi-Fi disconnected; retrying");
         esp_wifi_connect();
+        schedule_wifi_fallback();
     }
     if (base == IP_EVENT && event_id == IP_EVENT_STA_GOT_IP) {
         wifi_connected = true;
@@ -99,7 +117,8 @@ static void wifi_event_handler(void *argument, esp_event_base_t base, int32_t ev
 static void display_task(void *unused) {
     while (true) {
         display_ui_update(
-            &settings, wifi_connected, sd_mounted, adhan_audio_available);
+            &settings, wifi_connected, setup_ap_started,
+            storage_mounted, adhan_audio_available);
         vTaskDelay(pdMS_TO_TICKS(1000));
     }
 }
@@ -254,12 +273,12 @@ static void configure_audio_output(int sample_rate) {
     ESP_LOGI(TAG, "Audio output configured for %d Hz stereo", sample_rate);
 }
 
-static void play_adhan_from_sd(void) {
+static void play_adhan_from_storage(void) {
     if (xSemaphoreTake(audio_mutex, 0) != pdTRUE) {
         ESP_LOGW(TAG, "Audio playback is already active");
         return;
     }
-    FILE *file = fopen("/sdcard/adhan.mp3", "rb");
+    FILE *file = fopen(ADHAN_AUDIO_PATH, "rb");
     if (file == NULL) {
         xSemaphoreGive(audio_mutex);
         return;
@@ -270,7 +289,7 @@ static void play_adhan_from_sd(void) {
     int16_t *pcm = heap_caps_malloc(1152 * 2 * sizeof(int16_t), MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
     HMP3Decoder decoder = MP3InitDecoder();
     if (input == NULL || pcm == NULL || decoder == NULL) {
-        ESP_LOGE(TAG, "Not enough memory to decode /sdcard/adhan.mp3");
+        ESP_LOGE(TAG, "Not enough memory to decode %s", ADHAN_AUDIO_PATH);
         free(input);
         free(pcm);
         if (decoder != NULL) {
@@ -285,7 +304,7 @@ static void play_adhan_from_sd(void) {
     uint8_t *read_ptr = input;
     bool eof = false;
     int decoded_frames = 0;
-    ESP_LOGI(TAG, "Playing /sdcard/adhan.mp3");
+    ESP_LOGI(TAG, "Playing %s", ADHAN_AUDIO_PATH);
 
     while (available > 0 || !eof) {
         if (available < MAINBUF_SIZE * 2 && !eof) {
@@ -354,6 +373,153 @@ static void play_adhan_from_sd(void) {
     xSemaphoreGive(audio_mutex);
 }
 
+static bool current_media_url(char *url, size_t url_size) {
+    esp_netif_t *station = esp_netif_get_handle_from_ifkey("WIFI_STA_DEF");
+    esp_netif_ip_info_t ip_info = {0};
+    char address[16];
+    if (station == NULL || esp_netif_get_ip_info(station, &ip_info) != ESP_OK ||
+            ip_info.ip.addr == 0 ||
+            esp_ip4addr_ntoa(&ip_info.ip, address, sizeof(address)) == NULL) {
+        return false;
+    }
+    const int written = snprintf(
+        url, url_size, "http://%s/audio/adhan.mp3", address);
+    return written > 0 && (size_t)written < url_size;
+}
+
+static void play_adhan(void) {
+    if (xSemaphoreTake(playback_mutex, 0) != pdTRUE) {
+        ESP_LOGW(TAG, "Adhan playback is already being started");
+        return;
+    }
+    if (settings.output == ADHAN_OUTPUT_CAST) {
+        cast_device_t device;
+        char media_url[96];
+        char error[160] = {0};
+        ESP_LOGI(TAG, "Starting Cast playback on %s", settings.cast_device_name);
+        bool cast_started = false;
+        if (!wifi_connected) {
+            strlcpy(error, "Wi-Fi is offline", sizeof(error));
+        } else if (!current_media_url(media_url, sizeof(media_url))) {
+            strlcpy(error, "the device audio URL is unavailable", sizeof(error));
+        } else if (!cast_sender_find(settings.cast_device_id, &device, 8000)) {
+            strlcpy(error, "the saved Cast speaker did not answer discovery", sizeof(error));
+        } else {
+            cast_started = cast_sender_play(
+                &device, media_url, settings.volume, error, sizeof(error));
+        }
+        if (cast_started) {
+            xSemaphoreGive(playback_mutex);
+            return;
+        }
+        ESP_LOGW(TAG, "Cast playback failed%s%s; using attached speaker",
+            error[0] != '\0' ? ": " : "", error);
+    }
+    play_adhan_from_storage();
+    xSemaphoreGive(playback_mutex);
+}
+
+static bool file_exists(const char *path) {
+    FILE *file = fopen(path, "rb");
+    if (file == NULL) return false;
+    fclose(file);
+    return true;
+}
+
+static bool copy_audio_file(const char *source_path) {
+    FILE *source = fopen(source_path, "rb");
+    if (source == NULL) {
+        ESP_LOGE(TAG, "Could not open audio import source %s", source_path);
+        return false;
+    }
+    if (fseek(source, 0, SEEK_END) != 0) {
+        fclose(source);
+        return false;
+    }
+    const long expected_size = ftell(source);
+    rewind(source);
+    if (expected_size <= 0) {
+        fclose(source);
+        return false;
+    }
+
+    remove(ADHAN_UPLOAD_PATH);
+    FILE *destination = fopen(ADHAN_UPLOAD_PATH, "wb");
+    if (destination == NULL) {
+        ESP_LOGE(TAG, "Could not open internal audio import destination %s", ADHAN_UPLOAD_PATH);
+        fclose(source);
+        return false;
+    }
+    uint8_t *buffer = malloc(16 * 1024);
+    if (buffer == NULL) {
+        fclose(destination);
+        fclose(source);
+        remove(ADHAN_UPLOAD_PATH);
+        return false;
+    }
+
+    long copied = 0;
+    bool success = true;
+    while (true) {
+        const size_t count = fread(buffer, 1, 16 * 1024, source);
+        if (count > 0) {
+            if (fwrite(buffer, 1, count, destination) != count) {
+                success = false;
+                break;
+            }
+            copied += (long)count;
+        }
+        if (count < 16 * 1024) {
+            if (ferror(source)) success = false;
+            break;
+        }
+    }
+    free(buffer);
+    if (fclose(destination) != 0) success = false;
+    fclose(source);
+
+    if (!success || copied != expected_size) {
+        ESP_LOGE(TAG, "Internal audio import failed after %ld of %ld bytes", copied, expected_size);
+        remove(ADHAN_UPLOAD_PATH);
+        return false;
+    }
+    remove(ADHAN_AUDIO_PATH);
+    if (rename(ADHAN_UPLOAD_PATH, ADHAN_AUDIO_PATH) != 0) {
+        ESP_LOGE(TAG, "Could not install imported audio in internal storage");
+        remove(ADHAN_UPLOAD_PATH);
+        return false;
+    }
+    ESP_LOGI(TAG, "Imported %ld-byte adhan MP3 into internal storage", copied);
+    return true;
+}
+
+static void mount_internal_storage(void) {
+    const esp_vfs_fat_mount_config_t mount_config = {
+        .format_if_mount_failed = true,
+        .max_files = 6,
+        .allocation_unit_size = 16 * 1024,
+    };
+    const esp_err_t result = esp_vfs_fat_spiflash_mount_rw_wl(
+        ADHAN_STORAGE_BASE_PATH, "storage", &mount_config, &storage_wl_handle);
+    if (result != ESP_OK) {
+        ESP_LOGE(TAG, "Could not mount internal audio storage (%s)", esp_err_to_name(result));
+        return;
+    }
+    storage_mounted = true;
+    uint64_t total_bytes = 0;
+    uint64_t free_bytes = 0;
+    if (esp_vfs_fat_info(ADHAN_STORAGE_BASE_PATH, &total_bytes, &free_bytes) == ESP_OK) {
+        ESP_LOGI(TAG, "Internal audio storage ready: %llu bytes total, %llu bytes free",
+            (unsigned long long)total_bytes, (unsigned long long)free_bytes);
+    }
+    adhan_audio_available = file_exists(ADHAN_AUDIO_PATH);
+    if (adhan_audio_available) {
+        ESP_LOGI(TAG, "Adhan MP3 found in internal storage");
+    } else {
+        ESP_LOGI(TAG, "Internal storage is ready for an adhan MP3");
+    }
+}
+
 static void probe_sd_card(void) {
     if (sd_mounted) return;
     sdmmc_card_t *card = NULL;
@@ -382,19 +548,26 @@ static void probe_sd_card(void) {
         FILE *adhan = fopen("/sdcard/adhan.mp3", "rb");
         if (adhan != NULL) {
             fclose(adhan);
-            ESP_LOGI(TAG, "Adhan MP3 found at /sdcard/adhan.mp3");
-            adhan_audio_available = true;
+            if (storage_mounted && !adhan_audio_available) {
+                ESP_LOGI(TAG, "Importing /sdcard/adhan.mp3 into internal storage");
+                adhan_audio_available = copy_audio_file("/sdcard/adhan.mp3");
+            } else {
+                ESP_LOGI(TAG, "SD adhan MP3 retained as an optional backup");
+            }
         } else {
-            ESP_LOGI(TAG, "No adhan MP3 yet. Add a file named /sdcard/adhan.mp3");
+            ESP_LOGI(TAG, "No SD adhan MP3 available for import");
         }
         return;
     }
 
-    ESP_LOGW(TAG, "microSD not mounted (%s). Insert a FAT32 card for audio storage.", esp_err_to_name(result));
+    ESP_LOGI(TAG, "No optional microSD import source (%s)", esp_err_to_name(result));
 }
 
 static void sd_retry_task(void *unused) {
-    while (!sd_mounted) { vTaskDelay(pdMS_TO_TICKS(30000)); probe_sd_card(); }
+    while (!sd_mounted && !adhan_audio_available) {
+        vTaskDelay(pdMS_TO_TICKS(30000));
+        probe_sd_card();
+    }
     vTaskDelete(NULL);
 }
 
@@ -430,7 +603,7 @@ static void prayer_scheduler_task(void *unused) {
                     if (settings.enabled[index] && fired[index] != prayer_minute && minutes_late >= 0 && minutes_late <= 2) {
                         fired[index] = prayer_minute;
                         ESP_LOGI(TAG, "Scheduled %s adhan", prayer_time_name(prayer_indexes[index]));
-                        play_adhan_from_sd();
+                        play_adhan();
                     }
                 }
             }
@@ -459,7 +632,7 @@ static void probe_wifi(void) {
         ESP_ERROR_CHECK(esp_wifi_start());
         ESP_ERROR_CHECK(esp_wifi_connect());
         ESP_LOGI(TAG, "Connecting to saved Wi-Fi network: %s", settings.wifi_ssid);
-        xTaskCreate(wifi_fallback_task, "wifi_fallback", 3072, NULL, 2, NULL);
+        schedule_wifi_fallback();
     } else {
         start_setup_access_point();
         ESP_ERROR_CHECK(esp_wifi_start());
@@ -469,7 +642,7 @@ static void probe_wifi(void) {
     ESP_ERROR_CHECK(mdns_instance_name_set("Adhancron Prayer Clock"));
     ESP_ERROR_CHECK(mdns_service_add(NULL, "_http", "_tcp", 80, NULL, 0));
     ESP_LOGI(TAG, "Dashboard address: http://adhancron.local");
-    web_server_start(&settings, &sd_mounted, &adhan_audio_available, play_adhan_from_sd);
+    web_server_start(&settings, &storage_mounted, &adhan_audio_available, play_adhan);
 }
 
 void app_main(void) {
@@ -490,7 +663,9 @@ void app_main(void) {
     }
     settings_load(&settings);
     audio_mutex = xSemaphoreCreateMutex();
-    ESP_ERROR_CHECK(audio_mutex == NULL ? ESP_ERR_NO_MEM : ESP_OK);
+    playback_mutex = xSemaphoreCreateMutex();
+    ESP_ERROR_CHECK(
+        audio_mutex == NULL || playback_mutex == NULL ? ESP_ERR_NO_MEM : ESP_OK);
     setenv("TZ", settings.timezone, 1);
     tzset();
     ESP_LOGI(TAG, "Adhancron prayer clock starting");
@@ -498,10 +673,13 @@ void app_main(void) {
     init_display();
     init_audio();
     ESP_ERROR_CHECK(esp_codec_dev_set_out_vol(audio, settings.volume));
+    mount_internal_storage();
     probe_sd_card();
-    if (!sd_mounted) xTaskCreate(sd_retry_task, "sd_retry", 4096, NULL, 2, NULL);
+    if (!sd_mounted && !adhan_audio_available) {
+        xTaskCreate(sd_retry_task, "sd_retry", 4096, NULL, 2, NULL);
+    }
     probe_wifi();
-    xTaskCreate(prayer_scheduler_task, "prayer_scheduler", 6144, NULL, 4, NULL);
+    xTaskCreate(prayer_scheduler_task, "prayer_scheduler", 8192, NULL, 4, NULL);
     xTaskCreate(display_task, "display", 4096, NULL, 3, NULL);
     ESP_LOGI(TAG, "Prayer scheduler started. Configure Wi-Fi and location before use.");
 }

@@ -15,5 +15,6 @@ esp_err_t display_ui_init(
 void display_ui_update(
     const adhan_settings_t *settings,
     bool wifi_connected,
-    bool sd_mounted,
+    bool setup_access_point_active,
+    bool storage_mounted,
     bool adhan_audio_available);

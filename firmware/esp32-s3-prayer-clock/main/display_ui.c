@@ -1,5 +1,6 @@
 #include "display_ui.h"
 
+#include <ctype.h>
 #include <stdio.h>
 #include <string.h>
 #include <time.h>
@@ -29,6 +30,7 @@ static lv_obj_t *dashboard;
 static lv_obj_t *message_panel;
 static lv_obj_t *message_title;
 static lv_obj_t *message_detail;
+static lv_obj_t *location_label;
 static lv_obj_t *clock_label;
 static lv_obj_t *date_label;
 static lv_obj_t *wifi_icon;
@@ -167,8 +169,10 @@ static void create_dashboard(lv_obj_t *screen) {
     lv_obj_set_style_bg_opa(dashboard, LV_OPA_COVER, 0);
 
     create_crescent(dashboard);
-    lv_obj_t *brand = make_label(dashboard, "ADHANCRON", &lv_font_montserrat_12, COLOR_MUTED);
-    lv_obj_set_pos(brand, 44, 13);
+    location_label = make_label(dashboard, "ADHANCRON", &lv_font_montserrat_12, COLOR_MUTED);
+    lv_obj_set_pos(location_label, 44, 13);
+    lv_obj_set_size(location_label, 136, 16);
+    lv_label_set_long_mode(location_label, LV_LABEL_LONG_MODE_DOTS);
 
     wifi_icon = make_label(dashboard, LV_SYMBOL_WIFI, &lv_font_montserrat_14, COLOR_MUTED);
     lv_obj_set_pos(wifi_icon, 188, 11);
@@ -247,10 +251,71 @@ static void format_clock_minutes(int minutes, char output[6]) {
     snprintf(output, 6, "%02u:%02u", value / 60, value % 60);
 }
 
+static void compact_location_name(const char *saved_name, char output[32]) {
+    if (saved_name == NULL || saved_name[0] == '\0') {
+        strlcpy(output, "ADHANCRON", 32);
+        return;
+    }
+
+    const char *first_comma = strchr(saved_name, ',');
+    if (first_comma == NULL) {
+        strlcpy(output, saved_name, 32);
+        return;
+    }
+
+    const size_t first_length = (size_t)(first_comma - saved_name);
+    bool has_letter = false;
+    bool has_digit = false;
+    bool postcode_shape = first_length > 0 && first_length <= 8;
+    for (size_t index = 0; index < first_length; index++) {
+        const unsigned char character = (unsigned char)saved_name[index];
+        has_letter |= isalpha(character) != 0;
+        has_digit |= isdigit(character) != 0;
+        postcode_shape &= isalnum(character) != 0 || character == ' ';
+    }
+
+    if (postcode_shape && has_letter && has_digit) {
+        char outward_code[9] = {0};
+        const char *outward_end = memchr(saved_name, ' ', first_length);
+        const size_t outward_length = outward_end
+            ? (size_t)(outward_end - saved_name)
+            : first_length;
+        memcpy(outward_code, saved_name,
+            outward_length < sizeof(outward_code) - 1
+                ? outward_length
+                : sizeof(outward_code) - 1);
+
+        const char *district_start = first_comma + 1;
+        while (*district_start == ' ') district_start++;
+        const char *district_end = strchr(district_start, ',');
+        const size_t district_length = district_end
+            ? (size_t)(district_end - district_start)
+            : strlen(district_start);
+        char district[24] = {0};
+        memcpy(district, district_start,
+            district_length < sizeof(district) - 1
+                ? district_length
+                : sizeof(district) - 1);
+        char *upon = strstr(district, " upon ");
+        if (upon != NULL) *upon = '\0';
+        snprintf(output, 32, "%.8s %.22s", outward_code, district);
+        return;
+    }
+
+    if (has_letter) {
+        const size_t city_length = first_length < 31 ? first_length : 31;
+        memcpy(output, saved_name, city_length);
+        output[city_length] = '\0';
+        return;
+    }
+    strlcpy(output, saved_name, 32);
+}
+
 void display_ui_update(
     const adhan_settings_t *current_settings,
     bool connected,
-    bool card_mounted,
+    bool setup_access_point_active,
+    bool storage_mounted,
     bool audio_available) {
     if (!lvgl_display || !current_settings || !lvgl_port_lock(1000)) return;
 
@@ -293,6 +358,17 @@ void display_ui_update(
     lv_obj_add_flag(message_panel, LV_OBJ_FLAG_HIDDEN);
     lv_obj_clear_flag(dashboard, LV_OBJ_FLAG_HIDDEN);
 
+    char saved_location[64];
+    const char *location = current_settings->location_name;
+    if (location[0] == '\0') {
+        snprintf(saved_location, sizeof(saved_location), "%.4f, %.4f",
+            current_settings->latitude, current_settings->longitude);
+        location = saved_location;
+    }
+    char compact_location[32];
+    compact_location_name(location, compact_location);
+    lv_label_set_text(location_label, compact_location);
+
     char clock_text[6];
     snprintf(clock_text, sizeof(clock_text), "%02d%c%02d",
         local_now.tm_hour, local_now.tm_sec % 2 == 0 ? ':' : ' ', local_now.tm_min);
@@ -303,9 +379,12 @@ void display_ui_update(
     lv_label_set_text(date_label, date_text);
     lv_obj_align(date_label, LV_ALIGN_TOP_MID, 0, 84);
 
-    lv_obj_set_style_text_color(wifi_icon, color(connected ? COLOR_SKY : COLOR_MUTED), 0);
+    const uint32_t wifi_color = connected
+        ? COLOR_SKY
+        : (setup_access_point_active ? COLOR_GOLD : COLOR_MUTED);
+    lv_obj_set_style_text_color(wifi_icon, color(wifi_color), 0);
     lv_obj_set_style_text_color(audio_icon, color(audio_available ? COLOR_GOLD : COLOR_ERROR), 0);
-    lv_label_set_text(audio_icon, card_mounted ? LV_SYMBOL_VOLUME_MAX : LV_SYMBOL_WARNING);
+    lv_label_set_text(audio_icon, storage_mounted ? LV_SYMBOL_VOLUME_MAX : LV_SYMBOL_WARNING);
 
     static const int row_indexes[] = {0, 1, 2, 3, 4, 5};
     static const int prayer_indexes[] = {0, 2, 3, 4, 5};

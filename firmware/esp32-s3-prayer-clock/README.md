@@ -20,9 +20,11 @@ speaker the dependable primary adhan output.
 - Full-screen LVGL clock with anti-aliased Montserrat type, Fajr, sunrise, Dhuhr, Asr, Maghrib, Isha, next prayer, countdown, and Wi-Fi/audio status.
 - Once-per-prayer scheduling with individual prayer enable switches and a
   two-minute recovery window after a reboot or delayed clock synchronisation.
-- Local MP3 playback from `/sdcard/adhan.mp3` through the ES8311 speaker path.
+- Local MP3 playback from the 8 MB internal flash storage partition through the ES8311 speaker path.
+- Optional direct Google Cast playback, with speaker discovery on the local network and automatic fallback to the attached speaker if Cast is unavailable.
 - Browser MP3 upload, manual playback, status/timetable API, and byte-range audio serving.
-- Wi-Fi reconnect, SD retry, NVS recovery, and BOOT-button factory setup reset.
+- Automatic one-time import of `/sdcard/adhan.mp3` when internal audio is empty.
+- Wi-Fi reconnect, optional SD import, NVS recovery, and BOOT-button factory setup reset.
 
 The ES3N28P has no touch panel. The board silkscreen is shared with the touch
 variant, but the product packaging identifies this one as `2.8 Without touch`.
@@ -71,12 +73,15 @@ shows the setup instructions or prayer clock on the display.
    its password. Hidden and open networks are also supported.
 3. After restart, open `http://adhancron.local`.
 4. Search for the home town, city, or postcode and save it.
-5. Use the dashboard to test playback, select automatic prayers, set volume,
-   or replace the MP3.
+5. Use the dashboard to choose the attached speaker or a discovered Google
+   Cast speaker, test playback, select automatic prayers, set volume, or
+   replace the MP3.
 
-The SD card may be empty on first setup. Once it is mounted, use the dashboard
-to upload an MP3; it is stored as `/sdcard/adhan.mp3` and used for both manual
-tests and scheduled playback.
+The dashboard stores an uploaded MP3 in the device's dedicated 8 MB internal
+flash partition. It is used for manual tests, scheduled playback, and the
+`/audio/adhan.mp3` endpoint. A microSD card is optional: when internal audio is
+empty, the firmware imports `/sdcard/adhan.mp3` from an inserted FAT32 card and
+keeps the card's copy as a backup. The card can be removed after import.
 
 Hold BOOT for three seconds during startup to clear saved setup. If home Wi-Fi
 cannot be reached for 20 seconds, the recovery setup network is enabled without
@@ -92,7 +97,10 @@ cc -std=c11 -D_DEFAULT_SOURCE -I main tests/prayer_times_host_test.c main/prayer
 /tmp/adhancron-prayer-test
 ```
 
-Direct Google Cast control is not included. Google does not provide an ESP-IDF
-Cast sender SDK, and an unverified protocol reimplementation would be less
-dependable than the local speaker. The device does expose
-`/audio/adhan.mp3` with byte-range support for external integrations.
+For Google Cast playback, the ESP32 discovers compatible receivers with mDNS,
+launches Google's Default Media Receiver over the local Cast V2 connection,
+and gives it the device's own `/audio/adhan.mp3` URL. The receiver and prayer
+clock must be on networks that can reach one another. The saved receiver is
+rediscovered before every adhan so DHCP address changes are harmless. If the
+receiver is offline or playback cannot be confirmed, the attached speaker is
+used automatically instead.
