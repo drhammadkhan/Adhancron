@@ -58,19 +58,26 @@ static void restart_task(void *unused) {
 typedef enum { PAGE_AUTOMATIC, PAGE_LOCATION, PAGE_WIFI } page_kind_t;
 
 static esp_err_t render_page(httpd_req_t *request, page_kind_t kind) {
-    char page[7000];
-    int length = snprintf(page, sizeof(page), "%s", STYLE);
+    const size_t page_capacity = 7000;
+    char *page = malloc(page_capacity);
+    if (page == NULL) return httpd_resp_send_err(request, HTTPD_500_INTERNAL_SERVER_ERROR, "Not enough memory to render the page");
+    int length = snprintf(page, page_capacity, "%s", STYLE);
     if (kind == PAGE_WIFI || (kind == PAGE_AUTOMATIC && !settings_has_wifi(current_settings))) {
-        length += snprintf(page + length, sizeof(page) - length, "%s", WIFI_PAGE);
+        length += snprintf(page + length, page_capacity - length, "%s", WIFI_PAGE);
     } else if (kind == PAGE_LOCATION || (kind == PAGE_AUTOMATIC && !current_settings->location_configured)) {
-        length += snprintf(page + length, sizeof(page) - length, LOCATION_PAGE, current_settings->volume);
+        length += snprintf(page + length, page_capacity - length, LOCATION_PAGE, current_settings->volume);
     } else {
-        length += snprintf(page + length, sizeof(page) - length, DASHBOARD_PAGE,
+        length += snprintf(page + length, page_capacity - length, DASHBOARD_PAGE,
             current_settings->enabled[0]?"checked":"",current_settings->enabled[1]?"checked":"",current_settings->enabled[2]?"checked":"",current_settings->enabled[3]?"checked":"",current_settings->enabled[4]?"checked":"",current_settings->volume);
     }
-    if (length < 0 || (size_t)length >= sizeof(page)) return httpd_resp_send_err(request, HTTPD_500_INTERNAL_SERVER_ERROR, "Page is too large");
+    if (length < 0 || (size_t)length >= page_capacity) {
+        free(page);
+        return httpd_resp_send_err(request, HTTPD_500_INTERNAL_SERVER_ERROR, "Page is too large");
+    }
     httpd_resp_set_type(request, "text/html");
-    return httpd_resp_send(request, page, length);
+    const esp_err_t result = httpd_resp_send(request, page, length);
+    free(page);
+    return result;
 }
 
 static esp_err_t page_handler(httpd_req_t *request) { return render_page(request, PAGE_AUTOMATIC); }
@@ -232,7 +239,7 @@ static esp_err_t audio_file_handler(httpd_req_t *request) {
 
 void web_server_start(adhan_settings_t *settings, bool *sd_is_mounted, bool *adhan_audio_available, web_play_callback_t play_callback) {
     current_settings = settings; card_mounted = sd_is_mounted; audio_available = adhan_audio_available; play_audio = play_callback;
-    httpd_handle_t server = NULL; httpd_config_t config = HTTPD_DEFAULT_CONFIG(); config.max_uri_handlers = 8;
+    httpd_handle_t server = NULL; httpd_config_t config = HTTPD_DEFAULT_CONFIG(); config.max_uri_handlers = 8; config.stack_size = 8192;
     if (httpd_start(&server, &config) != ESP_OK) { ESP_LOGE(TAG, "Could not start web server"); return; }
     const httpd_uri_t root = {.uri = "/", .method = HTTP_GET, .handler = page_handler};
     const httpd_uri_t save = {.uri = "/api/settings", .method = HTTP_POST, .handler = settings_handler};
