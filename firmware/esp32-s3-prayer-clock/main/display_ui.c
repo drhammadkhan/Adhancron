@@ -31,7 +31,8 @@ static lv_obj_t *message_panel;
 static lv_obj_t *message_title;
 static lv_obj_t *message_detail;
 static lv_obj_t *location_label;
-static lv_obj_t *clock_label;
+static lv_obj_t *address_label;
+static lv_obj_t *clock_digit_labels[6];
 static lv_obj_t *date_label;
 static lv_obj_t *wifi_icon;
 static lv_obj_t *audio_icon;
@@ -116,7 +117,7 @@ static void create_message_panel(lv_obj_t *screen) {
 static void create_next_prayer_panel(lv_obj_t *parent) {
     lv_obj_t *panel = lv_obj_create(parent);
     make_plain(panel);
-    lv_obj_set_pos(panel, 10, 101);
+    lv_obj_set_pos(panel, 10, 106);
     lv_obj_set_size(panel, 220, 70);
     lv_obj_set_style_radius(panel, 8, 0);
     lv_obj_set_style_bg_color(panel, color(COLOR_PANEL), 0);
@@ -142,8 +143,8 @@ static void create_prayer_table(lv_obj_t *parent) {
     for (int row = 0; row < 6; row++) {
         prayer_rows[row] = lv_obj_create(parent);
         make_plain(prayer_rows[row]);
-        lv_obj_set_pos(prayer_rows[row], 10, 179 + row * 22);
-        lv_obj_set_size(prayer_rows[row], 220, 22);
+        lv_obj_set_pos(prayer_rows[row], 10, 178 + row * 21);
+        lv_obj_set_size(prayer_rows[row], 220, 21);
         lv_obj_set_style_radius(prayer_rows[row], 4, 0);
         lv_obj_set_style_bg_opa(prayer_rows[row], LV_OPA_TRANSP, 0);
         lv_obj_set_style_border_side(prayer_rows[row], LV_BORDER_SIDE_BOTTOM, 0);
@@ -169,24 +170,58 @@ static void create_dashboard(lv_obj_t *screen) {
     lv_obj_set_style_bg_opa(dashboard, LV_OPA_COVER, 0);
 
     create_crescent(dashboard);
-    location_label = make_label(dashboard, "ADHANCRON", &lv_font_montserrat_12, COLOR_MUTED);
-    lv_obj_set_pos(location_label, 44, 13);
-    lv_obj_set_size(location_label, 136, 16);
+    lv_obj_t *product_label = make_label(
+        dashboard, "ADHAN CLOCK", &lv_font_montserrat_12, COLOR_GOLD);
+    lv_obj_set_pos(product_label, 52, 4);
+    lv_obj_set_size(product_label, 136, 14);
+    lv_obj_set_style_text_align(product_label, LV_TEXT_ALIGN_CENTER, 0);
+    lv_label_set_long_mode(product_label, LV_LABEL_LONG_MODE_DOTS);
+
+    location_label = make_label(dashboard, "LOCATION", &lv_font_montserrat_12, COLOR_MUTED);
+    lv_obj_set_pos(location_label, 52, 20);
+    lv_obj_set_size(location_label, 136, 18);
+    lv_obj_set_style_text_align(location_label, LV_TEXT_ALIGN_CENTER, 0);
     lv_label_set_long_mode(location_label, LV_LABEL_LONG_MODE_DOTS);
 
     wifi_icon = make_label(dashboard, LV_SYMBOL_WIFI, &lv_font_montserrat_14, COLOR_MUTED);
-    lv_obj_set_pos(wifi_icon, 188, 11);
+    lv_obj_set_pos(wifi_icon, 188, 13);
     audio_icon = make_label(dashboard, LV_SYMBOL_VOLUME_MAX, &lv_font_montserrat_14, COLOR_MUTED);
-    lv_obj_set_pos(audio_icon, 215, 11);
+    lv_obj_set_pos(audio_icon, 215, 13);
 
-    clock_label = make_label(dashboard, "--:--", &lv_font_montserrat_48, COLOR_IVORY);
-    lv_obj_align(clock_label, LV_ALIGN_TOP_MID, 0, 34);
+    lv_obj_t *clock_row = lv_obj_create(dashboard);
+    make_plain(clock_row);
+    lv_obj_set_size(clock_row, 220, 44);
+    lv_obj_set_pos(clock_row, 10, 39);
+    int clock_x = 26;
+    for (int digit = 0; digit < 6; digit++) {
+        if (digit == 2 || digit == 4) {
+            lv_obj_t *separator = make_label(
+                clock_row, ":", &lv_font_montserrat_36, COLOR_IVORY);
+            lv_obj_set_size(separator, 12, 44);
+            lv_obj_set_pos(separator, clock_x, 0);
+            lv_obj_set_style_text_align(separator, LV_TEXT_ALIGN_CENTER, 0);
+            clock_x += 12;
+        }
+        clock_digit_labels[digit] = make_label(
+            clock_row, "-", &lv_font_montserrat_36, COLOR_IVORY);
+        lv_obj_set_size(clock_digit_labels[digit], 24, 44);
+        lv_obj_set_pos(clock_digit_labels[digit], clock_x, 0);
+        lv_obj_set_style_text_align(
+            clock_digit_labels[digit], LV_TEXT_ALIGN_CENTER, 0);
+        clock_x += 24;
+    }
 
     date_label = make_label(dashboard, "WAITING FOR TIME", &lv_font_montserrat_12, COLOR_MUTED);
-    lv_obj_align(date_label, LV_ALIGN_TOP_MID, 0, 84);
+    lv_obj_align(date_label, LV_ALIGN_TOP_MID, 0, 88);
 
     create_next_prayer_panel(dashboard);
     create_prayer_table(dashboard);
+
+    address_label = make_label(dashboard, "IP: OFFLINE", &lv_font_montserrat_12, COLOR_MUTED);
+    lv_obj_set_pos(address_label, 10, 305);
+    lv_obj_set_size(address_label, 220, 14);
+    lv_obj_set_style_text_align(address_label, LV_TEXT_ALIGN_CENTER, 0);
+    lv_label_set_long_mode(address_label, LV_LABEL_LONG_MODE_DOTS);
 }
 
 esp_err_t display_ui_init(
@@ -316,7 +351,8 @@ void display_ui_update(
     bool connected,
     bool setup_access_point_active,
     bool storage_mounted,
-    bool audio_available) {
+    bool audio_available,
+    const char *device_address) {
     if (!lvgl_display || !current_settings || !lvgl_port_lock(1000)) return;
 
     if (!settings_has_wifi(current_settings)) {
@@ -369,15 +405,23 @@ void display_ui_update(
     compact_location_name(location, compact_location);
     lv_label_set_text(location_label, compact_location);
 
-    char clock_text[6];
-    snprintf(clock_text, sizeof(clock_text), "%02d%c%02d",
-        local_now.tm_hour, local_now.tm_sec % 2 == 0 ? ':' : ' ', local_now.tm_min);
-    lv_label_set_text(clock_label, clock_text);
+    char address_text[24];
+    snprintf(address_text, sizeof(address_text), "IP: %s",
+        device_address != NULL && device_address[0] != '\0' ? device_address : "OFFLINE");
+    lv_label_set_text(address_label, address_text);
+
+    char clock_text[7];
+    snprintf(clock_text, sizeof(clock_text), "%02d%02d%02d",
+        local_now.tm_hour, local_now.tm_min, local_now.tm_sec);
+    for (int digit = 0; digit < 6; digit++) {
+        char value[2] = {clock_text[digit], '\0'};
+        lv_label_set_text(clock_digit_labels[digit], value);
+    }
 
     char date_text[32];
     strftime(date_text, sizeof(date_text), "%A  %d %B", &local_now);
     lv_label_set_text(date_label, date_text);
-    lv_obj_align(date_label, LV_ALIGN_TOP_MID, 0, 84);
+    lv_obj_align(date_label, LV_ALIGN_TOP_MID, 0, 88);
 
     const uint32_t wifi_color = connected
         ? COLOR_SKY

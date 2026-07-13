@@ -1,13 +1,14 @@
-# Adhancron Prayer Clock for ESP32-S3
+# Adhan Clock for ESP32-S3
 
 This is the standalone ESP32 companion edition of Adhancron. It targets the
 LCDWIKI ES3N28P board: an ESP32-S3 with 16 MB flash, 8 MB PSRAM, a 240x320
 ILI9341 display, microSD, and an ES8311 audio codec with a speaker amplifier.
 
-It is intentionally separate from the Docker and desktop applications. The
-shared product goals are local prayer-time calculation, scheduling, MP3 storage
-and serving, and optional network playback. This firmware will make the local
-speaker the dependable primary adhan output.
+It is intentionally separate from the Docker and desktop applications while
+remaining part of the same repository. The firmware is a complete appliance:
+it calculates and schedules prayer times, stores and serves its own MP3, drives
+the screen and attached speaker, and can control Google Cast directly. It does
+not require Docker, Home Assistant, or another computer after setup.
 
 ## Functionality
 
@@ -17,7 +18,9 @@ speaker the dependable primary adhan output.
 - Online town/city/postcode search followed by automatic coordinate and timezone storage.
 - NTP clock synchronisation and daylight-saving-aware local time.
 - Local Adhancron prayer calculation: Fajr 90 minutes before sunrise, Dhuhr five minutes after solar noon, standard Asr, Maghrib one minute after sunset, and Moonsighting Committee seasonal Isha.
-- Full-screen LVGL clock with anti-aliased Montserrat type, Fajr, sunrise, Dhuhr, Asr, Maghrib, Isha, next prayer, countdown, and Wi-Fi/audio status.
+- Full-screen LVGL dashboard with an `HH:MM:SS` clock, date, saved location, Fajr, sunrise, Dhuhr, Asr, Maghrib, Isha, next prayer, countdown, and Wi-Fi/audio status.
+- Fixed-width clock digits that do not move as the seconds change.
+- The device IP address in a centred footer so the browser dashboard is easy to find.
 - Once-per-prayer scheduling with individual prayer enable switches and a
   two-minute recovery window after a reboot or delayed clock synchronisation.
 - Local MP3 playback from the 8 MB internal flash storage partition through the ES8311 speaker path.
@@ -30,6 +33,16 @@ The ES3N28P has no touch panel. The board silkscreen is shared with the touch
 variant, but the product packaging identifies this one as `2.8 Without touch`.
 Device setup will therefore be browser-based, with the BOOT button reserved for
 recovery behaviour rather than normal navigation.
+
+## How It Works
+
+1. On first boot, the clock creates the **Adhancron Setup** Wi-Fi network.
+2. The user joins it from a phone or computer, opens `192.168.4.1`, chooses a scanned Wi-Fi network, and saves its password.
+3. After joining the home network, the clock exposes the same full dashboard at `http://adhancron.local` and shows its numerical IP address at the bottom of the display.
+4. The user searches for a location or enters coordinates. The clock saves the coordinates, timezone, and display name, then calculates prayer times locally each day.
+5. At each enabled prayer, the scheduler starts the saved output: either the attached speaker or the selected Google Cast receiver.
+6. For Cast playback, the ESP32 discovers the receiver, starts the Default Media Receiver, and serves `/audio/adhan.mp3` from internal flash with HTTP range support. If discovery or playback fails, it automatically uses the attached speaker.
+7. If the home network later becomes unavailable, the prayer display and local schedule continue running. After 20 seconds the recovery setup network appears, while the clock keeps its saved location and settings.
 
 ## Display architecture
 
@@ -76,6 +89,11 @@ shows the setup instructions or prayer clock on the display.
 5. Use the dashboard to choose the attached speaker or a discovered Google
    Cast speaker, test playback, select automatic prayers, set volume, or
    replace the MP3.
+
+The dashboard also shows connection state, saved location, today's calculated
+times, audio-storage state, and the currently selected playback output. All
+normal configuration is available on both the home network and the recovery
+setup network.
 
 The dashboard stores an uploaded MP3 in the device's dedicated 8 MB internal
 flash partition. It is used for manual tests, scheduled playback, and the

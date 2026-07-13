@@ -114,11 +114,29 @@ static void wifi_event_handler(void *argument, esp_event_base_t base, int32_t ev
     }
 }
 
+static void current_device_address(char address[16]) {
+    address[0] = '\0';
+    if (wifi_connected) {
+        esp_netif_t *station = esp_netif_get_handle_from_ifkey("WIFI_STA_DEF");
+        esp_netif_ip_info_t ip_info = {0};
+        if (station != NULL && esp_netif_get_ip_info(station, &ip_info) == ESP_OK &&
+                ip_info.ip.addr != 0 &&
+                esp_ip4addr_ntoa(&ip_info.ip, address, 16) != NULL) {
+            return;
+        }
+    }
+    if (setup_ap_started) {
+        strlcpy(address, "192.168.4.1", 16);
+    }
+}
+
 static void display_task(void *unused) {
     while (true) {
+        char device_address[16];
+        current_device_address(device_address);
         display_ui_update(
             &settings, wifi_connected, setup_ap_started,
-            storage_mounted, adhan_audio_available);
+            storage_mounted, adhan_audio_available, device_address);
         vTaskDelay(pdMS_TO_TICKS(1000));
     }
 }

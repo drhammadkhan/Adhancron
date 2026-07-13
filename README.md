@@ -1,8 +1,8 @@
 # Adhancron
 
-Adhancron is an adhan scheduler available as a Docker home-server service and a native desktop application. It keeps daily prayer times up to date, serves the adhan MP3 over HTTP, and plays it through either Home Assistant or a Google Cast speaker directly.
+Adhancron is a complete prayer clock and adhan scheduler available in three editions: a Docker home-server service, a native desktop application, and a standalone ESP32-S3 appliance. Every edition calculates daily prayer times locally from the user's location and can schedule adhan playback without relying on an external prayer-time service.
 
-The main supported use case is running this as a CasaOS or Docker container on a home server, then playing adhan through Home Assistant speakers such as Google Cast speakers.
+Docker and desktop can play through Home Assistant or Google Cast. The standalone ESP32-S3 edition adds an always-on 240x320 prayer display, its own browser-based setup, internal adhan storage, an attached speaker, and direct Google Cast playback served entirely by the device.
 
 ## Editions
 
@@ -25,14 +25,22 @@ On macOS this creates `dist/Adhancron.app`; on Windows it creates a `dist/Adhanc
 
 ### ESP32-S3 Prayer Clock
 
-`firmware/esp32-s3-prayer-clock` is a standalone appliance edition for the
-LCDWIKI ES3N28P board: an ESP32-S3 with a 240x320 display, speaker, and
-microSD slot. It will calculate and display local prayer times, play the adhan
-from its own speaker, and later offer network playback as an optional companion
-feature. It is developed independently from the Docker and desktop editions;
-see [firmware/esp32-s3-prayer-clock/README.md](firmware/esp32-s3-prayer-clock/README.md).
+`firmware/esp32-s3-prayer-clock` is a self-contained appliance edition for the LCDWIKI ES3N28P board: an ESP32-S3 with a 240x320 display, speaker, 16 MB flash, 8 MB PSRAM, and an optional microSD slot.
 
-## What It Does
+It provides:
+
+- A polished always-on clock showing seconds, location, date, the next prayer and countdown, and the complete daily prayer timetable.
+- First-run and recovery Wi-Fi networks with phone-friendly browser setup.
+- Location search by town, city, postcode, or coordinates, including automatic timezone and daylight-saving handling.
+- Local prayer-time calculation and once-per-prayer scheduling.
+- An 8 MB internal audio partition for the adhan MP3, with browser upload and optional one-time microSD import.
+- Scheduled or manual playback through the attached speaker or a discovered Google Cast receiver.
+- Byte-range HTTP audio serving directly from the ESP32, plus automatic fallback to the attached speaker when Cast is unavailable.
+- The current device IP address on the display so the full settings dashboard is easy to find.
+
+It runs independently from the Docker and desktop editions and needs no home server or Home Assistant. See [firmware/esp32-s3-prayer-clock/README.md](firmware/esp32-s3-prayer-clock/README.md) for hardware, setup, build, and recovery details.
+
+## Docker and Desktop Functionality
 
 - Runs a web dashboard on port `8090`.
 - Creates and maintains cron jobs for Fajr, Dhuhr, Asr, Maghrib, and Isha.

@@ -17,4 +17,5 @@ void display_ui_update(
     bool wifi_connected,
     bool setup_access_point_active,
     bool storage_mounted,
-    bool adhan_audio_available);
+    bool adhan_audio_available,
+    const char *device_address);
