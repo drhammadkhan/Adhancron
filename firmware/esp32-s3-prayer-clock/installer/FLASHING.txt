@@ -36,6 +36,13 @@ First boot
 4. Reconnect to the home Wi-Fi and open the IP address shown on the clock.
 5. Save the location, playback output, volume, and enabled prayers.
 
+Future firmware updates
+-----------------------
+This release adds safe Wi-Fi updates. After this one USB installation, the
+clock checks the published Adhan Clock release automatically and installs new
+application versions outside prayer and audio-playback windows. The dashboard
+shows the installed version and also provides a manual update check.
+
 The manual erase_flash command removes saved settings and uploaded adhan audio.
 The bundled firmware starts without an MP3; upload one from the device dashboard
 or insert a FAT32 microSD card containing /adhan.mp3 for one-time import.

@@ -42,6 +42,8 @@ It runs independently from the Docker and desktop editions and needs no home ser
 
 To put the firmware on a supported board without installing developer tools, open the [Adhan Clock browser installer](https://drhammadkhan.github.io/Adhancron/) in Chrome or Edge on a computer and connect the board over USB.
 
+That USB installation enables safe over-the-air updates. Afterwards the clock checks the published release over Wi-Fi, installs verified application updates outside prayer and playback windows, and rolls back automatically if an updated application cannot complete startup.
+
 ## Docker and Desktop Functionality
 
 - Runs a web dashboard on port `8090`.

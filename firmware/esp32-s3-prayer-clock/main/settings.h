@@ -21,6 +21,7 @@ typedef struct {
     adhan_output_t output;
     char cast_device_id[48];
     char cast_device_name[64];
+    bool automatic_updates;
 } adhan_settings_t;
 
 void settings_defaults(adhan_settings_t *settings);

@@ -36,6 +36,7 @@
 #include "board_config.h"
 #include "cast_sender.h"
 #include "display_ui.h"
+#include "firmware_update.h"
 #include "prayer_times.h"
 #include "settings.h"
 #include "web_server.h"
@@ -59,6 +60,7 @@ static bool setup_ap_started;
 static bool wifi_fallback_pending;
 static SemaphoreHandle_t audio_mutex;
 static SemaphoreHandle_t playback_mutex;
+static time_t playback_guard_until;
 
 static void start_setup_access_point(void) {
     if (setup_ap_started) return;
@@ -410,6 +412,7 @@ static void play_adhan(void) {
         ESP_LOGW(TAG, "Adhan playback is already being started");
         return;
     }
+    playback_guard_until = time(NULL) + 10 * 60;
     if (settings.output == ADHAN_OUTPUT_CAST) {
         cast_device_t device;
         char media_url[96];
@@ -435,6 +438,41 @@ static void play_adhan(void) {
     }
     play_adhan_from_storage();
     xSemaphoreGive(playback_mutex);
+}
+
+static bool firmware_update_window_safe(void) {
+    const time_t now = time(NULL);
+    if (now < playback_guard_until) {
+        return false;
+    }
+    struct tm local_now = {0};
+    localtime_r(&now, &local_now);
+    if (!settings.location_configured || local_now.tm_year < 120) {
+        return true;
+    }
+    const prayer_calculation_config_t calculation = {
+        .latitude = settings.latitude,
+        .longitude = settings.longitude,
+    };
+    prayer_times_t times;
+    if (!prayer_times_calculate(&local_now, &calculation, &times)) {
+        return true;
+    }
+    const int prayer_indexes[] = {0, 2, 3, 4, 5};
+    const int current_minute = local_now.tm_hour * 60 + local_now.tm_min;
+    for (int index = 0; index < 5; index++) {
+        if (!settings.enabled[index]) {
+            continue;
+        }
+        int distance = abs(current_minute - prayer_time_minutes(&times, prayer_indexes[index]));
+        if (distance > 720) {
+            distance = 1440 - distance;
+        }
+        if (distance <= 10) {
+            return false;
+        }
+    }
+    return true;
 }
 
 static bool file_exists(const char *path) {
@@ -699,5 +737,7 @@ void app_main(void) {
     probe_wifi();
     xTaskCreate(prayer_scheduler_task, "prayer_scheduler", 8192, NULL, 4, NULL);
     xTaskCreate(display_task, "display", 4096, NULL, 3, NULL);
+    firmware_update_start(
+        &settings, &wifi_connected, playback_mutex, firmware_update_window_safe);
     ESP_LOGI(TAG, "Prayer scheduler started. Configure Wi-Fi and location before use.");
 }

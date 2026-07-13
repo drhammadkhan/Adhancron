@@ -6,7 +6,8 @@
 #include "nvs.h"
 
 #define SETTINGS_NAMESPACE "adhan"
-#define SETTINGS_VERSION 5
+#define SETTINGS_VERSION 6
+#define LEGACY_SETTINGS_VERSION_5 5
 #define LEGACY_SETTINGS_VERSION_4 4
 #define LEGACY_SETTINGS_VERSION_3 3
 
@@ -34,6 +35,21 @@ typedef struct {
 } legacy_settings_v4_t;
 
 typedef struct {
+    char wifi_ssid[33];
+    char wifi_password[65];
+    char timezone[64];
+    char location_name[64];
+    double latitude;
+    double longitude;
+    bool location_configured;
+    int volume;
+    bool enabled[5];
+    adhan_output_t output;
+    char cast_device_id[48];
+    char cast_device_name[64];
+} legacy_settings_v5_t;
+
+typedef struct {
     uint32_t version;
     legacy_settings_v3_t value;
 } stored_settings_v3_t;
@@ -45,6 +61,11 @@ typedef struct {
 
 typedef struct {
     uint32_t version;
+    legacy_settings_v5_t value;
+} stored_settings_v5_t;
+
+typedef struct {
+    uint32_t version;
     adhan_settings_t value;
 } stored_settings_t;
 
@@ -53,6 +74,7 @@ void settings_defaults(adhan_settings_t *settings) {
     strcpy(settings->timezone, "GMT0BST,M3.5.0/1,M10.5.0/2");
     settings->volume = 80;
     settings->output = ADHAN_OUTPUT_ATTACHED;
+    settings->automatic_updates = true;
     for (size_t index = 0; index < 5; index++) {
         settings->enabled[index] = true;
     }
@@ -75,6 +97,26 @@ bool settings_load(adhan_settings_t *settings) {
         nvs_close(handle);
         if (result != ESP_OK || stored.version != SETTINGS_VERSION) return false;
         *settings = stored.value;
+        return true;
+    }
+    if (length == sizeof(stored_settings_v5_t)) {
+        stored_settings_v5_t stored = {0};
+        const esp_err_t result = nvs_get_blob(handle, "settings", &stored, &length);
+        nvs_close(handle);
+        if (result != ESP_OK || stored.version != LEGACY_SETTINGS_VERSION_5) return false;
+        memcpy(settings->wifi_ssid, stored.value.wifi_ssid, sizeof(settings->wifi_ssid));
+        memcpy(settings->wifi_password, stored.value.wifi_password, sizeof(settings->wifi_password));
+        memcpy(settings->timezone, stored.value.timezone, sizeof(settings->timezone));
+        memcpy(settings->location_name, stored.value.location_name, sizeof(settings->location_name));
+        settings->latitude = stored.value.latitude;
+        settings->longitude = stored.value.longitude;
+        settings->location_configured = stored.value.location_configured;
+        settings->volume = stored.value.volume;
+        memcpy(settings->enabled, stored.value.enabled, sizeof(settings->enabled));
+        settings->output = stored.value.output;
+        memcpy(settings->cast_device_id, stored.value.cast_device_id, sizeof(settings->cast_device_id));
+        memcpy(settings->cast_device_name, stored.value.cast_device_name, sizeof(settings->cast_device_name));
+        settings_save(settings);
         return true;
     }
     if (length == sizeof(stored_settings_v4_t)) {

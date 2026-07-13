@@ -9,8 +9,20 @@
       "improv": false,
       "parts": [
         {
-          "path": "firmware/adhan-clock-esp32-s3.bin",
+          "path": "firmware/bootloader.bin",
           "offset": 0
+        },
+        {
+          "path": "firmware/partition-table.bin",
+          "offset": 32768
+        },
+        {
+          "path": "firmware/adhan-clock-esp32-s3-ota.bin",
+          "offset": 65536
+        },
+        {
+          "path": "firmware/ota-data-initial.bin",
+          "offset": 14745600
         }
       ]
     }

@@ -30,6 +30,7 @@ jobs:
         shell: bash
         run: |
           source /opt/esp/idf/export.sh
+          export ADHAN_FIRMWARE_VERSION="${GITHUB_SHA::7}"
           idf.py build
           idf.py merge-bin -o adhan-clock-esp32-s3.bin -f raw
 
@@ -39,18 +40,30 @@ jobs:
           set -euo pipefail
           package="firmware/esp32-s3-prayer-clock/package"
           site="firmware/esp32-s3-prayer-clock/site"
+          version="${GITHUB_SHA::7}"
           mkdir -p "$package" "$site/firmware"
           cp firmware/esp32-s3-prayer-clock/build/adhan-clock-esp32-s3.bin "$package/"
+          cp firmware/esp32-s3-prayer-clock/build/adhancron_prayer_clock.bin "$package/adhan-clock-esp32-s3-ota.bin"
+          cp firmware/esp32-s3-prayer-clock/build/bootloader/bootloader.bin "$package/"
+          cp firmware/esp32-s3-prayer-clock/build/partition_table/partition-table.bin "$package/"
+          cp firmware/esp32-s3-prayer-clock/build/ota_data_initial.bin "$package/ota-data-initial.bin"
           cp firmware/esp32-s3-prayer-clock/installer/FLASHING.txt "$package/"
           (cd "$package" && sha256sum adhan-clock-esp32-s3.bin > adhan-clock-esp32-s3.bin.sha256)
+          (cd "$package" && sha256sum adhan-clock-esp32-s3-ota.bin > adhan-clock-esp32-s3-ota.bin.sha256)
+          printf '%s\n' "$version" > "$package/version.txt"
           cp firmware/esp32-s3-prayer-clock/installer/index.html "$site/"
           cp firmware/esp32-s3-prayer-clock/installer/manifest.json "$site/"
           cp firmware/esp32-s3-prayer-clock/installer/FLASHING.txt "$site/"
           cp casaos/icon.png "$site/icon.png"
           cp "$package/adhan-clock-esp32-s3.bin" "$site/firmware/"
           cp "$package/adhan-clock-esp32-s3.bin.sha256" "$site/firmware/"
+          cp "$package/adhan-clock-esp32-s3-ota.bin" "$site/firmware/"
+          cp "$package/adhan-clock-esp32-s3-ota.bin.sha256" "$site/firmware/"
+          cp "$package/bootloader.bin" "$site/firmware/"
+          cp "$package/partition-table.bin" "$site/firmware/"
+          cp "$package/ota-data-initial.bin" "$site/firmware/"
+          cp "$package/version.txt" "$site/firmware/"
           touch "$site/.nojekyll"
-          version="${GITHUB_SHA::7}"
           sed -i "s/__VERSION__/$version/g" "$site/manifest.json"
 
       - name: Upload downloadable firmware

@@ -77,14 +77,23 @@ Use a Windows, macOS, or Linux computer with Google Chrome or Microsoft Edge:
 5. Continue with [First Setup](#first-setup).
 
 Phones, tablets, Firefox, and Safari cannot perform the browser installation.
-Installing resets saved Wi-Fi, location, and settings. Existing adhan audio in
-the separate storage partition normally remains unless a full-device erase is
-selected. If the serial device is not listed, hold BOOT, tap RESET, release
-RESET, then release BOOT and retry.
+A normal installation preserves saved Wi-Fi, location, settings, and adhan
+audio by writing only the bootloader, partition table, OTA bookkeeping, and
+application regions. A full-device erase removes them. If the serial device is
+not listed, hold BOOT, tap RESET, release RESET, then release BOOT and retry.
 
 The installer also provides the merged firmware image, SHA-256 checksum, and a
 manual esptool guide. GitHub Actions rebuilds all of these from source whenever
 the ESP32 firmware changes on `main`.
+
+This browser installation is required once to add the OTA partition layout and
+rollback-capable bootloader. Future application releases are checked every six
+hours over HTTPS and installed automatically when Wi-Fi is online, no adhan is
+playing, and no enabled prayer is within ten minutes. The dashboard shows the
+installed version, allows automatic updates to be disabled, and offers a manual
+**Check and install now** action. Interrupted or unusable updates retain or roll
+back to the previous application. The 8 MB audio partition remains at its
+original address and is not overwritten by an OTA application update.
 
 ### Build from source
 

@@ -14,6 +14,7 @@
 #include "freertos/task.h"
 #include "audio_storage.h"
 #include "cast_sender.h"
+#include "firmware_update.h"
 #include "prayer_times.h"
 
 static const char *TAG = "adhan_web";
@@ -64,14 +65,18 @@ static const char DASHBOARD_PAGE[] =
     "<label>Playback volume</label><input name=volume type=number min=0 max=100 value='%d'></fieldset>"
     "<fieldset><legend>Automatic adhan</legend>"
     "<label class=check><input type=checkbox name=fajr %s>Fajr</label><label class=check><input type=checkbox name=dhuhr %s>Dhuhr</label><label class=check><input type=checkbox name=asr %s>Asr</label><label class=check><input type=checkbox name=maghrib %s>Maghrib</label><label class=check><input type=checkbox name=isha %s>Isha</label>"
-    "<button>Save playback settings</button></fieldset></form>"
+    "</fieldset><fieldset><legend>Software updates</legend><p id=firmware-status class=small>Loading firmware status...</p>"
+    "<label class=check><input type=checkbox name=automatic_updates %s>Install verified updates automatically over Wi-Fi</label>"
+    "<button id=update-button type=button onclick=checkUpdate()>Check and install now</button><p id=update-result class=small></p></fieldset>"
+    "<button>Save settings</button></form>"
     "<fieldset><legend>Adhan audio</legend><input id=audio type=file accept='audio/mpeg,.mp3'><button type=button onclick=uploadAudio()>Upload MP3</button><p id=upload class=small></p></fieldset>"
     "<p class=small><a href='/location'>Change location</a> · <a href='/wifi'>Change Wi-Fi</a></p>"
-    "<script>let savedCastId='',savedCastName='';async function refresh(){let s=await fetch('/api/status').then(r=>r.json());savedCastId=s.cast_device_id||'';savedCastName=s.cast_device_name||'';document.getElementById('place-name').textContent=s.location?'Prayer times for '+s.location:'Location not configured';summary.textContent=s.message;times.innerHTML=s.prayers.map(p=>'<p><b>'+p.name+'</b> '+p.time+'</p>').join('')}"
+    "<script>let savedCastId='',savedCastName='';async function refresh(){let s=await fetch('/api/status',{cache:'no-store'}).then(r=>r.json());savedCastId=s.cast_device_id||'';savedCastName=s.cast_device_name||'';document.getElementById('place-name').textContent=s.location?'Prayer times for '+s.location:'Location not configured';summary.textContent=s.message;times.innerHTML=s.prayers.map(p=>'<p><b>'+p.name+'</b> '+p.time+'</p>').join('');document.getElementById('firmware-status').textContent='Version '+(s.firmware_version||'unknown')+' - '+(s.update_status||'Update status unavailable');document.getElementById('update-button').disabled=!!s.update_running}"
     "function outputChanged(){let cast=document.querySelector('input[name=output]:checked').value==='cast';document.getElementById('cast-controls').classList.toggle('hidden',!cast);document.getElementById('cast-device').disabled=!cast;document.getElementById('cast-name').disabled=!cast}"
     "function castSelectionChanged(){let s=document.getElementById('cast-device'),o=s.options[s.selectedIndex];document.getElementById('cast-name').value=o&&o.dataset.name||''}"
     "async function scanCastDevices(){let s=document.getElementById('cast-device'),r=document.getElementById('cast-result');s.innerHTML='<option value=\"\">Scanning...</option>';r.textContent='Looking for speakers on this network...';try{let x=await fetch('/api/cast-devices',{cache:'no-store'});if(!x.ok)throw Error(await x.text());let j=await x.json();s.innerHTML='<option value=\"\">Choose a speaker</option>';j.devices.forEach(d=>{let o=document.createElement('option');o.value=d.id;o.dataset.name=d.name;o.textContent=d.name+(d.group?' (speaker group)':'')+(d.model?' - '+d.model:'');if(d.id===savedCastId)o.selected=true;s.appendChild(o)});if(savedCastId&&!j.devices.some(d=>d.id===savedCastId)){let o=document.createElement('option');o.value=savedCastId;o.dataset.name=savedCastName;o.textContent=savedCastName+' (currently unavailable)';o.selected=true;s.appendChild(o)}castSelectionChanged();r.textContent=j.devices.length?j.devices.length+' Cast speaker'+(j.devices.length===1?'':'s')+' found.':'No Cast speakers found.'}catch(e){r.textContent=e.message}}"
     "async function testPlayback(){let r=document.getElementById('test-result');r.textContent='Starting playback...';try{let x=await fetch('/api/play',{method:'POST'});r.textContent=await x.text()}catch(e){r.textContent=e.message}}"
+    "async function checkUpdate(){let b=document.getElementById('update-button'),r=document.getElementById('update-result');b.disabled=true;r.textContent='Starting update check...';try{let x=await fetch('/api/update',{method:'POST'});r.textContent=await x.text()}catch(e){r.textContent=e.message}setTimeout(refresh,1000)}"
     "async function uploadAudio(){let f=audio.files[0];if(!f)return;upload.textContent='Uploading...';let r=await fetch('/api/audio',{method:'POST',body:f});upload.textContent=await r.text()}async function init(){await refresh();outputChanged();await scanCastDevices()}init();setInterval(refresh,30000)</script></main></body></html>";
 
 static void restart_task(void *unused) {
@@ -95,7 +100,8 @@ static esp_err_t render_page(httpd_req_t *request, page_kind_t kind) {
             current_settings->output == ADHAN_OUTPUT_ATTACHED ? "checked" : "",
             current_settings->output == ADHAN_OUTPUT_CAST ? "checked" : "",
             current_settings->volume,
-            current_settings->enabled[0]?"checked":"",current_settings->enabled[1]?"checked":"",current_settings->enabled[2]?"checked":"",current_settings->enabled[3]?"checked":"",current_settings->enabled[4]?"checked":"");
+            current_settings->enabled[0]?"checked":"",current_settings->enabled[1]?"checked":"",current_settings->enabled[2]?"checked":"",current_settings->enabled[3]?"checked":"",current_settings->enabled[4]?"checked":"",
+            current_settings->automatic_updates ? "checked" : "");
     }
     if (length < 0 || (size_t)length >= page_capacity) {
         free(page);
@@ -207,6 +213,8 @@ static esp_err_t settings_handler(httpd_req_t *request) {
         const char *keys[] = {"fajr","dhuhr","asr","maghrib","isha"};
         for (int index=0;index<5;index++) { get_value(body,keys[index],value,sizeof(value)); current_settings->enabled[index]=value[0]!='\0'; }
         get_value(body, "volume", value, sizeof(value)); current_settings->volume = atoi(value);
+        get_value(body, "automatic_updates", value, sizeof(value));
+        current_settings->automatic_updates = value[0] != '\0';
         get_value(body, "output", value, sizeof(value));
         current_settings->output = strcmp(value, "cast") == 0
             ? ADHAN_OUTPUT_CAST : ADHAN_OUTPUT_ATTACHED;
@@ -240,7 +248,7 @@ static bool append_json_string(char *json, size_t capacity, size_t *length, cons
 static void format_minutes(int minutes, char output[6]) { unsigned value=(unsigned)(((minutes%1440)+1440)%1440); snprintf(output, 6, "%02u:%02u", value/60, value%60); }
 
 static esp_err_t status_handler(httpd_req_t *request) {
-    char json[1400];
+    char json[1800];
     size_t length = strlcpy(json, "{\"location\":", sizeof(json));
     if (!append_json_string(json, sizeof(json), &length,
             (const uint8_t *)current_settings->location_name)) {
@@ -266,6 +274,34 @@ static esp_err_t status_handler(httpd_req_t *request) {
             (const uint8_t *)current_settings->cast_device_name)) {
         return httpd_resp_send_err(request, HTTPD_500_INTERNAL_SERVER_ERROR, "Could not render status");
     }
+    firmware_update_status_t firmware = {0};
+    firmware_update_get_status(&firmware);
+    written = snprintf(json + length, sizeof(json) - length,
+        ",\"firmware_version\":");
+    if (written < 0 || (size_t)written >= sizeof(json) - length) {
+        return httpd_resp_send_err(request, HTTPD_500_INTERNAL_SERVER_ERROR, "Could not render status");
+    }
+    length += written;
+    if (!append_json_string(json, sizeof(json), &length,
+            (const uint8_t *)firmware.current_version)) {
+        return httpd_resp_send_err(request, HTTPD_500_INTERNAL_SERVER_ERROR, "Could not render status");
+    }
+    written = snprintf(json + length, sizeof(json) - length,
+        ",\"update_status\":");
+    if (written < 0 || (size_t)written >= sizeof(json) - length) {
+        return httpd_resp_send_err(request, HTTPD_500_INTERNAL_SERVER_ERROR, "Could not render status");
+    }
+    length += written;
+    if (!append_json_string(json, sizeof(json), &length,
+            (const uint8_t *)firmware.message)) {
+        return httpd_resp_send_err(request, HTTPD_500_INTERNAL_SERVER_ERROR, "Could not render status");
+    }
+    written = snprintf(json + length, sizeof(json) - length,
+        ",\"update_running\":%s", firmware.running ? "true" : "false");
+    if (written < 0 || (size_t)written >= sizeof(json) - length) {
+        return httpd_resp_send_err(request, HTTPD_500_INTERNAL_SERVER_ERROR, "Could not render status");
+    }
+    length += written;
     const time_t now = time(NULL); struct tm local_now = {0}; localtime_r(&now, &local_now);
     prayer_times_t times; prayer_calculation_config_t config = {.latitude = current_settings->latitude, .longitude = current_settings->longitude};
     written = 0;
@@ -403,6 +439,15 @@ static esp_err_t play_handler(httpd_req_t *request) {
     return httpd_resp_sendstr(request, "Adhan playback is starting.");
 }
 
+static esp_err_t firmware_update_handler(httpd_req_t *request) {
+    if (!firmware_update_request_check()) {
+        httpd_resp_set_status(request, "409 Conflict");
+        return httpd_resp_sendstr(request, "An update check is already underway");
+    }
+    return httpd_resp_sendstr(request,
+        "Checking for a verified update. The clock will restart automatically if one is installed.");
+}
+
 static esp_err_t audio_upload_handler(httpd_req_t *request) {
     if (!storage_mounted || !*storage_mounted) return httpd_resp_send_err(request, HTTPD_500_INTERNAL_SERVER_ERROR, "Internal audio storage is unavailable");
     if (request->content_len == 0 || request->content_len > 7 * 1024 * 1024) return httpd_resp_send_err(request, HTTPD_400_BAD_REQUEST, "Send an MP3 file under 7 MB");
@@ -511,7 +556,7 @@ static esp_err_t audio_file_handler(httpd_req_t *request) {
 
 void web_server_start(adhan_settings_t *settings, bool *storage_is_mounted, bool *adhan_audio_available, web_play_callback_t play_callback) {
     current_settings = settings; storage_mounted = storage_is_mounted; audio_available = adhan_audio_available; play_audio = play_callback;
-    httpd_handle_t server = NULL; httpd_config_t config = HTTPD_DEFAULT_CONFIG(); config.max_uri_handlers = 10; config.stack_size = 12288;
+    httpd_handle_t server = NULL; httpd_config_t config = HTTPD_DEFAULT_CONFIG(); config.max_uri_handlers = 11; config.stack_size = 12288;
     if (httpd_start(&server, &config) != ESP_OK) { ESP_LOGE(TAG, "Could not start web server"); return; }
     const httpd_uri_t root = {.uri = "/", .method = HTTP_GET, .handler = page_handler};
     const httpd_uri_t save = {.uri = "/api/settings", .method = HTTP_POST, .handler = settings_handler};
@@ -523,6 +568,7 @@ void web_server_start(adhan_settings_t *settings, bool *storage_is_mounted, bool
     const httpd_uri_t audio_file = {.uri = "/audio/adhan.mp3", .method = HTTP_GET, .handler = audio_file_handler};
     const httpd_uri_t networks = {.uri = "/api/networks", .method = HTTP_GET, .handler = networks_handler};
     const httpd_uri_t cast_devices = {.uri = "/api/cast-devices", .method = HTTP_GET, .handler = cast_devices_handler};
-    httpd_register_uri_handler(server, &root); httpd_register_uri_handler(server, &save); httpd_register_uri_handler(server, &play); httpd_register_uri_handler(server, &upload); httpd_register_uri_handler(server, &status); httpd_register_uri_handler(server, &location); httpd_register_uri_handler(server, &wifi); httpd_register_uri_handler(server, &audio_file); httpd_register_uri_handler(server, &networks); httpd_register_uri_handler(server, &cast_devices);
+    const httpd_uri_t firmware_update = {.uri = "/api/update", .method = HTTP_POST, .handler = firmware_update_handler};
+    httpd_register_uri_handler(server, &root); httpd_register_uri_handler(server, &save); httpd_register_uri_handler(server, &play); httpd_register_uri_handler(server, &upload); httpd_register_uri_handler(server, &status); httpd_register_uri_handler(server, &location); httpd_register_uri_handler(server, &wifi); httpd_register_uri_handler(server, &audio_file); httpd_register_uri_handler(server, &networks); httpd_register_uri_handler(server, &cast_devices); httpd_register_uri_handler(server, &firmware_update);
     ESP_LOGI(TAG, "Web setup interface is ready");
 }
