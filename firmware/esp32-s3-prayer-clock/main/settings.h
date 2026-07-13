@@ -22,6 +22,8 @@ typedef struct {
     char cast_device_id[48];
     char cast_device_name[64];
     bool automatic_updates;
+    char ramadan_start_date[11];
+    char ramadan_end_date[11];
 } adhan_settings_t;
 
 void settings_defaults(adhan_settings_t *settings);

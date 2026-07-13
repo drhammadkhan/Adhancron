@@ -16,6 +16,7 @@
 #include "cast_sender.h"
 #include "firmware_update.h"
 #include "prayer_times.h"
+#include "ramadan.h"
 
 static const char *TAG = "adhan_web";
 static adhan_settings_t *current_settings;
@@ -24,7 +25,7 @@ static bool *audio_available;
 static web_play_callback_t play_audio;
 
 static const char STYLE[] =
-    "<!doctype html><html><head><meta name=viewport content='width=device-width,initial-scale=1'>"
+    "<!doctype html><html><head><meta charset=utf-8><meta name=viewport content='width=device-width,initial-scale=1'>"
     "<style>body{font:16px system-ui;margin:0;background:#f3f6f2;color:#172b26}main{max-width:680px;margin:auto;padding:24px}"
     "h1{margin-bottom:4px}fieldset{border:1px solid #b9c8bf;border-radius:8px;margin:18px 0;padding:16px}"
     "label{display:block;margin:12px 0 4px}input,select,button{box-sizing:border-box;width:100%;padding:11px;font:inherit;border-radius:6px;border:1px solid #9caaa2}"
@@ -65,18 +66,23 @@ static const char DASHBOARD_PAGE[] =
     "<label>Playback volume</label><input name=volume type=number min=0 max=100 value='%d'></fieldset>"
     "<fieldset><legend>Automatic adhan</legend>"
     "<label class=check><input type=checkbox name=fajr %s>Fajr</label><label class=check><input type=checkbox name=dhuhr %s>Dhuhr</label><label class=check><input type=checkbox name=asr %s>Asr</label><label class=check><input type=checkbox name=maghrib %s>Maghrib</label><label class=check><input type=checkbox name=isha %s>Isha</label>"
+    "</fieldset><fieldset><legend>Ramadan</legend><p class=small>Choose the first and final fasting day for your community. Both dates are inclusive and should make a 29- or 30-day period.</p>"
+    "<label>First fasting day</label><input id=ramadan-start name=ramadan_start type=date value='%s'>"
+    "<label>Final fasting day</label><input id=ramadan-end name=ramadan_end type=date value='%s'>"
+    "<p id=ramadan-status class=small>Loading Ramadan status...</p><button type=button onclick=clearRamadan()>Turn Ramadan mode off</button>"
     "</fieldset><fieldset><legend>Software updates</legend><p id=firmware-status class=small>Loading firmware status...</p>"
     "<label class=check><input type=checkbox name=automatic_updates %s>Install verified updates automatically over Wi-Fi</label>"
     "<button id=update-button type=button onclick=checkUpdate()>Check and install now</button><p id=update-result class=small></p></fieldset>"
     "<button>Save settings</button></form>"
     "<fieldset><legend>Adhan audio</legend><input id=audio type=file accept='audio/mpeg,.mp3'><button type=button onclick=uploadAudio()>Upload MP3</button><p id=upload class=small></p></fieldset>"
-    "<p class=small><a href='/location'>Change location</a> · <a href='/wifi'>Change Wi-Fi</a></p>"
-    "<script>let savedCastId='',savedCastName='';async function refresh(){let s=await fetch('/api/status',{cache:'no-store'}).then(r=>r.json());savedCastId=s.cast_device_id||'';savedCastName=s.cast_device_name||'';document.getElementById('place-name').textContent=s.location?'Prayer times for '+s.location:'Location not configured';summary.textContent=s.message;times.innerHTML=s.prayers.map(p=>'<p><b>'+p.name+'</b> '+p.time+'</p>').join('');document.getElementById('firmware-status').textContent='Version '+(s.firmware_version||'unknown')+' - '+(s.update_status||'Update status unavailable');document.getElementById('update-button').disabled=!!s.update_running}"
+    "<p class=small><a href='/location'>Change location</a> &middot; <a href='/wifi'>Change Wi-Fi</a></p>"
+    "<script>let savedCastId='',savedCastName='';async function refresh(){let s=await fetch('/api/status',{cache:'no-store'}).then(r=>r.json());savedCastId=s.cast_device_id||'';savedCastName=s.cast_device_name||'';document.getElementById('place-name').textContent=s.location?'Prayer times for '+s.location:'Location not configured';summary.textContent=s.message;times.innerHTML=s.prayers.map(p=>'<p><b>'+p.name+'</b> '+p.time+'</p>').join('');document.getElementById('ramadan-status').textContent=s.ramadan_message||'Ramadan status unavailable';document.getElementById('firmware-status').textContent='Version '+(s.firmware_version||'unknown')+' - '+(s.update_status||'Update status unavailable');document.getElementById('update-button').disabled=!!s.update_running}"
     "function outputChanged(){let cast=document.querySelector('input[name=output]:checked').value==='cast';document.getElementById('cast-controls').classList.toggle('hidden',!cast);document.getElementById('cast-device').disabled=!cast;document.getElementById('cast-name').disabled=!cast}"
     "function castSelectionChanged(){let s=document.getElementById('cast-device'),o=s.options[s.selectedIndex];document.getElementById('cast-name').value=o&&o.dataset.name||''}"
     "async function scanCastDevices(){let s=document.getElementById('cast-device'),r=document.getElementById('cast-result');s.innerHTML='<option value=\"\">Scanning...</option>';r.textContent='Looking for speakers on this network...';try{let x=await fetch('/api/cast-devices',{cache:'no-store'});if(!x.ok)throw Error(await x.text());let j=await x.json();s.innerHTML='<option value=\"\">Choose a speaker</option>';j.devices.forEach(d=>{let o=document.createElement('option');o.value=d.id;o.dataset.name=d.name;o.textContent=d.name+(d.group?' (speaker group)':'')+(d.model?' - '+d.model:'');if(d.id===savedCastId)o.selected=true;s.appendChild(o)});if(savedCastId&&!j.devices.some(d=>d.id===savedCastId)){let o=document.createElement('option');o.value=savedCastId;o.dataset.name=savedCastName;o.textContent=savedCastName+' (currently unavailable)';o.selected=true;s.appendChild(o)}castSelectionChanged();r.textContent=j.devices.length?j.devices.length+' Cast speaker'+(j.devices.length===1?'':'s')+' found.':'No Cast speakers found.'}catch(e){r.textContent=e.message}}"
     "async function testPlayback(){let r=document.getElementById('test-result');r.textContent='Starting playback...';try{let x=await fetch('/api/play',{method:'POST'});r.textContent=await x.text()}catch(e){r.textContent=e.message}}"
     "async function checkUpdate(){let b=document.getElementById('update-button'),r=document.getElementById('update-result');b.disabled=true;r.textContent='Starting update check...';try{let x=await fetch('/api/update',{method:'POST'});r.textContent=await x.text()}catch(e){r.textContent=e.message}setTimeout(refresh,1000)}"
+    "function clearRamadan(){document.getElementById('ramadan-start').value='';document.getElementById('ramadan-end').value='';document.getElementById('ramadan-status').textContent='Save settings to turn Ramadan mode off.'}"
     "async function uploadAudio(){let f=audio.files[0];if(!f)return;upload.textContent='Uploading...';let r=await fetch('/api/audio',{method:'POST',body:f});upload.textContent=await r.text()}async function init(){await refresh();outputChanged();await scanCastDevices()}init();setInterval(refresh,30000)</script></main></body></html>";
 
 static void restart_task(void *unused) {
@@ -87,7 +93,7 @@ static void restart_task(void *unused) {
 typedef enum { PAGE_AUTOMATIC, PAGE_LOCATION, PAGE_WIFI } page_kind_t;
 
 static esp_err_t render_page(httpd_req_t *request, page_kind_t kind) {
-    const size_t page_capacity = 16000;
+    const size_t page_capacity = 20000;
     char *page = malloc(page_capacity);
     if (page == NULL) return httpd_resp_send_err(request, HTTPD_500_INTERNAL_SERVER_ERROR, "Not enough memory to render the page");
     int length = snprintf(page, page_capacity, "%s", STYLE);
@@ -101,6 +107,8 @@ static esp_err_t render_page(httpd_req_t *request, page_kind_t kind) {
             current_settings->output == ADHAN_OUTPUT_CAST ? "checked" : "",
             current_settings->volume,
             current_settings->enabled[0]?"checked":"",current_settings->enabled[1]?"checked":"",current_settings->enabled[2]?"checked":"",current_settings->enabled[3]?"checked":"",current_settings->enabled[4]?"checked":"",
+            current_settings->ramadan_start_date,
+            current_settings->ramadan_end_date,
             current_settings->automatic_updates ? "checked" : "");
     }
     if (length < 0 || (size_t)length >= page_capacity) {
@@ -210,11 +218,24 @@ static esp_err_t settings_handler(httpd_req_t *request) {
         current_settings->location_configured = true;
         get_value(body, "volume", value, sizeof(value)); current_settings->volume = atoi(value);
     } else if (strcmp(value, "playback") == 0) {
+        char ramadan_start[16] = {0};
+        char ramadan_end[16] = {0};
+        get_value(body, "ramadan_start", ramadan_start, sizeof(ramadan_start));
+        get_value(body, "ramadan_end", ramadan_end, sizeof(ramadan_end));
+        const bool ramadan_empty = ramadan_start[0] == '\0' && ramadan_end[0] == '\0';
+        if (!ramadan_empty && !ramadan_period_valid(ramadan_start, ramadan_end)) {
+            return httpd_resp_send_err(request, HTTPD_400_BAD_REQUEST,
+                "Choose both Ramadan dates and make the inclusive period 29 or 30 days");
+        }
         const char *keys[] = {"fajr","dhuhr","asr","maghrib","isha"};
         for (int index=0;index<5;index++) { get_value(body,keys[index],value,sizeof(value)); current_settings->enabled[index]=value[0]!='\0'; }
         get_value(body, "volume", value, sizeof(value)); current_settings->volume = atoi(value);
         get_value(body, "automatic_updates", value, sizeof(value));
         current_settings->automatic_updates = value[0] != '\0';
+        strlcpy(current_settings->ramadan_start_date, ramadan_start,
+            sizeof(current_settings->ramadan_start_date));
+        strlcpy(current_settings->ramadan_end_date, ramadan_end,
+            sizeof(current_settings->ramadan_end_date));
         get_value(body, "output", value, sizeof(value));
         current_settings->output = strcmp(value, "cast") == 0
             ? ADHAN_OUTPUT_CAST : ADHAN_OUTPUT_ATTACHED;
@@ -248,7 +269,7 @@ static bool append_json_string(char *json, size_t capacity, size_t *length, cons
 static void format_minutes(int minutes, char output[6]) { unsigned value=(unsigned)(((minutes%1440)+1440)%1440); snprintf(output, 6, "%02u:%02u", value/60, value%60); }
 
 static esp_err_t status_handler(httpd_req_t *request) {
-    char json[1800];
+    char json[2200];
     size_t length = strlcpy(json, "{\"location\":", sizeof(json));
     if (!append_json_string(json, sizeof(json), &length,
             (const uint8_t *)current_settings->location_name)) {
@@ -303,6 +324,40 @@ static esp_err_t status_handler(httpd_req_t *request) {
     }
     length += written;
     const time_t now = time(NULL); struct tm local_now = {0}; localtime_r(&now, &local_now);
+    ramadan_status_t ramadan = {0};
+    ramadan_status_for_date(
+        current_settings->ramadan_start_date,
+        current_settings->ramadan_end_date,
+        &local_now,
+        &ramadan);
+    char ramadan_message[128];
+    if (ramadan.active) {
+        snprintf(ramadan_message, sizeof(ramadan_message),
+            "Ramadan Day %d of %d - Sehri ends at Fajr and Iftar begins at Maghrib",
+            ramadan.day_number, ramadan.total_days);
+    } else if (ramadan.configured && ramadan.days_until_start > 0) {
+        snprintf(ramadan_message, sizeof(ramadan_message),
+            "Ramadan begins in %d day%s",
+            ramadan.days_until_start, ramadan.days_until_start == 1 ? "" : "s");
+    } else if (ramadan.configured) {
+        strlcpy(ramadan_message, "The saved Ramadan period has finished",
+            sizeof(ramadan_message));
+    } else {
+        strlcpy(ramadan_message,
+            "Set the first and final fasting day to enable Ramadan mode",
+            sizeof(ramadan_message));
+    }
+    written = snprintf(json + length, sizeof(json) - length,
+        ",\"ramadan_active\":%s,\"ramadan_day\":%d,\"ramadan_total_days\":%d,\"ramadan_message\":",
+        ramadan.active ? "true" : "false", ramadan.day_number, ramadan.total_days);
+    if (written < 0 || (size_t)written >= sizeof(json) - length) {
+        return httpd_resp_send_err(request, HTTPD_500_INTERNAL_SERVER_ERROR, "Could not render status");
+    }
+    length += written;
+    if (!append_json_string(json, sizeof(json), &length,
+            (const uint8_t *)ramadan_message)) {
+        return httpd_resp_send_err(request, HTTPD_500_INTERNAL_SERVER_ERROR, "Could not render status");
+    }
     prayer_times_t times; prayer_calculation_config_t config = {.latitude = current_settings->latitude, .longitude = current_settings->longitude};
     written = 0;
     if (!current_settings->location_configured || local_now.tm_year < 120 || !prayer_times_calculate(&local_now, &config, &times)) {
@@ -313,7 +368,7 @@ static esp_err_t status_handler(httpd_req_t *request) {
         const char *storage = storage_mounted && *storage_mounted
             ? (audio_available && *audio_available ? "Internal adhan audio ready" : "Upload an adhan MP3")
             : "Internal audio storage unavailable";
-        written = snprintf(json + length, sizeof(json) - length, ",\"message\":\"%04d-%02d-%02d %02d:%02d · %s\",\"prayers\":[{\"name\":\"Fajr\",\"time\":\"%s\"},{\"name\":\"Sunrise\",\"time\":\"%s\"},{\"name\":\"Dhuhr\",\"time\":\"%s\"},{\"name\":\"Asr\",\"time\":\"%s\"},{\"name\":\"Maghrib\",\"time\":\"%s\"},{\"name\":\"Isha\",\"time\":\"%s\"}]}", local_now.tm_year+1900,local_now.tm_mon+1,local_now.tm_mday,local_now.tm_hour,local_now.tm_min,storage,values[0],values[1],values[2],values[3],values[4],values[5]);
+        written = snprintf(json + length, sizeof(json) - length, ",\"message\":\"%04d-%02d-%02d %02d:%02d - %s\",\"prayers\":[{\"name\":\"Fajr\",\"time\":\"%s\"},{\"name\":\"Sunrise\",\"time\":\"%s\"},{\"name\":\"Dhuhr\",\"time\":\"%s\"},{\"name\":\"Asr\",\"time\":\"%s\"},{\"name\":\"Maghrib\",\"time\":\"%s\"},{\"name\":\"Isha\",\"time\":\"%s\"}]}", local_now.tm_year+1900,local_now.tm_mon+1,local_now.tm_mday,local_now.tm_hour,local_now.tm_min,storage,values[0],values[1],values[2],values[3],values[4],values[5]);
     }
     if (written < 0 || (size_t)written >= sizeof(json) - length) {
         return httpd_resp_send_err(request, HTTPD_500_INTERNAL_SERVER_ERROR, "Could not render status");

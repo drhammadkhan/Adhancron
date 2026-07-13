@@ -19,6 +19,7 @@ not require Docker, Home Assistant, or another computer after setup.
 - NTP clock synchronisation and daylight-saving-aware local time.
 - Local Adhancron prayer calculation: Fajr 90 minutes before sunrise, Dhuhr five minutes after solar noon, standard Asr, Maghrib one minute after sunset, and Moonsighting Committee seasonal Isha.
 - Full-screen LVGL dashboard with an `HH:MM:SS` clock, date, saved location, Fajr, sunrise, Dhuhr, Asr, Maghrib, Isha, next prayer, countdown, and Wi-Fi/audio status.
+- User-configured Ramadan start and end dates. During the inclusive 29- or 30-day period, the display shows the Ramadan day number and presents Fajr/Maghrib as Sehri/Iftar without changing the established prayer calculations.
 - Fixed-width clock digits that do not move as the seconds change.
 - The device IP address in a centred footer so the browser dashboard is easy to find.
 - Once-per-prayer scheduling with individual prayer enable switches and a
@@ -118,8 +119,8 @@ shows the setup instructions or prayer clock on the display.
 3. After restart, open `http://adhancron.local`.
 4. Search for the home town, city, or postcode and save it.
 5. Use the dashboard to choose the attached speaker or a discovered Google
-   Cast speaker, test playback, select automatic prayers, set volume, or
-   replace the MP3.
+   Cast speaker, test playback, select automatic prayers, set volume, choose
+   the first and final fasting days for Ramadan, or replace the MP3.
 
 The dashboard also shows connection state, saved location, today's calculated
 times, audio-storage state, and the currently selected playback output. All
@@ -144,6 +145,14 @@ June, and December against the Python Adhancron implementation:
 ```bash
 cc -std=c11 -D_DEFAULT_SOURCE -I main tests/prayer_times_host_test.c main/prayer_times.c -lm -o /tmp/adhancron-prayer-test
 /tmp/adhancron-prayer-test
+```
+
+The Ramadan fixture test covers date validation, leap years, year boundaries,
+29- and 30-day periods, upcoming status, and inclusive day numbering:
+
+```bash
+cc -std=c11 -D_DEFAULT_SOURCE -I main tests/ramadan_host_test.c main/ramadan.c -o /tmp/adhancron-ramadan-test
+/tmp/adhancron-ramadan-test
 ```
 
 For Google Cast playback, the ESP32 discovers compatible receivers with mDNS,
