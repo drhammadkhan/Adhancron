@@ -1,0 +1,232 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#071d1a">
+  <title>Install Adhan Clock</title>
+  <meta name="description" content="Install Adhan Clock firmware on the supported LCDWIKI ESP32-S3 prayer clock board.">
+  <script type="module" src="https://unpkg.com/esp-web-tools@10/dist/web/install-button.js?module"></script>
+  <style>
+    :root {
+      color-scheme: dark;
+      --background: #071d1a;
+      --surface: #123a34;
+      --surface-active: #23483d;
+      --line: #285049;
+      --ivory: #f7f2e7;
+      --muted: #a6bbb5;
+      --gold: #e6b967;
+      --sky: #79c3d2;
+      --error: #e58b78;
+      --esp-tools-button-color: #e6b967;
+      --esp-tools-button-text-color: #071d1a;
+      --esp-tools-button-border-radius: 6px;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      background: var(--background);
+      color: var(--ivory);
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      letter-spacing: 0;
+    }
+
+    main {
+      width: min(760px, calc(100% - 32px));
+      margin: 0 auto;
+      padding: 36px 0 48px;
+    }
+
+    header {
+      display: grid;
+      grid-template-columns: 80px minmax(0, 1fr);
+      gap: 18px;
+      align-items: center;
+      padding-bottom: 26px;
+      border-bottom: 1px solid var(--line);
+    }
+
+    .app-icon {
+      width: 80px;
+      height: 80px;
+      border-radius: 8px;
+      object-fit: cover;
+      display: block;
+    }
+
+    h1, h2, p { margin-top: 0; }
+
+    h1 {
+      margin-bottom: 7px;
+      font-size: 32px;
+      line-height: 1.1;
+      letter-spacing: 0;
+    }
+
+    header p {
+      margin-bottom: 0;
+      color: var(--muted);
+      font-size: 16px;
+      line-height: 1.5;
+    }
+
+    section {
+      padding: 26px 0;
+      border-bottom: 1px solid var(--line);
+    }
+
+    h2 {
+      margin-bottom: 12px;
+      color: var(--gold);
+      font-size: 18px;
+      letter-spacing: 0;
+    }
+
+    p, li {
+      color: var(--muted);
+      font-size: 15px;
+      line-height: 1.6;
+    }
+
+    strong { color: var(--ivory); }
+
+    .compatibility {
+      padding: 16px;
+      background: var(--surface);
+      border-left: 4px solid var(--gold);
+      border-radius: 4px;
+    }
+
+    .compatibility p:last-child { margin-bottom: 0; }
+
+    ol {
+      margin: 0;
+      padding-left: 24px;
+    }
+
+    li + li { margin-top: 8px; }
+
+    .installer {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 14px;
+      margin-top: 20px;
+    }
+
+    button {
+      min-height: 46px;
+      padding: 0 22px;
+      border: 0;
+      border-radius: 6px;
+      background: var(--gold);
+      color: var(--background);
+      font: inherit;
+      font-weight: 750;
+      cursor: pointer;
+    }
+
+    button:hover { background: #f1c879; }
+    button:focus-visible { outline: 3px solid var(--sky); outline-offset: 3px; }
+
+    a {
+      color: var(--sky);
+      text-underline-offset: 3px;
+    }
+
+    .unsupported {
+      display: block;
+      padding: 12px 14px;
+      color: var(--ivory);
+      background: var(--surface-active);
+      border-radius: 4px;
+    }
+
+    .downloads {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 18px;
+    }
+
+    footer {
+      padding-top: 22px;
+      color: var(--muted);
+      font-size: 13px;
+      line-height: 1.5;
+    }
+
+    @media (max-width: 560px) {
+      main { width: min(100% - 24px, 760px); padding-top: 24px; }
+      header { grid-template-columns: 64px minmax(0, 1fr); gap: 14px; }
+      .app-icon { width: 64px; height: 64px; }
+      h1 { font-size: 26px; }
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <header>
+      <img class="app-icon" src="icon.png" alt="Adhan Clock icon" width="80" height="80">
+      <div>
+        <h1>Install Adhan Clock</h1>
+        <p>Flash the standalone prayer clock firmware directly from a supported desktop browser.</p>
+      </div>
+    </header>
+
+    <section>
+      <h2>Check your board</h2>
+      <div class="compatibility">
+        <p><strong>Only continue with the LCDWIKI ES3N28P:</strong> ESP32-S3, 16 MB flash, 8 MB PSRAM, 240x320 ILI9341 display, and ES8311 audio.</p>
+        <p>Installing this image on a different ESP32-S3 board can leave its display, storage, and audio unusable until different firmware is installed.</p>
+      </div>
+    </section>
+
+    <section>
+      <h2>Install firmware</h2>
+      <ol>
+        <li>Use <strong>Google Chrome or Microsoft Edge</strong> on a Windows, macOS, or Linux computer. Phones, tablets, Firefox, and Safari cannot use this installer.</li>
+        <li>Connect the clock directly to the computer with a USB data cable and close any serial-monitor application.</li>
+        <li>Choose <strong>Install firmware</strong>, select the ESP32-S3 serial device, and confirm the installation.</li>
+        <li>Keep the cable connected until installation reaches 100% and the clock restarts.</li>
+      </ol>
+
+      <div class="installer">
+        <esp-web-install-button manifest="manifest.json">
+          <button slot="activate" type="button">Install firmware</button>
+          <span slot="unsupported" class="unsupported">Open this page in Chrome or Edge on a computer with Web Serial support.</span>
+          <span slot="not-allowed" class="unsupported">Browser access to the serial device was blocked. Reload the page and allow access when prompted.</span>
+        </esp-web-install-button>
+      </div>
+      <p><strong>Important:</strong> installation resets saved Wi-Fi, location, and settings. Existing adhan audio normally remains; choosing a full-device erase also removes it.</p>
+    </section>
+
+    <section>
+      <h2>Complete setup</h2>
+      <ol>
+        <li>Join <strong>Adhancron Setup</strong> using password <strong>adhancron</strong>.</li>
+        <li>Open <a href="http://192.168.4.1">192.168.4.1</a>, choose the home Wi-Fi network, and save its password.</li>
+        <li>After the clock reconnects, open the IP address shown at the bottom of its display.</li>
+        <li>Save the location, playback output, volume, enabled prayers, and adhan MP3.</li>
+      </ol>
+    </section>
+
+    <section>
+      <h2>Manual recovery</h2>
+      <p>Download the merged image when browser flashing is unavailable. It must be written at offset <code>0x0</code> with esptool.</p>
+      <div class="downloads">
+        <a href="firmware/adhan-clock-esp32-s3.bin" download>Download firmware</a>
+        <a href="firmware/adhan-clock-esp32-s3.bin.sha256" download>Download checksum</a>
+        <a href="FLASHING.txt" download>Manual flashing guide</a>
+      </div>
+    </section>
+
+    <footer>
+      Adhan Clock is open-source firmware from the Adhancron project. The installer runs locally in your browser; it does not upload serial data to the server.
+    </footer>
+  </main>
+</body>
+</html>

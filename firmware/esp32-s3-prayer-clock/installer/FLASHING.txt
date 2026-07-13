@@ -1,0 +1,41 @@
+ADHAN CLOCK - MANUAL FIRMWARE INSTALLATION
+
+Supported hardware
+------------------
+LCDWIKI ES3N28P with ESP32-S3, 16 MB flash, 8 MB PSRAM, 240x320 ILI9341
+display, and ES8311 audio codec. Do not install this image on another board.
+
+The browser installer is the recommended method:
+https://drhammadkhan.github.io/Adhancron/
+
+Manual installation with esptool
+--------------------------------
+1. Install Python 3.
+2. Install esptool:
+
+   python -m pip install esptool
+
+3. Connect the board with a USB data cable.
+4. Find its serial port.
+5. Erase and flash the merged image at offset 0:
+
+   python -m esptool --chip esp32s3 --port YOUR_SERIAL_PORT erase_flash
+   python -m esptool --chip esp32s3 --port YOUR_SERIAL_PORT --baud 460800 write_flash 0x0 adhan-clock-esp32-s3.bin
+
+On macOS, a port normally looks like /dev/cu.usbmodemXXXX.
+On Windows, it normally looks like COM3 or another COM number.
+
+If the board is not detected, hold BOOT, tap RESET, release RESET, then release
+BOOT and retry. Close any serial monitor before flashing.
+
+First boot
+----------
+1. Wait for the display to show the setup instructions.
+2. Join the Wi-Fi network "Adhancron Setup" using password "adhancron".
+3. Open http://192.168.4.1 and save the home Wi-Fi credentials.
+4. Reconnect to the home Wi-Fi and open the IP address shown on the clock.
+5. Save the location, playback output, volume, and enabled prayers.
+
+The manual erase_flash command removes saved settings and uploaded adhan audio.
+The bundled firmware starts without an MP3; upload one from the device dashboard
+or insert a FAT32 microSD card containing /adhan.mp3 for one-time import.

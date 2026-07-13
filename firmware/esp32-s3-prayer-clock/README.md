@@ -64,7 +64,29 @@ audio playback, Wi-Fi, and the web server remain independent of the renderer.
 | Status LED | 42 |
 | Battery ADC | 9 |
 
-## Build and flash
+## Install Firmware
+
+### Browser installer (recommended)
+
+Use a Windows, macOS, or Linux computer with Google Chrome or Microsoft Edge:
+
+1. Open [Install Adhan Clock](https://drhammadkhan.github.io/Adhancron/).
+2. Confirm that the board is the LCDWIKI ES3N28P with 16 MB flash and 8 MB PSRAM.
+3. Connect it directly with a USB data cable.
+4. Select **Install firmware**, choose the ESP32-S3 serial device, and wait for installation to reach 100%.
+5. Continue with [First Setup](#first-setup).
+
+Phones, tablets, Firefox, and Safari cannot perform the browser installation.
+Installing resets saved Wi-Fi, location, and settings. Existing adhan audio in
+the separate storage partition normally remains unless a full-device erase is
+selected. If the serial device is not listed, hold BOOT, tap RESET, release
+RESET, then release BOOT and retry.
+
+The installer also provides the merged firmware image, SHA-256 checksum, and a
+manual esptool guide. GitHub Actions rebuilds all of these from source whenever
+the ESP32 firmware changes on `main`.
+
+### Build from source
 
 Install ESP-IDF 5.4 or later, then run:
 

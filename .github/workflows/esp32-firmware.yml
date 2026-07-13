@@ -1,0 +1,80 @@
+name: Build and publish ESP32 firmware
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+    paths:
+      - ".github/workflows/esp32-firmware.yml"
+      - "firmware/esp32-s3-prayer-clock/**"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: esp32-firmware-pages
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: Build ESP32-S3 image
+    runs-on: ubuntu-latest
+    container: espressif/idf:v5.4.1
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Build and merge firmware
+        working-directory: firmware/esp32-s3-prayer-clock
+        run: |
+          idf.py build
+          idf.py merge-bin -o adhan-clock-esp32-s3.bin -f raw
+
+      - name: Prepare downloads and installer
+        shell: bash
+        run: |
+          set -euo pipefail
+          package="firmware/esp32-s3-prayer-clock/package"
+          site="firmware/esp32-s3-prayer-clock/site"
+          mkdir -p "$package" "$site/firmware"
+          cp firmware/esp32-s3-prayer-clock/build/adhan-clock-esp32-s3.bin "$package/"
+          cp firmware/esp32-s3-prayer-clock/installer/FLASHING.txt "$package/"
+          (cd "$package" && sha256sum adhan-clock-esp32-s3.bin > adhan-clock-esp32-s3.bin.sha256)
+          cp firmware/esp32-s3-prayer-clock/installer/index.html "$site/"
+          cp firmware/esp32-s3-prayer-clock/installer/manifest.json "$site/"
+          cp firmware/esp32-s3-prayer-clock/installer/FLASHING.txt "$site/"
+          cp casaos/icon.png "$site/icon.png"
+          cp "$package/adhan-clock-esp32-s3.bin" "$site/firmware/"
+          cp "$package/adhan-clock-esp32-s3.bin.sha256" "$site/firmware/"
+          touch "$site/.nojekyll"
+          version="${GITHUB_SHA::7}"
+          sed -i "s/__VERSION__/$version/g" "$site/manifest.json"
+
+      - name: Upload downloadable firmware
+        uses: actions/upload-artifact@v4
+        with:
+          name: Adhan-Clock-ESP32-S3
+          path: firmware/esp32-s3-prayer-clock/package
+          if-no-files-found: error
+
+      - name: Upload installer site
+        uses: actions/upload-pages-artifact@v4
+        with:
+          path: firmware/esp32-s3-prayer-clock/site
+
+  deploy:
+    name: Publish browser installer
+    if: github.ref == 'refs/heads/main'
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Publish GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
