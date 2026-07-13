@@ -20,6 +20,7 @@ not require Docker, Home Assistant, or another computer after setup.
 - Local Adhancron prayer calculation: Fajr 90 minutes before sunrise, Dhuhr five minutes after solar noon, standard Asr, Maghrib one minute after sunset, and Moonsighting Committee seasonal Isha.
 - Full-screen LVGL dashboard with an `HH:MM:SS` clock, date, saved location, Fajr, sunrise, Dhuhr, Asr, Maghrib, Isha, next prayer, countdown, and Wi-Fi/audio status.
 - User-configured Ramadan start and end dates. During the inclusive 29- or 30-day period, the display adds the Ramadan day number while retaining the canonical Fajr and Maghrib prayer names. The Web UI separately explains when Sehri ends and Iftar begins.
+- A seconds-accurate event panel during the final ten minutes before Fajr and Maghrib, showing `SEHRI ENDS IN` or `IFTAR IN` while the prayer table continues to identify the prayers correctly.
 - Fixed-width clock digits that do not move as the seconds change.
 - The device IP address in a centred footer so the browser dashboard is easy to find.
 - Once-per-prayer scheduling with individual prayer enable switches and a

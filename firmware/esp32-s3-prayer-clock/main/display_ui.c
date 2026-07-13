@@ -37,6 +37,7 @@ static lv_obj_t *clock_digit_labels[6];
 static lv_obj_t *date_label;
 static lv_obj_t *wifi_icon;
 static lv_obj_t *audio_icon;
+static lv_obj_t *next_eyebrow_label;
 static lv_obj_t *next_name_label;
 static lv_obj_t *next_time_label;
 static lv_obj_t *countdown_label;
@@ -126,8 +127,9 @@ static void create_next_prayer_panel(lv_obj_t *parent) {
     lv_obj_set_style_border_width(panel, 1, 0);
     lv_obj_set_style_border_color(panel, color(COLOR_DIVIDER), 0);
 
-    lv_obj_t *eyebrow = make_label(panel, "NEXT PRAYER", &lv_font_montserrat_12, COLOR_GOLD);
-    lv_obj_set_pos(eyebrow, 12, 8);
+    next_eyebrow_label = make_label(
+        panel, "NEXT PRAYER", &lv_font_montserrat_12, COLOR_GOLD);
+    lv_obj_set_pos(next_eyebrow_label, 12, 8);
 
     next_name_label = make_label(panel, "FAJR", &lv_font_montserrat_20, COLOR_IVORY);
     lv_obj_set_pos(next_name_label, 12, 27);
@@ -475,17 +477,34 @@ void display_ui_update(
     const int next_minutes = prayer_time_minutes(&times, prayer_indexes[next]);
     char next_time[6];
     format_clock_minutes(next_minutes, next_time);
-    lv_label_set_text(next_name_label, prayer_names[next]);
-    lv_label_set_text(next_time_label, next_time);
-    lv_obj_align(next_time_label, LV_ALIGN_TOP_RIGHT, -12, 27);
-
     int countdown = next_minutes - current_minute;
     if (countdown <= 0) countdown += 1440;
-    const unsigned countdown_value = (unsigned)(countdown % 1441);
-    char countdown_text[16];
-    snprintf(countdown_text, sizeof(countdown_text), "IN %02u:%02u",
-        countdown_value / 60, countdown_value % 60);
-    lv_label_set_text(countdown_label, countdown_text);
+    const int current_seconds = current_minute * 60 + local_now.tm_sec;
+    int countdown_seconds = next_minutes * 60 - current_seconds;
+    if (countdown_seconds <= 0) countdown_seconds += 24 * 60 * 60;
+    const bool ramadan_event_countdown = ramadan.active &&
+        countdown_seconds <= 10 * 60 && (next == 0 || next == 3);
+
+    if (ramadan_event_countdown) {
+        const char *event = next == 0 ? "SEHRI ENDS IN" : "IFTAR IN";
+        char seconds_text[16];
+        snprintf(seconds_text, sizeof(seconds_text), "%02d:%02d",
+            countdown_seconds / 60, countdown_seconds % 60);
+        lv_label_set_text(next_eyebrow_label, event);
+        lv_label_set_text(next_name_label, seconds_text);
+        lv_label_set_text(next_time_label, next_time);
+        lv_label_set_text(countdown_label, prayer_names[next]);
+    } else {
+        const unsigned countdown_value = (unsigned)(countdown % 1441);
+        char countdown_text[16];
+        snprintf(countdown_text, sizeof(countdown_text), "IN %02u:%02u",
+            countdown_value / 60, countdown_value % 60);
+        lv_label_set_text(next_eyebrow_label, "NEXT PRAYER");
+        lv_label_set_text(next_name_label, prayer_names[next]);
+        lv_label_set_text(next_time_label, next_time);
+        lv_label_set_text(countdown_label, countdown_text);
+    }
+    lv_obj_align(next_time_label, LV_ALIGN_TOP_RIGHT, -12, 27);
     lv_obj_align(countdown_label, LV_ALIGN_BOTTOM_RIGHT, -12, -7);
 
     lvgl_port_unlock();
