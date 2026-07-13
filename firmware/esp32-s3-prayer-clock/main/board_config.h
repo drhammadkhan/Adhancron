@@ -23,7 +23,9 @@
 #define BOARD_AUDIO_ENABLE_GPIO 1
 #define BOARD_I2S_MCLK_GPIO 4
 #define BOARD_I2S_BCLK_GPIO 5
-#define BOARD_I2S_DOUT_GPIO 6
+// GPIO 8 is ES8311 DSDIN (audio from the ESP32 to the codec). GPIO 6 is
+// DSDOUT, the opposite direction used for the on-board microphone.
+#define BOARD_I2S_DOUT_GPIO 8
 #define BOARD_I2S_LRCK_GPIO 7
 #define BOARD_I2S_DIN_GPIO 8
 
