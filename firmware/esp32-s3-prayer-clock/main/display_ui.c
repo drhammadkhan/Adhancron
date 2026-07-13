@@ -449,13 +449,10 @@ void display_ui_update(
     static const int prayer_indexes[] = {0, 2, 3, 4, 5};
     static const char *prayer_names[] = {"FAJR", "DHUHR", "ASR", "MAGHRIB", "ISHA"};
     static const char *row_names[] = {"Fajr", "Sunrise", "Dhuhr", "Asr", "Maghrib", "Isha"};
-    static const char *ramadan_row_names[] = {"Sehri", "Sunrise", "Dhuhr", "Asr", "Iftar", "Isha"};
-    static const char *ramadan_prayer_names[] = {"SEHRI", "DHUHR", "ASR", "IFTAR", "ISHA"};
     for (int row = 0; row < 6; row++) {
         char value[6];
         format_clock_minutes(prayer_time_minutes(&times, row_indexes[row]), value);
-        lv_label_set_text(prayer_name_labels[row],
-            ramadan.active ? ramadan_row_names[row] : row_names[row]);
+        lv_label_set_text(prayer_name_labels[row], row_names[row]);
         lv_label_set_text(prayer_time_labels[row], value);
         lv_obj_set_style_bg_opa(prayer_rows[row], LV_OPA_TRANSP, 0);
         lv_obj_set_style_text_color(
@@ -478,8 +475,7 @@ void display_ui_update(
     const int next_minutes = prayer_time_minutes(&times, prayer_indexes[next]);
     char next_time[6];
     format_clock_minutes(next_minutes, next_time);
-    lv_label_set_text(next_name_label,
-        ramadan.active ? ramadan_prayer_names[next] : prayer_names[next]);
+    lv_label_set_text(next_name_label, prayer_names[next]);
     lv_label_set_text(next_time_label, next_time);
     lv_obj_align(next_time_label, LV_ALIGN_TOP_RIGHT, -12, 27);
 

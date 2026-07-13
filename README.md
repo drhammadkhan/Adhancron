@@ -37,7 +37,7 @@ It provides:
 - Scheduled or manual playback through the attached speaker or a discovered Google Cast receiver.
 - Byte-range HTTP audio serving directly from the ESP32, plus automatic fallback to the attached speaker when Cast is unavailable.
 - The current device IP address on the display so the full settings dashboard is easy to find.
-- User-defined first and final fasting days, with automatic Ramadan day numbering and Sehri/Iftar presentation during the saved 29- or 30-day period.
+- User-defined first and final fasting days, with automatic Ramadan day numbering and separate Sehri/Iftar context while retaining the canonical prayer names.
 
 It runs independently from the Docker and desktop editions and needs no home server or Home Assistant. See [firmware/esp32-s3-prayer-clock/README.md](firmware/esp32-s3-prayer-clock/README.md) for hardware, setup, build, and recovery details.
 
