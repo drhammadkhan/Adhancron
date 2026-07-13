@@ -27,7 +27,9 @@ jobs:
 
       - name: Build and merge firmware
         working-directory: firmware/esp32-s3-prayer-clock
+        shell: bash
         run: |
+          source /opt/esp/idf/export.sh
           idf.py build
           idf.py merge-bin -o adhan-clock-esp32-s3.bin -f raw
 
