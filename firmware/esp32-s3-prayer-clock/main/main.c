@@ -64,7 +64,7 @@ static void start_setup_access_point(void) {
     access_point.ap.channel = 1;
     access_point.ap.max_connection = 4;
     access_point.ap.authmode = WIFI_AUTH_WPA2_PSK;
-    ESP_ERROR_CHECK(esp_wifi_set_mode(settings_has_wifi(&settings) ? WIFI_MODE_APSTA : WIFI_MODE_AP));
+    ESP_ERROR_CHECK(esp_wifi_set_mode(WIFI_MODE_APSTA));
     ESP_ERROR_CHECK(esp_wifi_set_config(WIFI_IF_AP, &access_point));
     ESP_LOGI(TAG, "Setup Wi-Fi ready: Adhancron Setup (password: adhancron), open http://192.168.4.1");
 }
@@ -503,15 +503,15 @@ static void probe_wifi(void) {
     ESP_ERROR_CHECK(esp_event_loop_create_default());
     wifi_init_config_t init_config = WIFI_INIT_CONFIG_DEFAULT();
     ESP_ERROR_CHECK(esp_wifi_init(&init_config));
+    esp_netif_create_default_wifi_sta();
 
     if (settings_has_wifi(&settings)) {
-        esp_netif_create_default_wifi_sta();
         ESP_ERROR_CHECK(esp_event_handler_register(WIFI_EVENT, WIFI_EVENT_STA_DISCONNECTED, &wifi_event_handler, NULL));
         ESP_ERROR_CHECK(esp_event_handler_register(IP_EVENT, IP_EVENT_STA_GOT_IP, &wifi_event_handler, NULL));
         wifi_config_t station = {0};
         strlcpy((char *)station.sta.ssid, settings.wifi_ssid, sizeof(station.sta.ssid));
         strlcpy((char *)station.sta.password, settings.wifi_password, sizeof(station.sta.password));
-        station.sta.threshold.authmode = WIFI_AUTH_WPA2_PSK;
+        station.sta.threshold.authmode = WIFI_AUTH_OPEN;
         ESP_ERROR_CHECK(esp_wifi_set_mode(WIFI_MODE_STA));
         ESP_ERROR_CHECK(esp_wifi_set_config(WIFI_IF_STA, &station));
         ESP_ERROR_CHECK(esp_wifi_start());

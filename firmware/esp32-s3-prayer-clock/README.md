@@ -58,7 +58,8 @@ shows the setup instructions or prayer clock on the display.
 ## First Setup
 
 1. Join **Adhancron Setup** with password `adhancron`.
-2. Open `http://192.168.4.1` and save the home Wi-Fi credentials.
+2. Open `http://192.168.4.1`, choose a scanned home Wi-Fi network, and enter
+   its password. Hidden and open networks are also supported.
 3. After restart, open `http://adhancron.local`.
 4. Search for the home town, city, or postcode and save it.
 5. Use the dashboard to test playback, select automatic prayers, set volume,

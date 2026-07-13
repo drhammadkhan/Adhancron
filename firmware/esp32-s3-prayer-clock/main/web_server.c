@@ -8,6 +8,7 @@
 #include "esp_http_server.h"
 #include "esp_log.h"
 #include "esp_system.h"
+#include "esp_wifi.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "prayer_times.h"
@@ -28,8 +29,10 @@ static const char STYLE[] =
 static const char WIFI_PAGE[] =
     "<h1>Welcome to Adhancron</h1><p class=small>First, connect this prayer clock to your home Wi-Fi. You will choose its location after it is online.</p>"
     "<form method=post action='/api/settings'><input type=hidden name=step value=wifi><fieldset><legend>Home Wi-Fi</legend>"
-    "<label>Network name</label><input name=ssid autocomplete='username' required><label>Password</label><input type=password name=password autocomplete='current-password' required></fieldset>"
-    "<button>Connect and continue</button></form></main></body></html>";
+    "<label>Network</label><select id=ssid name=ssid required><option value=''>Scanning for networks...</option></select><button type=button onclick=scanNetworks()>Scan again</button>"
+    "<label>Wi-Fi password</label><input type=password name=password autocomplete='current-password'><p class=small>Leave this blank only for an open network.</p>"
+    "<details><summary>Network not listed?</summary><label>Enter a hidden network name</label><input id=manual autocomplete='username' oninput=useManual(this.value)></details></fieldset>"
+    "<button>Connect and continue</button></form><script>function useManual(v){let s=document.getElementById('ssid'),o=document.getElementById('manualOption');if(!o){o=document.createElement('option');o.id='manualOption';s.appendChild(o)}o.value=v;o.textContent=v||'Hidden network';if(v)o.selected=true}async function scanNetworks(){let s=document.getElementById('ssid');s.innerHTML='<option value=\"\">Scanning...</option>';try{let r=await fetch('/api/networks',{cache:'no-store'});if(!r.ok)throw Error(await r.text());let j=await r.json();s.innerHTML='<option value=\"\">Choose your home network</option>';j.networks.forEach(n=>{let o=document.createElement('option');o.value=n.ssid;o.textContent=n.ssid+' - '+(n.secure?'secured':'open')+' - '+n.signal;s.appendChild(o)});if(!j.networks.length)throw Error('No networks found')}catch(e){s.innerHTML='<option value=\"\">Scan unavailable</option>';document.getElementById('manual').focus()}}scanNetworks()</script></main></body></html>";
 
 static const char LOCATION_PAGE[] =
     "<h1>Set your location</h1><p class=small>Search for your town, city, or postcode. Adhancron obtains the coordinates and timezone online and applies its established prayer-time rules.</p>"
@@ -159,7 +162,7 @@ static esp_err_t settings_handler(httpd_req_t *request) {
     if (wifi_step) {
         get_value(body, "ssid", current_settings->wifi_ssid, sizeof(current_settings->wifi_ssid));
         get_value(body, "password", current_settings->wifi_password, sizeof(current_settings->wifi_password));
-        if (!settings_has_wifi(current_settings) || current_settings->wifi_password[0] == '\0') return httpd_resp_send_err(request, HTTPD_400_BAD_REQUEST, "Enter the Wi-Fi name and password");
+        if (!settings_has_wifi(current_settings)) return httpd_resp_send_err(request, HTTPD_400_BAD_REQUEST, "Choose or enter a Wi-Fi network");
     } else if (strcmp(value, "location") == 0) {
         get_value(body, "found", value, sizeof(value));
         if (strcmp(value, "1") != 0) return httpd_resp_send_err(request, HTTPD_400_BAD_REQUEST, "Find and confirm a location first");
@@ -198,6 +201,69 @@ static esp_err_t status_handler(httpd_req_t *request) {
         snprintf(json, sizeof(json), "{\"message\":\"%04d-%02d-%02d %02d:%02d · %s\",\"prayers\":[{\"name\":\"Fajr\",\"time\":\"%s\"},{\"name\":\"Sunrise\",\"time\":\"%s\"},{\"name\":\"Dhuhr\",\"time\":\"%s\"},{\"name\":\"Asr\",\"time\":\"%s\"},{\"name\":\"Maghrib\",\"time\":\"%s\"},{\"name\":\"Isha\",\"time\":\"%s\"}]}", local_now.tm_year+1900,local_now.tm_mon+1,local_now.tm_mday,local_now.tm_hour,local_now.tm_min,storage,values[0],values[1],values[2],values[3],values[4],values[5]);
     }
     httpd_resp_set_type(request, "application/json"); return httpd_resp_sendstr(request, json);
+}
+
+static const char *signal_label(int rssi) {
+    if (rssi >= -55) return "excellent";
+    if (rssi >= -67) return "good";
+    if (rssi >= -75) return "fair";
+    return "weak";
+}
+
+static bool append_json_string(char *json, size_t capacity, size_t *length, const uint8_t *value) {
+    if (*length + 2 >= capacity) return false;
+    json[(*length)++] = '"';
+    for (const uint8_t *cursor = value; *cursor != '\0'; cursor++) {
+        if (*cursor < 0x20) continue;
+        if (*cursor == '"' || *cursor == '\\') {
+            if (*length + 2 >= capacity) return false;
+            json[(*length)++] = '\\';
+        } else if (*length + 1 >= capacity) {
+            return false;
+        }
+        json[(*length)++] = (char)*cursor;
+    }
+    if (*length + 1 >= capacity) return false;
+    json[(*length)++] = '"';
+    json[*length] = '\0';
+    return true;
+}
+
+static esp_err_t networks_handler(httpd_req_t *request) {
+    wifi_scan_config_t scan = {.show_hidden = false};
+    const esp_err_t scan_result = esp_wifi_scan_start(&scan, true);
+    if (scan_result != ESP_OK) return httpd_resp_send_err(request, HTTPD_500_INTERNAL_SERVER_ERROR, "Could not scan for Wi-Fi networks");
+
+    wifi_ap_record_t records[16] = {0};
+    uint16_t record_count = 16;
+    const esp_err_t records_result = esp_wifi_scan_get_ap_records(&record_count, records);
+    if (records_result != ESP_OK) return httpd_resp_send_err(request, HTTPD_500_INTERNAL_SERVER_ERROR, "Could not read Wi-Fi scan results");
+
+    const size_t capacity = 2304;
+    char *json = malloc(capacity);
+    if (json == NULL) return httpd_resp_send_err(request, HTTPD_500_INTERNAL_SERVER_ERROR, "Not enough memory for scan results");
+    size_t length = strlcpy(json, "{\"networks\":[", capacity);
+    int visible_count = 0;
+    for (uint16_t index = 0; index < record_count; index++) {
+        bool duplicate = false;
+        for (uint16_t previous = 0; previous < index; previous++) {
+            if (strcmp((const char *)records[index].ssid, (const char *)records[previous].ssid) == 0) { duplicate = true; break; }
+        }
+        if (duplicate || records[index].ssid[0] == '\0' || strcmp((const char *)records[index].ssid, "Adhancron Setup") == 0) continue;
+        const int prefix = snprintf(json + length, capacity - length, "%s{\"ssid\":", visible_count++ ? "," : "");
+        if (prefix < 0 || (size_t)prefix >= capacity - length) break;
+        length += (size_t)prefix;
+        if (!append_json_string(json, capacity, &length, records[index].ssid)) break;
+        const int suffix = snprintf(json + length, capacity - length, ",\"secure\":%s,\"signal\":\"%s\"}", records[index].authmode == WIFI_AUTH_OPEN ? "false" : "true", signal_label(records[index].rssi));
+        if (suffix < 0 || (size_t)suffix >= capacity - length) break;
+        length += (size_t)suffix;
+    }
+    strlcpy(json + length, "]}", capacity - length);
+    httpd_resp_set_type(request, "application/json");
+    httpd_resp_set_hdr(request, "Cache-Control", "no-store");
+    const esp_err_t result = httpd_resp_sendstr(request, json);
+    free(json);
+    return result;
 }
 
 static void play_task(void *unused) { play_audio(); vTaskDelete(NULL); }
@@ -239,7 +305,7 @@ static esp_err_t audio_file_handler(httpd_req_t *request) {
 
 void web_server_start(adhan_settings_t *settings, bool *sd_is_mounted, bool *adhan_audio_available, web_play_callback_t play_callback) {
     current_settings = settings; card_mounted = sd_is_mounted; audio_available = adhan_audio_available; play_audio = play_callback;
-    httpd_handle_t server = NULL; httpd_config_t config = HTTPD_DEFAULT_CONFIG(); config.max_uri_handlers = 8; config.stack_size = 8192;
+    httpd_handle_t server = NULL; httpd_config_t config = HTTPD_DEFAULT_CONFIG(); config.max_uri_handlers = 9; config.stack_size = 8192;
     if (httpd_start(&server, &config) != ESP_OK) { ESP_LOGE(TAG, "Could not start web server"); return; }
     const httpd_uri_t root = {.uri = "/", .method = HTTP_GET, .handler = page_handler};
     const httpd_uri_t save = {.uri = "/api/settings", .method = HTTP_POST, .handler = settings_handler};
@@ -249,6 +315,7 @@ void web_server_start(adhan_settings_t *settings, bool *sd_is_mounted, bool *adh
     const httpd_uri_t location = {.uri = "/location", .method = HTTP_GET, .handler = location_page_handler};
     const httpd_uri_t wifi = {.uri = "/wifi", .method = HTTP_GET, .handler = wifi_page_handler};
     const httpd_uri_t audio_file = {.uri = "/audio/adhan.mp3", .method = HTTP_GET, .handler = audio_file_handler};
-    httpd_register_uri_handler(server, &root); httpd_register_uri_handler(server, &save); httpd_register_uri_handler(server, &play); httpd_register_uri_handler(server, &upload); httpd_register_uri_handler(server, &status); httpd_register_uri_handler(server, &location); httpd_register_uri_handler(server, &wifi); httpd_register_uri_handler(server, &audio_file);
+    const httpd_uri_t networks = {.uri = "/api/networks", .method = HTTP_GET, .handler = networks_handler};
+    httpd_register_uri_handler(server, &root); httpd_register_uri_handler(server, &save); httpd_register_uri_handler(server, &play); httpd_register_uri_handler(server, &upload); httpd_register_uri_handler(server, &status); httpd_register_uri_handler(server, &location); httpd_register_uri_handler(server, &wifi); httpd_register_uri_handler(server, &audio_file); httpd_register_uri_handler(server, &networks);
     ESP_LOGI(TAG, "Web setup interface is ready");
 }
