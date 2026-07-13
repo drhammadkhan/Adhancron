@@ -16,8 +16,8 @@ speaker the dependable primary adhan output.
 - `http://adhancron.local` discovery on the home network.
 - Online town/city/postcode search followed by automatic coordinate and timezone storage.
 - NTP clock synchronisation and daylight-saving-aware local time.
-- Local Adhancron prayer calculation: Fajr 90 minutes before sunrise, Dhuhr five minutes after solar noon, standard Asr, Maghrib/Iftar one minute after sunset, and Moonsighting Committee seasonal Isha.
-- Full-screen clock with Fajr/Sehri, sunrise, Dhuhr, Asr, Iftar, Isha, next prayer, and countdown.
+- Local Adhancron prayer calculation: Fajr 90 minutes before sunrise, Dhuhr five minutes after solar noon, standard Asr, Maghrib one minute after sunset, and Moonsighting Committee seasonal Isha.
+- Full-screen LVGL clock with anti-aliased Montserrat type, Fajr, sunrise, Dhuhr, Asr, Maghrib, Isha, next prayer, countdown, and Wi-Fi/audio status.
 - Once-per-prayer scheduling with individual prayer enable switches and a
   two-minute recovery window after a reboot or delayed clock synchronisation.
 - Local MP3 playback from `/sdcard/adhan.mp3` through the ES8311 speaker path.
@@ -28,6 +28,15 @@ The ES3N28P has no touch panel. The board silkscreen is shared with the touch
 variant, but the product packaging identifies this one as `2.8 Without touch`.
 Device setup will therefore be browser-based, with the BOOT button reserved for
 recovery behaviour rather than normal navigation.
+
+## Display architecture
+
+The interface uses LVGL 9 through Espressif's `esp_lvgl_port` and the native
+ILI9341 `esp_lcd` driver. The component versions are pinned in
+`main/idf_component.yml` so builds remain reproducible. Two 240 x 32 RGB565 DMA
+buffers allow anti-aliased rendering without reserving a full-screen internal
+framebuffer. The dashboard is defined in `main/display_ui.c`; prayer scheduling,
+audio playback, Wi-Fi, and the web server remain independent of the renderer.
 
 ## Board wiring
 

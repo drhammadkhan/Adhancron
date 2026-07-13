@@ -32,6 +32,7 @@
 #include "sdmmc_cmd.h"
 
 #include "board_config.h"
+#include "display_ui.h"
 #include "prayer_times.h"
 #include "settings.h"
 #include "web_server.h"
@@ -39,7 +40,6 @@
 static const char *TAG = "adhancron_hw";
 
 static esp_lcd_panel_handle_t display;
-static uint16_t *frame_buffer;
 static i2c_master_bus_handle_t i2c_bus;
 static i2s_chan_handle_t i2s_tx;
 static esp_codec_dev_handle_t audio;
@@ -96,89 +96,18 @@ static void wifi_event_handler(void *argument, esp_event_base_t base, int32_t ev
     }
 }
 
-static void fill_rect(int x, int y, int width, int height, uint16_t color) {
-    if (x < 0) { width += x; x = 0; }
-    if (y < 0) { height += y; y = 0; }
-    if (x + width > BOARD_LCD_WIDTH) width = BOARD_LCD_WIDTH - x;
-    if (y + height > BOARD_LCD_HEIGHT) height = BOARD_LCD_HEIGHT - y;
-    if (width <= 0 || height <= 0) return;
-    for (int row = y; row < y + height; row++) {
-        uint16_t *pixels = frame_buffer + row * BOARD_LCD_WIDTH + x;
-        for (int column = 0; column < width; column++) pixels[column] = color;
+static void display_task(void *unused) {
+    while (true) {
+        display_ui_update(
+            &settings, wifi_connected, sd_mounted, adhan_audio_available);
+        vTaskDelay(pdMS_TO_TICKS(1000));
     }
-}
-
-static void present_frame(void) {
-    ESP_ERROR_CHECK(esp_lcd_panel_draw_bitmap(display, 0, 0, BOARD_LCD_WIDTH, BOARD_LCD_HEIGHT, frame_buffer));
-}
-
-static const uint8_t *glyph(char character) {
-    static const uint8_t digits[10][5] = {{0x3e,0x51,0x49,0x45,0x3e},{0x00,0x42,0x7f,0x40,0x00},{0x42,0x61,0x51,0x49,0x46},{0x21,0x41,0x45,0x4b,0x31},{0x18,0x14,0x12,0x7f,0x10},{0x27,0x45,0x45,0x45,0x39},{0x3c,0x4a,0x49,0x49,0x30},{0x01,0x71,0x09,0x05,0x03},{0x36,0x49,0x49,0x49,0x36},{0x06,0x49,0x49,0x29,0x1e}};
-    static const uint8_t letters[26][5] = {{0x7e,0x11,0x11,0x11,0x7e},{0x7f,0x49,0x49,0x49,0x36},{0x3e,0x41,0x41,0x41,0x22},{0x7f,0x41,0x41,0x22,0x1c},{0x7f,0x49,0x49,0x49,0x41},{0x7f,0x09,0x09,0x09,0x01},{0x3e,0x41,0x49,0x49,0x7a},{0x7f,0x08,0x08,0x08,0x7f},{0x00,0x41,0x7f,0x41,0x00},{0x20,0x40,0x41,0x3f,0x01},{0x7f,0x08,0x14,0x22,0x41},{0x7f,0x40,0x40,0x40,0x40},{0x7f,0x02,0x0c,0x02,0x7f},{0x7f,0x04,0x08,0x10,0x7f},{0x3e,0x41,0x41,0x41,0x3e},{0x7f,0x09,0x09,0x09,0x06},{0x3e,0x41,0x51,0x21,0x5e},{0x7f,0x09,0x19,0x29,0x46},{0x46,0x49,0x49,0x49,0x31},{0x01,0x01,0x7f,0x01,0x01},{0x3f,0x40,0x40,0x40,0x3f},{0x1f,0x20,0x40,0x20,0x1f},{0x3f,0x40,0x38,0x40,0x3f},{0x63,0x14,0x08,0x14,0x63},{0x07,0x08,0x70,0x08,0x07},{0x61,0x51,0x49,0x45,0x43}};
-    static const uint8_t colon[5] = {0,0x36,0x36,0,0};
-    static const uint8_t dot[5] = {0,0x60,0x60,0,0};
-    static const uint8_t blank[5] = {0,0,0,0,0};
-    if (character >= '0' && character <= '9') return digits[character - '0'];
-    if (character >= 'A' && character <= 'Z') return letters[character - 'A'];
-    if (character == ':') return colon;
-    if (character == '.') return dot;
-    return blank;
-}
-
-static void draw_text(int x, int y, const char *text, int scale, uint16_t color) {
-    for (const char *cursor = text; *cursor; cursor++, x += 6 * scale) {
-        const uint8_t *bitmap = glyph(*cursor >= 'a' && *cursor <= 'z' ? *cursor - 32 : *cursor);
-        for (int column = 0; column < 5; column++) for (int row = 0; row < 7; row++)
-            if (bitmap[column] & (1 << row)) fill_rect(x + column * scale, y + row * scale, scale, scale, color);
-    }
-}
-
-static void format_clock_minutes(int minutes, char output[6]) { unsigned value=(unsigned)(((minutes%1440)+1440)%1440); snprintf(output, 6, "%02u:%02u", value/60, value%60); }
-
-static void draw_prayer_clock(void) {
-    const uint16_t background = 0x2A22, white = 0xFFFF, mint = 0x9FF3, gold = 0xE6FC;
-    fill_rect(0, 0, BOARD_LCD_WIDTH, BOARD_LCD_HEIGHT, background);
-    if (!settings_has_wifi(&settings)) { draw_text(30, 55, "SETUP", 5, gold); draw_text(48, 120, "WIFI", 5, white); draw_text(33, 205, "192.168.4.1", 2, mint); present_frame(); return; }
-    if (!wifi_connected) { draw_text(20, 90, "CONNECTING", 3, gold); draw_text(42, 145, "WIFI", 4, white); present_frame(); return; }
-    if (!settings.location_configured) { draw_text(26, 70, "SET LOCATION", 2, gold); draw_text(18, 120, "ADHANCRON.LOCAL", 2, white); present_frame(); return; }
-    const time_t now = time(NULL); struct tm local_now = {0}; localtime_r(&now, &local_now);
-    if (local_now.tm_year < 120) { draw_text(20, 100, "SYNCING TIME", 2, gold); present_frame(); return; }
-    char clock[6]; snprintf(clock, sizeof(clock), "%02d%c%02d", local_now.tm_hour, local_now.tm_sec % 2 == 0 ? ':' : ' ', local_now.tm_min); draw_text(29, 18, clock, 6, white);
-    prayer_times_t times; prayer_calculation_config_t config = {.latitude=settings.latitude,.longitude=settings.longitude};
-    if (!prayer_times_calculate(&local_now, &config, &times)) { draw_text(22, 115, "TIMES UNAVAILABLE", 2, gold); present_frame(); return; }
-    const int rows[] = {0,1,2,3,4,5}; const char *row_names[] = {"FAJR","SUNRISE","DHUHR","ASR","MAGHRIB","ISHA"};
-    for (int row = 0; row < 6; row++) { char value[6]; format_clock_minutes(prayer_time_minutes(&times,rows[row]),value); draw_text(10, 78+row*30,row_names[row],2,row==4?gold:mint); draw_text(166,78+row*30,value,2,white); }
-    const int prayer_indexes[] = {0,2,3,4,5}; const char *prayer_names[] = {"FAJR","DHUHR","ASR","MAGHRIB","ISHA"};
-    const int current = local_now.tm_hour*60+local_now.tm_min; int next=0; for(int i=0;i<5;i++) if(prayer_time_minutes(&times,prayer_indexes[i])>current){next=i;break;}
-    draw_text(10, 272, "NEXT", 2, gold); draw_text(80,272,prayer_names[next],2,white);
-    int countdown=prayer_time_minutes(&times,prayer_indexes[next])-current; if(countdown<=0)countdown+=1440; unsigned countdown_value=(unsigned)(countdown%1441); char countdown_text[16]; snprintf(countdown_text,sizeof(countdown_text),"IN %02u:%02u",countdown_value/60,countdown_value%60); draw_text(80,296,countdown_text,1,mint);
-    present_frame();
-}
-
-static void display_task(void *unused) { while (true) { draw_prayer_clock(); vTaskDelay(pdMS_TO_TICKS(1000)); } }
-
-static void draw_hardware_screen(void) {
-    // The colour bands make display orientation, colour order, and backlight
-    // faults obvious before the LVGL dashboard is introduced.
-    fill_rect(0, 0, BOARD_LCD_WIDTH, BOARD_LCD_HEIGHT, 0x0821);
-    fill_rect(0, 0, BOARD_LCD_WIDTH, 64, 0x07E0);
-    fill_rect(0, 64, BOARD_LCD_WIDTH, 64, 0x001F);
-    fill_rect(0, 128, BOARD_LCD_WIDTH, 64, 0xF800);
-    fill_rect(0, 192, BOARD_LCD_WIDTH, 64, 0xFFE0);
-    fill_rect(0, 256, BOARD_LCD_WIDTH, 64, 0xFFFF);
-
-    for (int x = 0; x < BOARD_LCD_WIDTH; x += 20) {
-        fill_rect(x, 0, 4, BOARD_LCD_HEIGHT, 0x0000);
-    }
-    present_frame();
 }
 
 static void init_display(void) {
     ESP_LOGI(TAG, "Initialising ILI9341 display");
 
-    const size_t frame_bytes = BOARD_LCD_WIDTH * BOARD_LCD_HEIGHT * sizeof(uint16_t);
-    frame_buffer = heap_caps_malloc(frame_bytes, MALLOC_CAP_DMA | MALLOC_CAP_INTERNAL);
-    ESP_ERROR_CHECK(frame_buffer == NULL ? ESP_ERR_NO_MEM : ESP_OK);
+    const size_t transfer_bytes = BOARD_LCD_WIDTH * 32 * sizeof(uint16_t);
 
     gpio_config_t backlight_config = {
         .pin_bit_mask = 1ULL << BOARD_LCD_BACKLIGHT_GPIO,
@@ -193,7 +122,7 @@ static void init_display(void) {
         .miso_io_num = BOARD_LCD_MISO_GPIO,
         .quadwp_io_num = GPIO_NUM_NC,
         .quadhd_io_num = GPIO_NUM_NC,
-        .max_transfer_sz = frame_bytes,
+        .max_transfer_sz = transfer_bytes,
     };
     ESP_ERROR_CHECK(spi_bus_initialize(BOARD_LCD_HOST, &bus_config, SPI_DMA_CH_AUTO));
 
@@ -220,7 +149,7 @@ static void init_display(void) {
     ESP_ERROR_CHECK(esp_lcd_panel_invert_color(display, true));
     ESP_ERROR_CHECK(esp_lcd_panel_mirror(display, true, false));
     ESP_ERROR_CHECK(esp_lcd_panel_disp_on_off(display, true));
-    draw_hardware_screen();
+    ESP_ERROR_CHECK(display_ui_init(io, display));
 }
 
 static void report_psram(void) {
