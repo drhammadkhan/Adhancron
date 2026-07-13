@@ -141,8 +141,6 @@ static bool install_update(const char *version) {
     };
     const esp_https_ota_config_t ota_config = {
         .http_config = &http_config,
-        .partial_http_download = true,
-        .max_http_request_size = 4096,
     };
     ESP_LOGI(TAG, "Installing firmware %s from %s", version, image_url);
     const esp_err_t result = esp_https_ota(&ota_config);
