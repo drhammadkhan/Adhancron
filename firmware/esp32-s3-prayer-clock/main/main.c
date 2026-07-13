@@ -139,9 +139,9 @@ static void draw_prayer_clock(void) {
     char clock[6]; snprintf(clock, sizeof(clock), "%02d:%02d", local_now.tm_hour, local_now.tm_min); draw_text(29, 18, clock, 6, white);
     prayer_times_t times; prayer_calculation_config_t config = {.latitude=settings.latitude,.longitude=settings.longitude};
     if (!prayer_times_calculate(&local_now, &config, &times)) { draw_text(22, 115, "TIMES UNAVAILABLE", 2, gold); return; }
-    const int rows[] = {0,1,2,3,4,5}; const char *row_names[] = {"FAJR","SUNRISE","DHUHR","ASR","IFTAR","ISHA"};
+    const int rows[] = {0,1,2,3,4,5}; const char *row_names[] = {"FAJR","SUNRISE","DHUHR","ASR","MAGHRIB","ISHA"};
     for (int row = 0; row < 6; row++) { char value[6]; format_clock_minutes(prayer_time_minutes(&times,rows[row]),value); draw_text(10, 78+row*30,row_names[row],2,row==4?gold:mint); draw_text(166,78+row*30,value,2,white); }
-    const int prayer_indexes[] = {0,2,3,4,5}; const char *prayer_names[] = {"FAJR","DHUHR","ASR","IFTAR","ISHA"};
+    const int prayer_indexes[] = {0,2,3,4,5}; const char *prayer_names[] = {"FAJR","DHUHR","ASR","MAGHRIB","ISHA"};
     const int current = local_now.tm_hour*60+local_now.tm_min; int next=0; for(int i=0;i<5;i++) if(prayer_time_minutes(&times,prayer_indexes[i])>current){next=i;break;}
     draw_text(10, 272, "NEXT", 2, gold); draw_text(80,272,prayer_names[next],2,white);
     int countdown=prayer_time_minutes(&times,prayer_indexes[next])-current; if(countdown<=0)countdown+=1440; unsigned countdown_value=(unsigned)(countdown%1441); char countdown_text[16]; snprintf(countdown_text,sizeof(countdown_text),"IN %02u:%02u",countdown_value/60,countdown_value%60); draw_text(80,296,countdown_text,1,mint);
