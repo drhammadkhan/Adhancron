@@ -66,6 +66,13 @@ audio playback, Wi-Fi, and the web server remain independent of the renderer.
 | Status LED | 42 |
 | Battery ADC | 9 |
 
+The status bar reads the battery through GPIO 9 using ESP-IDF's calibrated ADC
+driver. It shows a battery symbol and estimated percentage whenever a 3.7 V
+LiPo is connected, changes colour at 15%, and uses a charging bolt after a
+sustained voltage rise is detected. The board's TP4054 charging-status output is
+not connected to the ESP32, so charging is inferred from the voltage trend and
+can take about one minute to appear after USB power is connected.
+
 ## Install Firmware
 
 ### Browser installer (recommended)
@@ -154,6 +161,13 @@ The Ramadan fixture test covers date validation, leap years, year boundaries,
 ```bash
 cc -std=c11 -D_DEFAULT_SOURCE -I main tests/ramadan_host_test.c main/ramadan.c -o /tmp/adhancron-ramadan-test
 /tmp/adhancron-ramadan-test
+```
+
+Battery percentage and charging-trend logic can be checked without ESP-IDF:
+
+```bash
+cc -std=c11 -I main tests/battery_status_host_test.c main/battery_status.c -o /tmp/adhancron-battery-test
+/tmp/adhancron-battery-test
 ```
 
 For Google Cast playback, the ESP32 discovers compatible receivers with mDNS,

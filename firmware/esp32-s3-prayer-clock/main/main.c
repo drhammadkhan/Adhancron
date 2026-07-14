@@ -33,6 +33,7 @@
 #include "wear_levelling.h"
 
 #include "audio_storage.h"
+#include "battery_monitor.h"
 #include "board_config.h"
 #include "cast_sender.h"
 #include "display_ui.h"
@@ -53,6 +54,7 @@ static bool sd_mounted;
 static bool storage_mounted;
 static wl_handle_t storage_wl_handle = WL_INVALID_HANDLE;
 static bool adhan_audio_available;
+static bool battery_monitor_ready;
 static adhan_settings_t settings;
 static bool ntp_started;
 static bool wifi_connected;
@@ -135,10 +137,12 @@ static void current_device_address(char address[16]) {
 static void display_task(void *unused) {
     while (true) {
         char device_address[16];
+        battery_status_t battery = {0};
         current_device_address(device_address);
+        if (battery_monitor_ready) battery_monitor_sample(&battery);
         display_ui_update(
             &settings, wifi_connected, setup_ap_started,
-            storage_mounted, adhan_audio_available, device_address);
+            storage_mounted, adhan_audio_available, device_address, &battery);
         vTaskDelay(pdMS_TO_TICKS(1000));
     }
 }
@@ -726,6 +730,12 @@ void app_main(void) {
     tzset();
     ESP_LOGI(TAG, "Adhancron prayer clock starting");
     report_psram();
+    const esp_err_t battery_result = battery_monitor_init();
+    battery_monitor_ready = battery_result == ESP_OK;
+    if (!battery_monitor_ready) {
+        ESP_LOGW(TAG, "Battery monitoring unavailable: %s",
+            esp_err_to_name(battery_result));
+    }
     init_display();
     init_audio();
     ESP_ERROR_CHECK(esp_codec_dev_set_out_vol(audio, settings.volume));

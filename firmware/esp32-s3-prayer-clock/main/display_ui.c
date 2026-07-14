@@ -33,6 +33,7 @@ static lv_obj_t *message_title;
 static lv_obj_t *message_detail;
 static lv_obj_t *location_label;
 static lv_obj_t *address_label;
+static lv_obj_t *battery_label;
 static lv_obj_t *clock_digit_labels[6];
 static lv_obj_t *date_label;
 static lv_obj_t *wifi_icon;
@@ -221,10 +222,15 @@ static void create_dashboard(lv_obj_t *screen) {
     create_prayer_table(dashboard);
 
     address_label = make_label(dashboard, "IP: OFFLINE", &lv_font_montserrat_12, COLOR_MUTED);
-    lv_obj_set_pos(address_label, 10, 305);
-    lv_obj_set_size(address_label, 220, 14);
+    lv_obj_set_pos(address_label, 30, 305);
+    lv_obj_set_size(address_label, 180, 14);
     lv_obj_set_style_text_align(address_label, LV_TEXT_ALIGN_CENTER, 0);
     lv_label_set_long_mode(address_label, LV_LABEL_LONG_MODE_DOTS);
+
+    battery_label = make_label(dashboard, "", &lv_font_montserrat_12, COLOR_MUTED);
+    lv_obj_set_pos(battery_label, 180, 305);
+    lv_obj_set_size(battery_label, 56, 14);
+    lv_obj_set_style_text_align(battery_label, LV_TEXT_ALIGN_RIGHT, 0);
 }
 
 esp_err_t display_ui_init(
@@ -355,7 +361,8 @@ void display_ui_update(
     bool setup_access_point_active,
     bool storage_mounted,
     bool audio_available,
-    const char *device_address) {
+    const char *device_address,
+    const battery_status_t *battery) {
     if (!lvgl_display || !current_settings || !lvgl_port_lock(1000)) return;
 
     if (!settings_has_wifi(current_settings)) {
@@ -412,6 +419,26 @@ void display_ui_update(
     snprintf(address_text, sizeof(address_text), "IP: %s",
         device_address != NULL && device_address[0] != '\0' ? device_address : "OFFLINE");
     lv_label_set_text(address_label, address_text);
+
+    if (battery != NULL && battery->available) {
+        const char *symbol = LV_SYMBOL_BATTERY_EMPTY;
+        if (battery->percentage >= 90) symbol = LV_SYMBOL_BATTERY_FULL;
+        else if (battery->percentage >= 65) symbol = LV_SYMBOL_BATTERY_3;
+        else if (battery->percentage >= 35) symbol = LV_SYMBOL_BATTERY_2;
+        else if (battery->percentage >= 15) symbol = LV_SYMBOL_BATTERY_1;
+        if (battery->charging) symbol = LV_SYMBOL_CHARGE;
+
+        char battery_text[20];
+        snprintf(battery_text, sizeof(battery_text), "%s %d%%",
+            symbol, battery->percentage);
+        lv_label_set_text(battery_label, battery_text);
+        lv_obj_set_style_text_color(battery_label, color(
+            battery->charging ? COLOR_GOLD :
+            (battery->percentage <= 15 ? COLOR_ERROR : COLOR_SKY)), 0);
+        lv_obj_clear_flag(battery_label, LV_OBJ_FLAG_HIDDEN);
+    } else {
+        lv_obj_add_flag(battery_label, LV_OBJ_FLAG_HIDDEN);
+    }
 
     char clock_text[7];
     snprintf(clock_text, sizeof(clock_text), "%02d%02d%02d",

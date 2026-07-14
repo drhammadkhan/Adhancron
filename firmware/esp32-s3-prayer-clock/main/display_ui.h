@@ -7,6 +7,7 @@
 #include "esp_lcd_panel_ops.h"
 
 #include "settings.h"
+#include "battery_status.h"
 
 esp_err_t display_ui_init(
     esp_lcd_panel_io_handle_t panel_io,
@@ -18,4 +19,5 @@ void display_ui_update(
     bool setup_access_point_active,
     bool storage_mounted,
     bool adhan_audio_available,
-    const char *device_address);
+    const char *device_address,
+    const battery_status_t *battery);
