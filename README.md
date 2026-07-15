@@ -39,6 +39,10 @@ It provides:
 - The current device IP address on the display so the full settings dashboard is easy to find.
 - User-defined first and final fasting days, with automatic Ramadan day numbering and separate Sehri/Iftar context while retaining the canonical prayer names.
 - Ten-minute, seconds-accurate Ramadan countdowns to the end of Sehri and the beginning of Iftar.
+- User-defined Eid al-Fitr and Eid al-Adha dates, an all-day Eid greeting, and
+  configurable repeated takbeer playback through the attached speaker or
+  Google Cast. The original 65-second takbeer recording is included and stored
+  separately from the adhan.
 - A battery symbol and estimated charge percentage for an attached protected
   single-cell 3.7 V LiPo, including low-charge and detected-charging states.
   USB powers the board while its TP4054 charges the cell at approximately

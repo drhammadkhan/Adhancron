@@ -19,5 +19,6 @@ void display_ui_update(
     bool setup_access_point_active,
     bool storage_mounted,
     bool adhan_audio_available,
+    bool takbeer_audio_available,
     const char *device_address,
     const battery_status_t *battery);

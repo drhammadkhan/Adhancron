@@ -24,6 +24,11 @@ typedef struct {
     bool automatic_updates;
     char ramadan_start_date[11];
     char ramadan_end_date[11];
+    char eid_fitr_date[11];
+    char eid_adha_date[11];
+    int eid_takbeer_start_minute;
+    int eid_takbeer_end_minute;
+    int eid_takbeer_interval_minutes;
 } adhan_settings_t;
 
 void settings_defaults(adhan_settings_t *settings);

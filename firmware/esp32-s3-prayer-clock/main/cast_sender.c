@@ -486,7 +486,8 @@ static bool wait_for_media_start(
 }
 
 bool cast_sender_play(
-        const cast_device_t *device, const char *media_url, int volume,
+        const cast_device_t *device, const char *media_url, const char *title,
+        int volume,
         char *error, size_t error_size) {
     if (device == NULL || media_url == NULL || media_url[0] == '\0') {
         set_error(error, error_size, "Cast playback is not configured");
@@ -542,16 +543,17 @@ bool cast_sender_play(
         "{\"type\":\"LOAD\",\"requestId\":%d,\"sessionId\":\"%s\","
         "\"media\":{\"contentId\":\"%s\",\"streamType\":\"BUFFERED\","
         "\"contentType\":\"audio/mpeg\",\"metadata\":{\"metadataType\":3,"
-        "\"title\":\"Adhan\",\"artist\":\"Adhancron Prayer Clock\"}},"
+        "\"title\":\"%s\",\"artist\":\"Adhancron Prayer Clock\"}},"
         "\"autoplay\":true,\"currentTime\":0,\"customData\":{}}",
-        request_id++, application.session_id, media_url);
+        request_id++, application.session_id, media_url,
+        title != NULL && title[0] != '\0' ? title : "Adhancron Audio");
     if (written < 0 || (size_t)written >= sizeof(payload)) success = false;
     if (success) {
         success = connection_send(
             connection, application.transport_id, NS_MEDIA, payload);
     }
     if (!success) {
-        set_error(error, error_size, "Could not send the Adhan to the Cast receiver");
+        set_error(error, error_size, "Could not send audio to the Cast receiver");
         connection_close(connection);
         return false;
     }

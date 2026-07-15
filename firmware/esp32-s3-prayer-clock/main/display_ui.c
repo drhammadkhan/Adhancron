@@ -11,6 +11,7 @@
 #include "lvgl.h"
 
 #include "board_config.h"
+#include "eid.h"
 #include "prayer_times.h"
 #include "ramadan.h"
 
@@ -361,6 +362,7 @@ void display_ui_update(
     bool setup_access_point_active,
     bool storage_mounted,
     bool audio_available,
+    bool takbeer_available,
     const char *device_address,
     const battery_status_t *battery) {
     if (!lvgl_display || !current_settings || !lvgl_port_lock(1000)) return;
@@ -454,9 +456,18 @@ void display_ui_update(
         current_settings->ramadan_end_date,
         &local_now,
         &ramadan);
+    eid_status_t eid = {0};
+    eid_status_for_date(
+        current_settings->eid_fitr_date,
+        current_settings->eid_adha_date,
+        &local_now,
+        &eid);
 
     char date_text[32];
-    if (ramadan.active) {
+    if (eid.active) {
+        snprintf(date_text, sizeof(date_text), "EID MUBARAK  |  %s",
+            eid.kind == EID_AL_FITR ? "FITR" : "ADHA");
+    } else if (ramadan.active) {
         char short_date[12];
         strftime(short_date, sizeof(short_date), "%d %b", &local_now);
         snprintf(date_text, sizeof(date_text), "RAMADAN %d  |  %s",
@@ -465,6 +476,8 @@ void display_ui_update(
         strftime(date_text, sizeof(date_text), "%A  %d %B", &local_now);
     }
     lv_label_set_text(date_label, date_text);
+    lv_obj_set_style_text_color(
+        date_label, color(eid.active ? COLOR_GOLD : COLOR_MUTED), 0);
     lv_obj_align(date_label, LV_ALIGN_TOP_MID, 0, 88);
 
     const uint32_t wifi_color = connected
@@ -511,8 +524,36 @@ void display_ui_update(
     if (countdown_seconds <= 0) countdown_seconds += 24 * 60 * 60;
     const bool ramadan_event_countdown = ramadan.active &&
         countdown_seconds <= 10 * 60 && (next == 0 || next == 3);
+    int next_takbeer = eid_next_takbeer_minute(
+        &eid, current_minute,
+        current_settings->eid_takbeer_start_minute,
+        current_settings->eid_takbeer_end_minute,
+        current_settings->eid_takbeer_interval_minutes);
+    if (next_takbeer == current_minute && local_now.tm_sec > 0) {
+        next_takbeer = eid_next_takbeer_minute(
+            &eid, current_minute + 1,
+            current_settings->eid_takbeer_start_minute,
+            current_settings->eid_takbeer_end_minute,
+            current_settings->eid_takbeer_interval_minutes);
+    }
+    const bool eid_takbeer_panel = takbeer_available && eid.active &&
+        next_takbeer >= 0 &&
+        current_minute >= current_settings->eid_takbeer_start_minute - 10;
 
-    if (ramadan_event_countdown) {
+    if (eid_takbeer_panel) {
+        char takbeer_time[6];
+        format_clock_minutes(next_takbeer, takbeer_time);
+        const int takbeer_seconds =
+            next_takbeer * 60 - current_seconds;
+        char seconds_text[24];
+        snprintf(seconds_text, sizeof(seconds_text), "IN %02d:%02d",
+            takbeer_seconds / 60, takbeer_seconds % 60);
+        lv_label_set_text(next_eyebrow_label, "EID TAKBEER");
+        lv_label_set_text(next_name_label,
+            eid.kind == EID_AL_FITR ? "AL-FITR" : "AL-ADHA");
+        lv_label_set_text(next_time_label, takbeer_time);
+        lv_label_set_text(countdown_label, seconds_text);
+    } else if (ramadan_event_countdown) {
         const char *event = next == 0 ? "SEHRI ENDS IN" : "IFTAR IN";
         char seconds_text[16];
         snprintf(seconds_text, sizeof(seconds_text), "%02d:%02d",

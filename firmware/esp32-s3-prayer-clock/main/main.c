@@ -37,6 +37,7 @@
 #include "board_config.h"
 #include "cast_sender.h"
 #include "display_ui.h"
+#include "eid.h"
 #include "firmware_update.h"
 #include "prayer_times.h"
 #include "settings.h"
@@ -54,6 +55,7 @@ static bool sd_mounted;
 static bool storage_mounted;
 static wl_handle_t storage_wl_handle = WL_INVALID_HANDLE;
 static bool adhan_audio_available;
+static bool takbeer_audio_available;
 static bool battery_monitor_ready;
 static adhan_settings_t settings;
 static bool ntp_started;
@@ -63,6 +65,11 @@ static bool wifi_fallback_pending;
 static SemaphoreHandle_t audio_mutex;
 static SemaphoreHandle_t playback_mutex;
 static time_t playback_guard_until;
+
+extern const uint8_t bundled_takbeer_start[]
+    asm("_binary_eid_takbeer_mp3_start");
+extern const uint8_t bundled_takbeer_end[]
+    asm("_binary_eid_takbeer_mp3_end");
 
 static void start_setup_access_point(void) {
     if (setup_ap_started) return;
@@ -142,7 +149,8 @@ static void display_task(void *unused) {
         if (battery_monitor_ready) battery_monitor_sample(&battery);
         display_ui_update(
             &settings, wifi_connected, setup_ap_started,
-            storage_mounted, adhan_audio_available, device_address, &battery);
+            storage_mounted, adhan_audio_available, takbeer_audio_available,
+            device_address, &battery);
         vTaskDelay(pdMS_TO_TICKS(1000));
     }
 }
@@ -297,12 +305,22 @@ static void configure_audio_output(int sample_rate) {
     ESP_LOGI(TAG, "Audio output configured for %d Hz stereo", sample_rate);
 }
 
-static void play_adhan_from_storage(void) {
+static const char *audio_track_path(audio_track_t track) {
+    return track == AUDIO_TRACK_EID_TAKBEER
+        ? TAKBEER_AUDIO_PATH : ADHAN_AUDIO_PATH;
+}
+
+static const char *audio_track_title(audio_track_t track) {
+    return track == AUDIO_TRACK_EID_TAKBEER ? "Eid Takbeer" : "Adhan";
+}
+
+static void play_audio_from_storage(audio_track_t track) {
     if (xSemaphoreTake(audio_mutex, 0) != pdTRUE) {
         ESP_LOGW(TAG, "Audio playback is already active");
         return;
     }
-    FILE *file = fopen(ADHAN_AUDIO_PATH, "rb");
+    const char *path = audio_track_path(track);
+    FILE *file = fopen(path, "rb");
     if (file == NULL) {
         xSemaphoreGive(audio_mutex);
         return;
@@ -313,7 +331,7 @@ static void play_adhan_from_storage(void) {
     int16_t *pcm = heap_caps_malloc(1152 * 2 * sizeof(int16_t), MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
     HMP3Decoder decoder = MP3InitDecoder();
     if (input == NULL || pcm == NULL || decoder == NULL) {
-        ESP_LOGE(TAG, "Not enough memory to decode %s", ADHAN_AUDIO_PATH);
+        ESP_LOGE(TAG, "Not enough memory to decode %s", path);
         free(input);
         free(pcm);
         if (decoder != NULL) {
@@ -328,7 +346,7 @@ static void play_adhan_from_storage(void) {
     uint8_t *read_ptr = input;
     bool eof = false;
     int decoded_frames = 0;
-    ESP_LOGI(TAG, "Playing %s", ADHAN_AUDIO_PATH);
+    ESP_LOGI(TAG, "Playing %s", path);
 
     while (available > 0 || !eof) {
         if (available < MAINBUF_SIZE * 2 && !eof) {
@@ -389,7 +407,8 @@ static void play_adhan_from_storage(void) {
         audio_sample_rate = 0;
         i2s_output_enabled = false;
     }
-    ESP_LOGI(TAG, "Adhan playback finished (%d MP3 frames)", decoded_frames);
+    ESP_LOGI(TAG, "%s playback finished (%d MP3 frames)",
+        audio_track_title(track), decoded_frames);
     MP3FreeDecoder(decoder);
     free(pcm);
     free(input);
@@ -397,7 +416,8 @@ static void play_adhan_from_storage(void) {
     xSemaphoreGive(audio_mutex);
 }
 
-static bool current_media_url(char *url, size_t url_size) {
+static bool current_media_url(
+        audio_track_t track, char *url, size_t url_size) {
     esp_netif_t *station = esp_netif_get_handle_from_ifkey("WIFI_STA_DEF");
     esp_netif_ip_info_t ip_info = {0};
     char address[16];
@@ -407,13 +427,14 @@ static bool current_media_url(char *url, size_t url_size) {
         return false;
     }
     const int written = snprintf(
-        url, url_size, "http://%s/audio/adhan.mp3", address);
+        url, url_size, "http://%s/audio/%s.mp3", address,
+        track == AUDIO_TRACK_EID_TAKBEER ? "takbeer" : "adhan");
     return written > 0 && (size_t)written < url_size;
 }
 
-static void play_adhan(void) {
+static void play_audio(audio_track_t track) {
     if (xSemaphoreTake(playback_mutex, 0) != pdTRUE) {
-        ESP_LOGW(TAG, "Adhan playback is already being started");
+        ESP_LOGW(TAG, "Audio playback is already being started");
         return;
     }
     playback_guard_until = time(NULL) + 10 * 60;
@@ -421,17 +442,19 @@ static void play_adhan(void) {
         cast_device_t device;
         char media_url[96];
         char error[160] = {0};
-        ESP_LOGI(TAG, "Starting Cast playback on %s", settings.cast_device_name);
+        ESP_LOGI(TAG, "Starting %s Cast playback on %s",
+            audio_track_title(track), settings.cast_device_name);
         bool cast_started = false;
         if (!wifi_connected) {
             strlcpy(error, "Wi-Fi is offline", sizeof(error));
-        } else if (!current_media_url(media_url, sizeof(media_url))) {
+        } else if (!current_media_url(track, media_url, sizeof(media_url))) {
             strlcpy(error, "the device audio URL is unavailable", sizeof(error));
         } else if (!cast_sender_find(settings.cast_device_id, &device, 8000)) {
             strlcpy(error, "the saved Cast speaker did not answer discovery", sizeof(error));
         } else {
             cast_started = cast_sender_play(
-                &device, media_url, settings.volume, error, sizeof(error));
+                &device, media_url, audio_track_title(track), settings.volume,
+                error, sizeof(error));
         }
         if (cast_started) {
             xSemaphoreGive(playback_mutex);
@@ -440,7 +463,7 @@ static void play_adhan(void) {
         ESP_LOGW(TAG, "Cast playback failed%s%s; using attached speaker",
             error[0] != '\0' ? ": " : "", error);
     }
-    play_adhan_from_storage();
+    play_audio_from_storage(track);
     xSemaphoreGive(playback_mutex);
 }
 
@@ -476,6 +499,18 @@ static bool firmware_update_window_safe(void) {
             return false;
         }
     }
+    eid_status_t eid = {0};
+    eid_status_for_date(
+        settings.eid_fitr_date, settings.eid_adha_date, &local_now, &eid);
+    const int next_takbeer = eid_next_takbeer_minute(
+        &eid, current_minute,
+        settings.eid_takbeer_start_minute,
+        settings.eid_takbeer_end_minute,
+        settings.eid_takbeer_interval_minutes);
+    if (takbeer_audio_available && next_takbeer >= current_minute &&
+            next_takbeer - current_minute <= 10) {
+        return false;
+    }
     return true;
 }
 
@@ -486,7 +521,11 @@ static bool file_exists(const char *path) {
     return true;
 }
 
-static bool copy_audio_file(const char *source_path) {
+static bool copy_audio_file(
+        const char *source_path,
+        const char *destination_path,
+        const char *temporary_path,
+        const char *label) {
     FILE *source = fopen(source_path, "rb");
     if (source == NULL) {
         ESP_LOGE(TAG, "Could not open audio import source %s", source_path);
@@ -503,10 +542,11 @@ static bool copy_audio_file(const char *source_path) {
         return false;
     }
 
-    remove(ADHAN_UPLOAD_PATH);
-    FILE *destination = fopen(ADHAN_UPLOAD_PATH, "wb");
+    remove(temporary_path);
+    FILE *destination = fopen(temporary_path, "wb");
     if (destination == NULL) {
-        ESP_LOGE(TAG, "Could not open internal audio import destination %s", ADHAN_UPLOAD_PATH);
+        ESP_LOGE(TAG, "Could not open internal %s import destination %s",
+            label, temporary_path);
         fclose(source);
         return false;
     }
@@ -514,7 +554,7 @@ static bool copy_audio_file(const char *source_path) {
     if (buffer == NULL) {
         fclose(destination);
         fclose(source);
-        remove(ADHAN_UPLOAD_PATH);
+        remove(temporary_path);
         return false;
     }
 
@@ -540,23 +580,51 @@ static bool copy_audio_file(const char *source_path) {
 
     if (!success || copied != expected_size) {
         ESP_LOGE(TAG, "Internal audio import failed after %ld of %ld bytes", copied, expected_size);
-        remove(ADHAN_UPLOAD_PATH);
+        remove(temporary_path);
         return false;
     }
-    remove(ADHAN_AUDIO_PATH);
-    if (rename(ADHAN_UPLOAD_PATH, ADHAN_AUDIO_PATH) != 0) {
-        ESP_LOGE(TAG, "Could not install imported audio in internal storage");
-        remove(ADHAN_UPLOAD_PATH);
+    remove(destination_path);
+    if (rename(temporary_path, destination_path) != 0) {
+        ESP_LOGE(TAG, "Could not install imported %s in internal storage", label);
+        remove(temporary_path);
         return false;
     }
-    ESP_LOGI(TAG, "Imported %ld-byte adhan MP3 into internal storage", copied);
+    ESP_LOGI(TAG, "Imported %ld-byte %s MP3 into internal storage", copied, label);
+    return true;
+}
+
+static bool install_bundled_takbeer(void) {
+    const size_t length = (size_t)(bundled_takbeer_end - bundled_takbeer_start);
+    if (length == 0) return false;
+    remove(TAKBEER_UPLOAD_PATH);
+    FILE *destination = fopen(TAKBEER_UPLOAD_PATH, "wb");
+    if (destination == NULL) {
+        ESP_LOGE(TAG, "Could not create the bundled Eid takbeer file");
+        return false;
+    }
+    const bool written =
+        fwrite(bundled_takbeer_start, 1, length, destination) == length;
+    const bool closed = fclose(destination) == 0;
+    if (!written || !closed) {
+        remove(TAKBEER_UPLOAD_PATH);
+        ESP_LOGE(TAG, "Could not write the bundled Eid takbeer file");
+        return false;
+    }
+    remove(TAKBEER_AUDIO_PATH);
+    if (rename(TAKBEER_UPLOAD_PATH, TAKBEER_AUDIO_PATH) != 0) {
+        remove(TAKBEER_UPLOAD_PATH);
+        ESP_LOGE(TAG, "Could not install the bundled Eid takbeer file");
+        return false;
+    }
+    ESP_LOGI(TAG, "Installed bundled %u-byte Eid takbeer MP3",
+        (unsigned)length);
     return true;
 }
 
 static void mount_internal_storage(void) {
     const esp_vfs_fat_mount_config_t mount_config = {
         .format_if_mount_failed = true,
-        .max_files = 6,
+        .max_files = 8,
         .allocation_unit_size = 16 * 1024,
     };
     const esp_err_t result = esp_vfs_fat_spiflash_mount_rw_wl(
@@ -573,10 +641,19 @@ static void mount_internal_storage(void) {
             (unsigned long long)total_bytes, (unsigned long long)free_bytes);
     }
     adhan_audio_available = file_exists(ADHAN_AUDIO_PATH);
+    takbeer_audio_available = file_exists(TAKBEER_AUDIO_PATH);
+    if (!takbeer_audio_available) {
+        takbeer_audio_available = install_bundled_takbeer();
+    }
     if (adhan_audio_available) {
         ESP_LOGI(TAG, "Adhan MP3 found in internal storage");
     } else {
         ESP_LOGI(TAG, "Internal storage is ready for an adhan MP3");
+    }
+    if (takbeer_audio_available) {
+        ESP_LOGI(TAG, "Eid takbeer MP3 found in internal storage");
+    } else {
+        ESP_LOGI(TAG, "Internal storage is ready for an Eid takbeer MP3");
     }
 }
 
@@ -605,17 +682,29 @@ static void probe_sd_card(void) {
         sd_mounted = true;
         ESP_LOGI(TAG, "microSD mounted at /sdcard");
         sdmmc_card_print_info(stdout, card);
-        FILE *adhan = fopen("/sdcard/adhan.mp3", "rb");
-        if (adhan != NULL) {
-            fclose(adhan);
+        if (file_exists("/sdcard/adhan.mp3")) {
             if (storage_mounted && !adhan_audio_available) {
                 ESP_LOGI(TAG, "Importing /sdcard/adhan.mp3 into internal storage");
-                adhan_audio_available = copy_audio_file("/sdcard/adhan.mp3");
+                adhan_audio_available = copy_audio_file(
+                    "/sdcard/adhan.mp3", ADHAN_AUDIO_PATH,
+                    ADHAN_UPLOAD_PATH, "adhan");
             } else {
                 ESP_LOGI(TAG, "SD adhan MP3 retained as an optional backup");
             }
         } else {
             ESP_LOGI(TAG, "No SD adhan MP3 available for import");
+        }
+        if (file_exists("/sdcard/takbeer.mp3")) {
+            if (storage_mounted && !takbeer_audio_available) {
+                ESP_LOGI(TAG, "Importing /sdcard/takbeer.mp3 into internal storage");
+                takbeer_audio_available = copy_audio_file(
+                    "/sdcard/takbeer.mp3", TAKBEER_AUDIO_PATH,
+                    TAKBEER_UPLOAD_PATH, "Eid takbeer");
+            } else {
+                ESP_LOGI(TAG, "SD Eid takbeer MP3 retained as an optional backup");
+            }
+        } else {
+            ESP_LOGI(TAG, "No SD Eid takbeer MP3 available for import");
         }
         return;
     }
@@ -624,7 +713,7 @@ static void probe_sd_card(void) {
 }
 
 static void sd_retry_task(void *unused) {
-    while (!sd_mounted && !adhan_audio_available) {
+    while (!sd_mounted && (!adhan_audio_available || !takbeer_audio_available)) {
         vTaskDelay(pdMS_TO_TICKS(30000));
         probe_sd_card();
     }
@@ -635,6 +724,7 @@ static void prayer_scheduler_task(void *unused) {
     int last_year_day = -1;
     int last_minute = -1;
     int fired[5] = {-1, -1, -1, -1, -1};
+    int fired_takbeer_slot = -1;
     const int prayer_indexes[] = {0, 2, 3, 4, 5};
 
     while (true) {
@@ -648,6 +738,7 @@ static void prayer_scheduler_task(void *unused) {
         const int minute = local_now.tm_hour * 60 + local_now.tm_min;
         if (local_now.tm_yday != last_year_day) {
             memset(fired, 0xff, sizeof(fired));
+            fired_takbeer_slot = -1;
             last_year_day = local_now.tm_yday;
         }
         if (minute != last_minute) {
@@ -663,9 +754,25 @@ static void prayer_scheduler_task(void *unused) {
                     if (settings.enabled[index] && fired[index] != prayer_minute && minutes_late >= 0 && minutes_late <= 2) {
                         fired[index] = prayer_minute;
                         ESP_LOGI(TAG, "Scheduled %s adhan", prayer_time_name(prayer_indexes[index]));
-                        play_adhan();
+                        play_audio(AUDIO_TRACK_ADHAN);
                     }
                 }
+            }
+            eid_status_t eid = {0};
+            eid_status_for_date(
+                settings.eid_fitr_date, settings.eid_adha_date,
+                &local_now, &eid);
+            const int takbeer_slot = eid_latest_takbeer_minute(
+                &eid, minute,
+                settings.eid_takbeer_start_minute,
+                settings.eid_takbeer_end_minute,
+                settings.eid_takbeer_interval_minutes,
+                2);
+            if (takbeer_audio_available && takbeer_slot >= 0 &&
+                    fired_takbeer_slot != takbeer_slot) {
+                fired_takbeer_slot = takbeer_slot;
+                ESP_LOGI(TAG, "Scheduled %s takbeer", eid_kind_name(eid.kind));
+                play_audio(AUDIO_TRACK_EID_TAKBEER);
             }
             last_minute = minute;
         }
@@ -702,7 +809,9 @@ static void probe_wifi(void) {
     ESP_ERROR_CHECK(mdns_instance_name_set("Adhancron Prayer Clock"));
     ESP_ERROR_CHECK(mdns_service_add(NULL, "_http", "_tcp", 80, NULL, 0));
     ESP_LOGI(TAG, "Dashboard address: http://adhancron.local");
-    web_server_start(&settings, &storage_mounted, &adhan_audio_available, play_adhan);
+    web_server_start(
+        &settings, &storage_mounted, &adhan_audio_available,
+        &takbeer_audio_available, play_audio);
 }
 
 void app_main(void) {
@@ -741,7 +850,7 @@ void app_main(void) {
     ESP_ERROR_CHECK(esp_codec_dev_set_out_vol(audio, settings.volume));
     mount_internal_storage();
     probe_sd_card();
-    if (!sd_mounted && !adhan_audio_available) {
+    if (!sd_mounted && (!adhan_audio_available || !takbeer_audio_available)) {
         xTaskCreate(sd_retry_task, "sd_retry", 4096, NULL, 2, NULL);
     }
     probe_wifi();

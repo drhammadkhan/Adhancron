@@ -24,6 +24,7 @@ bool cast_sender_find(const char *device_id, cast_device_t *device, uint32_t tim
 bool cast_sender_play(
     const cast_device_t *device,
     const char *media_url,
+    const char *title,
     int volume,
     char *error,
     size_t error_size);

@@ -1,6 +1,7 @@
 #include "web_server.h"
 
 #include <stdio.h>
+#include <stdint.h>
 #include <stdlib.h>
 #include <string.h>
 #include <math.h>
@@ -15,6 +16,7 @@
 #include "audio_storage.h"
 #include "battery_monitor.h"
 #include "cast_sender.h"
+#include "eid.h"
 #include "firmware_update.h"
 #include "prayer_times.h"
 #include "ramadan.h"
@@ -22,7 +24,8 @@
 static const char *TAG = "adhan_web";
 static adhan_settings_t *current_settings;
 static bool *storage_mounted;
-static bool *audio_available;
+static bool *adhan_audio_available;
+static bool *takbeer_audio_available;
 static web_play_callback_t play_audio;
 
 static const char STYLE[] =
@@ -58,7 +61,7 @@ static const char LOCATION_PAGE[] =
 
 static const char DASHBOARD_PAGE[] =
     "<h1>Adhancron Prayer Clock</h1><p id=place-name><b>Loading saved location...</b></p><p id=summary class=small>Loading today&apos;s timetable...</p><p id=battery-status class=small></p><div id=times></div>"
-    "<button type=button onclick=testPlayback()>Play Adhan Now</button><p id=test-result class=small></p>"
+    "<button type=button onclick=\"testPlayback('adhan')\">Play Adhan Now</button><button type=button onclick=\"testPlayback('takbeer')\">Play Eid Takbeer Now</button><p id=test-result class=small></p>"
     "<form method=post action='/api/settings'><input type=hidden name=step value=playback>"
     "<fieldset><legend>Playback</legend><label class='check choice'><input type=radio name=output value=attached %s onchange=outputChanged()>Attached speaker</label>"
     "<label class='check choice'><input type=radio name=output value=cast %s onchange=outputChanged()>Google Cast speaker</label>"
@@ -71,20 +74,29 @@ static const char DASHBOARD_PAGE[] =
     "<label>First fasting day</label><input id=ramadan-start name=ramadan_start type=date value='%s'>"
     "<label>Final fasting day</label><input id=ramadan-end name=ramadan_end type=date value='%s'>"
     "<p id=ramadan-status class=small>Loading Ramadan status...</p><button type=button onclick=clearRamadan()>Turn Ramadan mode off</button>"
+    "</fieldset><fieldset><legend>Eid days and takbeer</legend><p class=small>Set the locally observed dates for Eid al-Fitr and Eid al-Adha. On either date, the clock shows an Eid greeting and plays the separate takbeer recording repeatedly during this window.</p>"
+    "<label>Eid al-Fitr date</label><input id=eid-fitr name=eid_fitr type=date value='%s'>"
+    "<label>Eid al-Adha date</label><input id=eid-adha name=eid_adha type=date value='%s'>"
+    "<label>Takbeer starts</label><input name=eid_takbeer_start type=time value='%s' required>"
+    "<label>Takbeer finishes</label><input name=eid_takbeer_end type=time value='%s' required>"
+    "<label>Repeat every (minutes)</label><input name=eid_takbeer_interval type=number min=5 max=120 step=5 value='%d' required>"
+    "<p id=eid-status class=small>Loading Eid status...</p><button type=button onclick=clearEid()>Clear Eid dates</button>"
     "</fieldset><fieldset><legend>Software updates</legend><p id=firmware-status class=small>Loading firmware status...</p>"
     "<label class=check><input type=checkbox name=automatic_updates %s>Install verified updates automatically over Wi-Fi</label>"
     "<button id=update-button type=button onclick=checkUpdate()>Check and install now</button><p id=update-result class=small></p></fieldset>"
     "<button>Save settings</button></form>"
-    "<fieldset><legend>Adhan audio</legend><input id=audio type=file accept='audio/mpeg,.mp3'><button type=button onclick=uploadAudio()>Upload MP3</button><p id=upload class=small></p></fieldset>"
+    "<fieldset><legend>Audio recordings</legend><p id=adhan-audio-status class=small></p><label>Adhan MP3</label><input id=adhan-audio type=file accept='audio/mpeg,.mp3'><button type=button onclick=\"uploadAudio('adhan-audio','/api/audio','adhan-upload')\">Upload adhan MP3</button><p id=adhan-upload class=small></p>"
+    "<p id=takbeer-audio-status class=small></p><label>Eid takbeer MP3</label><input id=takbeer-audio type=file accept='audio/mpeg,.mp3'><button type=button onclick=\"uploadAudio('takbeer-audio','/api/audio/takbeer','takbeer-upload')\">Upload takbeer MP3</button><p id=takbeer-upload class=small></p></fieldset>"
     "<p class=small><a href='/location'>Change location</a> &middot; <a href='/wifi'>Change Wi-Fi</a></p>"
-    "<script>let savedCastId='',savedCastName='';async function refresh(){let s=await fetch('/api/status',{cache:'no-store'}).then(r=>r.json());savedCastId=s.cast_device_id||'';savedCastName=s.cast_device_name||'';document.getElementById('place-name').textContent=s.location?'Prayer times for '+s.location:'Location not configured';summary.textContent=s.message;let b=document.getElementById('battery-status');b.textContent=s.battery_available?'Battery '+s.battery_percentage+'%% - '+(s.battery_millivolts/1000).toFixed(2)+' V - '+(s.battery_charging?'charging detected':s.battery_full?'fully charged':'battery connected'):'';times.innerHTML=s.prayers.map(p=>'<p><b>'+p.name+'</b> '+p.time+'</p>').join('');document.getElementById('ramadan-status').textContent=s.ramadan_message||'Ramadan status unavailable';document.getElementById('firmware-status').textContent='Version '+(s.firmware_version||'unknown')+' - '+(s.update_status||'Update status unavailable');document.getElementById('update-button').disabled=!!s.update_running}"
+    "<script>let savedCastId='',savedCastName='';async function refresh(){let s=await fetch('/api/status',{cache:'no-store'}).then(r=>r.json());savedCastId=s.cast_device_id||'';savedCastName=s.cast_device_name||'';document.getElementById('place-name').textContent=s.location?'Prayer times for '+s.location:'Location not configured';summary.textContent=s.message;let b=document.getElementById('battery-status');b.textContent=s.battery_available?'Battery '+s.battery_percentage+'%% - '+(s.battery_millivolts/1000).toFixed(2)+' V - '+(s.battery_charging?'charging detected':s.battery_full?'fully charged':'battery connected'):'';times.innerHTML=s.prayers.map(p=>'<p><b>'+p.name+'</b> '+p.time+'</p>').join('');document.getElementById('ramadan-status').textContent=s.ramadan_message||'Ramadan status unavailable';document.getElementById('eid-status').textContent=s.eid_message||'Eid status unavailable';document.getElementById('adhan-audio-status').textContent=s.adhan_audio_available?'Adhan recording ready.':'No adhan recording saved.';document.getElementById('takbeer-audio-status').textContent=s.takbeer_audio_available?'Eid takbeer recording ready.':'Upload an Eid takbeer recording before the configured date.';document.getElementById('firmware-status').textContent='Version '+(s.firmware_version||'unknown')+' - '+(s.update_status||'Update status unavailable');document.getElementById('update-button').disabled=!!s.update_running}"
     "function outputChanged(){let cast=document.querySelector('input[name=output]:checked').value==='cast';document.getElementById('cast-controls').classList.toggle('hidden',!cast);document.getElementById('cast-device').disabled=!cast;document.getElementById('cast-name').disabled=!cast}"
     "function castSelectionChanged(){let s=document.getElementById('cast-device'),o=s.options[s.selectedIndex];document.getElementById('cast-name').value=o&&o.dataset.name||''}"
     "async function scanCastDevices(){let s=document.getElementById('cast-device'),r=document.getElementById('cast-result');s.innerHTML='<option value=\"\">Scanning...</option>';r.textContent='Looking for speakers on this network...';try{let x=await fetch('/api/cast-devices',{cache:'no-store'});if(!x.ok)throw Error(await x.text());let j=await x.json();s.innerHTML='<option value=\"\">Choose a speaker</option>';j.devices.forEach(d=>{let o=document.createElement('option');o.value=d.id;o.dataset.name=d.name;o.textContent=d.name+(d.group?' (speaker group)':'')+(d.model?' - '+d.model:'');if(d.id===savedCastId)o.selected=true;s.appendChild(o)});if(savedCastId&&!j.devices.some(d=>d.id===savedCastId)){let o=document.createElement('option');o.value=savedCastId;o.dataset.name=savedCastName;o.textContent=savedCastName+' (currently unavailable)';o.selected=true;s.appendChild(o)}castSelectionChanged();r.textContent=j.devices.length?j.devices.length+' Cast speaker'+(j.devices.length===1?'':'s')+' found.':'No Cast speakers found.'}catch(e){r.textContent=e.message}}"
-    "async function testPlayback(){let r=document.getElementById('test-result');r.textContent='Starting playback...';try{let x=await fetch('/api/play',{method:'POST'});r.textContent=await x.text()}catch(e){r.textContent=e.message}}"
+    "async function testPlayback(track){let r=document.getElementById('test-result');r.textContent='Starting playback...';try{let x=await fetch(track==='takbeer'?'/api/play/takbeer':'/api/play',{method:'POST'});r.textContent=await x.text()}catch(e){r.textContent=e.message}}"
     "async function checkUpdate(){let b=document.getElementById('update-button'),r=document.getElementById('update-result');b.disabled=true;r.textContent='Starting update check...';try{let x=await fetch('/api/update',{method:'POST'});r.textContent=await x.text()}catch(e){r.textContent=e.message}setTimeout(refresh,1000)}"
     "function clearRamadan(){document.getElementById('ramadan-start').value='';document.getElementById('ramadan-end').value='';document.getElementById('ramadan-status').textContent='Save settings to turn Ramadan mode off.'}"
-    "async function uploadAudio(){let f=audio.files[0];if(!f)return;upload.textContent='Uploading...';let r=await fetch('/api/audio',{method:'POST',body:f});upload.textContent=await r.text()}async function init(){await refresh();outputChanged();await scanCastDevices()}init();setInterval(refresh,30000)</script></main></body></html>";
+    "function clearEid(){document.getElementById('eid-fitr').value='';document.getElementById('eid-adha').value='';document.getElementById('eid-status').textContent='Save settings to clear both Eid dates.'}"
+    "async function uploadAudio(inputId,endpoint,resultId){let f=document.getElementById(inputId).files[0],r=document.getElementById(resultId);if(!f)return;r.textContent='Uploading...';let x=await fetch(endpoint,{method:'POST',body:f});r.textContent=await x.text();await refresh()}async function init(){await refresh();outputChanged();await scanCastDevices()}init();setInterval(refresh,30000)</script></main></body></html>";
 
 static void restart_task(void *unused) {
     vTaskDelay(pdMS_TO_TICKS(1200));
@@ -92,6 +104,8 @@ static void restart_task(void *unused) {
 }
 
 typedef enum { PAGE_AUTOMATIC, PAGE_LOCATION, PAGE_WIFI } page_kind_t;
+
+static void format_minutes(int minutes, char output[6]);
 
 static esp_err_t render_page(httpd_req_t *request, page_kind_t kind) {
     const size_t page_capacity = 20000;
@@ -103,6 +117,10 @@ static esp_err_t render_page(httpd_req_t *request, page_kind_t kind) {
     } else if (kind == PAGE_LOCATION || (kind == PAGE_AUTOMATIC && !current_settings->location_configured)) {
         length += snprintf(page + length, page_capacity - length, LOCATION_PAGE, current_settings->volume);
     } else {
+        char eid_start[6];
+        char eid_end[6];
+        format_minutes(current_settings->eid_takbeer_start_minute, eid_start);
+        format_minutes(current_settings->eid_takbeer_end_minute, eid_end);
         length += snprintf(page + length, page_capacity - length, DASHBOARD_PAGE,
             current_settings->output == ADHAN_OUTPUT_ATTACHED ? "checked" : "",
             current_settings->output == ADHAN_OUTPUT_CAST ? "checked" : "",
@@ -110,6 +128,11 @@ static esp_err_t render_page(httpd_req_t *request, page_kind_t kind) {
             current_settings->enabled[0]?"checked":"",current_settings->enabled[1]?"checked":"",current_settings->enabled[2]?"checked":"",current_settings->enabled[3]?"checked":"",current_settings->enabled[4]?"checked":"",
             current_settings->ramadan_start_date,
             current_settings->ramadan_end_date,
+            current_settings->eid_fitr_date,
+            current_settings->eid_adha_date,
+            eid_start,
+            eid_end,
+            current_settings->eid_takbeer_interval_minutes,
             current_settings->automatic_updates ? "checked" : "");
     }
     if (length < 0 || (size_t)length >= page_capacity) {
@@ -184,6 +207,19 @@ static void get_value(const char *body, const char *key, char *value, size_t val
     *destination = '\0';
 }
 
+static bool parse_time_value(const char *value, int *minutes) {
+    int hour = 0;
+    int minute = 0;
+    char trailing = '\0';
+    if (value == NULL || minutes == NULL ||
+            sscanf(value, "%2d:%2d%c", &hour, &minute, &trailing) != 2 ||
+            hour < 0 || hour > 23 || minute < 0 || minute > 59) {
+        return false;
+    }
+    *minutes = hour * 60 + minute;
+    return true;
+}
+
 static esp_err_t settings_handler(httpd_req_t *request) {
     if (request->content_len > 1536) {
         return httpd_resp_send_err(request, HTTPD_400_BAD_REQUEST, "Settings are too large");
@@ -221,12 +257,43 @@ static esp_err_t settings_handler(httpd_req_t *request) {
     } else if (strcmp(value, "playback") == 0) {
         char ramadan_start[16] = {0};
         char ramadan_end[16] = {0};
+        char eid_fitr[16] = {0};
+        char eid_adha[16] = {0};
         get_value(body, "ramadan_start", ramadan_start, sizeof(ramadan_start));
         get_value(body, "ramadan_end", ramadan_end, sizeof(ramadan_end));
         const bool ramadan_empty = ramadan_start[0] == '\0' && ramadan_end[0] == '\0';
         if (!ramadan_empty && !ramadan_period_valid(ramadan_start, ramadan_end)) {
             return httpd_resp_send_err(request, HTTPD_400_BAD_REQUEST,
                 "Choose both Ramadan dates and make the inclusive period 29 or 30 days");
+        }
+        get_value(body, "eid_fitr", eid_fitr, sizeof(eid_fitr));
+        get_value(body, "eid_adha", eid_adha, sizeof(eid_adha));
+        if ((eid_fitr[0] != '\0' && !ramadan_date_valid(eid_fitr)) ||
+                (eid_adha[0] != '\0' && !ramadan_date_valid(eid_adha))) {
+            return httpd_resp_send_err(request, HTTPD_400_BAD_REQUEST,
+                "Choose valid dates for Eid al-Fitr and Eid al-Adha");
+        }
+        char eid_start_value[8] = {0};
+        char eid_end_value[8] = {0};
+        char eid_interval_value[8] = {0};
+        int eid_start = 0;
+        int eid_end = 0;
+        get_value(body, "eid_takbeer_start", eid_start_value,
+            sizeof(eid_start_value));
+        get_value(body, "eid_takbeer_end", eid_end_value,
+            sizeof(eid_end_value));
+        get_value(body, "eid_takbeer_interval", eid_interval_value,
+            sizeof(eid_interval_value));
+        char *interval_end = NULL;
+        const long eid_interval = strtol(
+            eid_interval_value, &interval_end, 10);
+        if (!parse_time_value(eid_start_value, &eid_start) ||
+                !parse_time_value(eid_end_value, &eid_end) ||
+                interval_end == eid_interval_value || *interval_end != '\0' ||
+                !eid_takbeer_schedule_valid(
+                    eid_start, eid_end, (int)eid_interval)) {
+            return httpd_resp_send_err(request, HTTPD_400_BAD_REQUEST,
+                "Choose an Eid takbeer window within one day and an interval from 5 to 120 minutes");
         }
         const char *keys[] = {"fajr","dhuhr","asr","maghrib","isha"};
         for (int index=0;index<5;index++) { get_value(body,keys[index],value,sizeof(value)); current_settings->enabled[index]=value[0]!='\0'; }
@@ -237,6 +304,13 @@ static esp_err_t settings_handler(httpd_req_t *request) {
             sizeof(current_settings->ramadan_start_date));
         strlcpy(current_settings->ramadan_end_date, ramadan_end,
             sizeof(current_settings->ramadan_end_date));
+        strlcpy(current_settings->eid_fitr_date, eid_fitr,
+            sizeof(current_settings->eid_fitr_date));
+        strlcpy(current_settings->eid_adha_date, eid_adha,
+            sizeof(current_settings->eid_adha_date));
+        current_settings->eid_takbeer_start_minute = eid_start;
+        current_settings->eid_takbeer_end_minute = eid_end;
+        current_settings->eid_takbeer_interval_minutes = (int)eid_interval;
         get_value(body, "output", value, sizeof(value));
         current_settings->output = strcmp(value, "cast") == 0
             ? ADHAN_OUTPUT_CAST : ADHAN_OUTPUT_ATTACHED;
@@ -270,7 +344,7 @@ static bool append_json_string(char *json, size_t capacity, size_t *length, cons
 static void format_minutes(int minutes, char output[6]) { unsigned value=(unsigned)(((minutes%1440)+1440)%1440); snprintf(output, 6, "%02u:%02u", value/60, value%60); }
 
 static esp_err_t status_handler(httpd_req_t *request) {
-    char json[2200];
+    char json[3200];
     size_t length = strlcpy(json, "{\"location\":", sizeof(json));
     if (!append_json_string(json, sizeof(json), &length,
             (const uint8_t *)current_settings->location_name)) {
@@ -336,6 +410,14 @@ static esp_err_t status_handler(httpd_req_t *request) {
         return httpd_resp_send_err(request, HTTPD_500_INTERNAL_SERVER_ERROR, "Could not render status");
     }
     length += written;
+    written = snprintf(json + length, sizeof(json) - length,
+        ",\"adhan_audio_available\":%s,\"takbeer_audio_available\":%s",
+        adhan_audio_available && *adhan_audio_available ? "true" : "false",
+        takbeer_audio_available && *takbeer_audio_available ? "true" : "false");
+    if (written < 0 || (size_t)written >= sizeof(json) - length) {
+        return httpd_resp_send_err(request, HTTPD_500_INTERNAL_SERVER_ERROR, "Could not render status");
+    }
+    length += written;
     const time_t now = time(NULL); struct tm local_now = {0}; localtime_r(&now, &local_now);
     ramadan_status_t ramadan = {0};
     ramadan_status_for_date(
@@ -371,6 +453,58 @@ static esp_err_t status_handler(httpd_req_t *request) {
             (const uint8_t *)ramadan_message)) {
         return httpd_resp_send_err(request, HTTPD_500_INTERNAL_SERVER_ERROR, "Could not render status");
     }
+    eid_status_t eid = {0};
+    eid_status_for_date(
+        current_settings->eid_fitr_date,
+        current_settings->eid_adha_date,
+        &local_now,
+        &eid);
+    char eid_start[6];
+    char eid_end[6];
+    format_minutes(current_settings->eid_takbeer_start_minute, eid_start);
+    format_minutes(current_settings->eid_takbeer_end_minute, eid_end);
+    char eid_message[192];
+    if (eid.active) {
+        snprintf(eid_message, sizeof(eid_message),
+            "%s today - takbeer every %d minutes from %s to %s%s",
+            eid_kind_name(eid.kind),
+            current_settings->eid_takbeer_interval_minutes,
+            eid_start, eid_end,
+            takbeer_audio_available && *takbeer_audio_available
+                ? "" : " - upload the takbeer MP3 before playback");
+    } else if (eid.fitr_configured || eid.adha_configured) {
+        snprintf(eid_message, sizeof(eid_message),
+            "Eid al-Fitr: %s - Eid al-Adha: %s - takbeer %s to %s every %d minutes",
+            eid.fitr_configured ? current_settings->eid_fitr_date : "not set",
+            eid.adha_configured ? current_settings->eid_adha_date : "not set",
+            eid_start, eid_end,
+            current_settings->eid_takbeer_interval_minutes);
+    } else {
+        strlcpy(eid_message,
+            "Set your locally observed Eid dates to enable the greeting and takbeer schedule",
+            sizeof(eid_message));
+    }
+    written = snprintf(json + length, sizeof(json) - length,
+        ",\"eid_active\":%s,\"eid_kind\":",
+        eid.active ? "true" : "false");
+    if (written < 0 || (size_t)written >= sizeof(json) - length) {
+        return httpd_resp_send_err(request, HTTPD_500_INTERNAL_SERVER_ERROR, "Could not render status");
+    }
+    length += written;
+    if (!append_json_string(json, sizeof(json), &length,
+            (const uint8_t *)(eid.active ? eid_kind_name(eid.kind) : ""))) {
+        return httpd_resp_send_err(request, HTTPD_500_INTERNAL_SERVER_ERROR, "Could not render status");
+    }
+    written = snprintf(json + length, sizeof(json) - length,
+        ",\"eid_message\":");
+    if (written < 0 || (size_t)written >= sizeof(json) - length) {
+        return httpd_resp_send_err(request, HTTPD_500_INTERNAL_SERVER_ERROR, "Could not render status");
+    }
+    length += written;
+    if (!append_json_string(json, sizeof(json), &length,
+            (const uint8_t *)eid_message)) {
+        return httpd_resp_send_err(request, HTTPD_500_INTERNAL_SERVER_ERROR, "Could not render status");
+    }
     prayer_times_t times; prayer_calculation_config_t config = {.latitude = current_settings->latitude, .longitude = current_settings->longitude};
     written = 0;
     if (!current_settings->location_configured || local_now.tm_year < 120 || !prayer_times_calculate(&local_now, &config, &times)) {
@@ -379,7 +513,11 @@ static esp_err_t status_handler(httpd_req_t *request) {
     } else {
         char values[6][6]; for (int i = 0; i < 6; i++) format_minutes(prayer_time_minutes(&times, i), values[i]);
         const char *storage = storage_mounted && *storage_mounted
-            ? (audio_available && *audio_available ? "Internal adhan audio ready" : "Upload an adhan MP3")
+            ? (adhan_audio_available && *adhan_audio_available
+                ? (takbeer_audio_available && *takbeer_audio_available
+                    ? "Adhan and Eid takbeer audio ready"
+                    : "Adhan ready; upload an Eid takbeer MP3")
+                : "Upload an adhan MP3")
             : "Internal audio storage unavailable";
         written = snprintf(json + length, sizeof(json) - length, ",\"message\":\"%04d-%02d-%02d %02d:%02d - %s\",\"prayers\":[{\"name\":\"Fajr\",\"time\":\"%s\"},{\"name\":\"Sunrise\",\"time\":\"%s\"},{\"name\":\"Dhuhr\",\"time\":\"%s\"},{\"name\":\"Asr\",\"time\":\"%s\"},{\"name\":\"Maghrib\",\"time\":\"%s\"},{\"name\":\"Isha\",\"time\":\"%s\"}]}", local_now.tm_year+1900,local_now.tm_mon+1,local_now.tm_mday,local_now.tm_hour,local_now.tm_min,storage,values[0],values[1],values[2],values[3],values[4],values[5]);
     }
@@ -500,11 +638,25 @@ static esp_err_t cast_devices_handler(httpd_req_t *request) {
     return result;
 }
 
-static void play_task(void *unused) { play_audio(); vTaskDelete(NULL); }
+static void play_task(void *argument) {
+    play_audio((audio_track_t)(intptr_t)argument);
+    vTaskDelete(NULL);
+}
 static esp_err_t play_handler(httpd_req_t *request) {
-    if (!audio_available || !*audio_available || play_audio == NULL) return httpd_resp_send_err(request, HTTPD_400_BAD_REQUEST, "No adhan MP3 in internal storage");
-    xTaskCreate(play_task, "play_adhan", 12288, NULL, 4, NULL);
-    return httpd_resp_sendstr(request, "Adhan playback is starting.");
+    const bool takbeer = strstr(request->uri, "takbeer") != NULL;
+    bool *available = takbeer ? takbeer_audio_available : adhan_audio_available;
+    if (!available || !*available || play_audio == NULL) {
+        return httpd_resp_send_err(request, HTTPD_400_BAD_REQUEST,
+            takbeer ? "No Eid takbeer MP3 in internal storage" :
+                "No adhan MP3 in internal storage");
+    }
+    const audio_track_t track = takbeer
+        ? AUDIO_TRACK_EID_TAKBEER : AUDIO_TRACK_ADHAN;
+    xTaskCreate(play_task, takbeer ? "play_takbeer" : "play_adhan",
+        12288, (void *)(intptr_t)track, 4, NULL);
+    return httpd_resp_sendstr(request,
+        takbeer ? "Eid takbeer playback is starting." :
+            "Adhan playback is starting.");
 }
 
 static esp_err_t firmware_update_handler(httpd_req_t *request) {
@@ -517,6 +669,13 @@ static esp_err_t firmware_update_handler(httpd_req_t *request) {
 }
 
 static esp_err_t audio_upload_handler(httpd_req_t *request) {
+    const bool takbeer = strstr(request->uri, "takbeer") != NULL;
+    const char *temporary_path = takbeer
+        ? TAKBEER_UPLOAD_PATH : ADHAN_UPLOAD_PATH;
+    const char *destination_path = takbeer
+        ? TAKBEER_AUDIO_PATH : ADHAN_AUDIO_PATH;
+    bool *available = takbeer
+        ? takbeer_audio_available : adhan_audio_available;
     if (!storage_mounted || !*storage_mounted) return httpd_resp_send_err(request, HTTPD_500_INTERNAL_SERVER_ERROR, "Internal audio storage is unavailable");
     if (request->content_len == 0 || request->content_len > 7 * 1024 * 1024) return httpd_resp_send_err(request, HTTPD_400_BAD_REQUEST, "Send an MP3 file under 7 MB");
     uint64_t free_bytes = 0;
@@ -525,27 +684,29 @@ static esp_err_t audio_upload_handler(httpd_req_t *request) {
         httpd_resp_set_status(request, "507 Insufficient Storage");
         return httpd_resp_sendstr(request, "The new MP3 is too large to replace the existing recording safely");
     }
-    remove(ADHAN_UPLOAD_PATH);
-    FILE *file = fopen(ADHAN_UPLOAD_PATH, "wb");
+    remove(temporary_path);
+    FILE *file = fopen(temporary_path, "wb");
     if (file == NULL) return httpd_resp_send_err(request, HTTPD_500_INTERNAL_SERVER_ERROR, "Could not write internal storage");
     char buffer[1024]; int remaining = request->content_len;
     while (remaining > 0) {
         int count = httpd_req_recv(request, buffer, remaining > sizeof(buffer) ? sizeof(buffer) : remaining);
         if (count <= 0 || fwrite(buffer, 1, count, file) != (size_t)count) {
             fclose(file);
-            remove(ADHAN_UPLOAD_PATH);
+            remove(temporary_path);
             return ESP_FAIL;
         }
         remaining -= count;
     }
     if (fclose(file) != 0) {
-        remove(ADHAN_UPLOAD_PATH);
+        remove(temporary_path);
         return httpd_resp_send_err(request, HTTPD_500_INTERNAL_SERVER_ERROR, "Could not finish the MP3 upload");
     }
-    remove(ADHAN_AUDIO_PATH);
-    if (rename(ADHAN_UPLOAD_PATH, ADHAN_AUDIO_PATH) != 0) return httpd_resp_send_err(request, HTTPD_500_INTERNAL_SERVER_ERROR, "Could not install the MP3 upload");
-    *audio_available = true;
-    return httpd_resp_sendstr(request, "Audio saved to internal storage.");
+    remove(destination_path);
+    if (rename(temporary_path, destination_path) != 0) return httpd_resp_send_err(request, HTTPD_500_INTERNAL_SERVER_ERROR, "Could not install the MP3 upload");
+    if (available != NULL) *available = true;
+    return httpd_resp_sendstr(request,
+        takbeer ? "Eid takbeer saved to internal storage." :
+            "Adhan saved to internal storage.");
 }
 
 static bool send_all(httpd_req_t *request, const char *data, size_t length) {
@@ -559,7 +720,10 @@ static bool send_all(httpd_req_t *request, const char *data, size_t length) {
 }
 
 static esp_err_t audio_file_handler(httpd_req_t *request) {
-    FILE *file = fopen(ADHAN_AUDIO_PATH, "rb");
+    const bool takbeer = strstr(request->uri, "takbeer") != NULL;
+    const char *path = takbeer ? TAKBEER_AUDIO_PATH : ADHAN_AUDIO_PATH;
+    const char *label = takbeer ? "Eid takbeer" : "Adhan";
+    FILE *file = fopen(path, "rb");
     if (file == NULL) return httpd_resp_send_err(request, HTTPD_404_NOT_FOUND, "Audio not found");
     fseek(file, 0, SEEK_END); const long file_size = ftell(file); long start = 0; long end = file_size - 1;
     bool partial = false;
@@ -597,7 +761,8 @@ static esp_err_t audio_file_handler(httpd_req_t *request) {
     wifi_ps_type_t previous_power_save = WIFI_PS_MIN_MODEM;
     esp_wifi_get_ps(&previous_power_save);
     esp_wifi_set_ps(WIFI_PS_NONE);
-    ESP_LOGI(TAG, "Serving adhan audio bytes %ld-%ld of %ld", start, end, file_size);
+    ESP_LOGI(TAG, "Serving %s audio bytes %ld-%ld of %ld",
+        label, start, end, file_size);
     fseek(file, start, SEEK_SET);
     long remaining = response_size;
     char *buffer = malloc(16 * 1024);
@@ -610,7 +775,8 @@ static esp_err_t audio_file_handler(httpd_req_t *request) {
         const size_t wanted = remaining > 16 * 1024 ? 16 * 1024 : (size_t)remaining;
         const size_t count = fread(buffer, 1, wanted, file);
         if (count == 0 || !send_all(request, buffer, count)) {
-            ESP_LOGW(TAG, "Adhan audio client disconnected with %ld bytes remaining", remaining);
+            ESP_LOGW(TAG, "%s audio client disconnected with %ld bytes remaining",
+                label, remaining);
             break;
         }
         remaining -= (long)count;
@@ -618,25 +784,29 @@ static esp_err_t audio_file_handler(httpd_req_t *request) {
     free(buffer);
     esp_wifi_set_ps(previous_power_save);
     fclose(file);
-    ESP_LOGI(TAG, "Adhan audio response complete (%ld bytes sent)", response_size - remaining);
+    ESP_LOGI(TAG, "%s audio response complete (%ld bytes sent)",
+        label, response_size - remaining);
     return remaining == 0 ? ESP_OK : ESP_FAIL;
 }
 
-void web_server_start(adhan_settings_t *settings, bool *storage_is_mounted, bool *adhan_audio_available, web_play_callback_t play_callback) {
-    current_settings = settings; storage_mounted = storage_is_mounted; audio_available = adhan_audio_available; play_audio = play_callback;
-    httpd_handle_t server = NULL; httpd_config_t config = HTTPD_DEFAULT_CONFIG(); config.max_uri_handlers = 11; config.stack_size = 12288;
+void web_server_start(adhan_settings_t *settings, bool *storage_is_mounted, bool *adhan_available, bool *takbeer_available, web_play_callback_t play_callback) {
+    current_settings = settings; storage_mounted = storage_is_mounted; adhan_audio_available = adhan_available; takbeer_audio_available = takbeer_available; play_audio = play_callback;
+    httpd_handle_t server = NULL; httpd_config_t config = HTTPD_DEFAULT_CONFIG(); config.max_uri_handlers = 16; config.stack_size = 12288;
     if (httpd_start(&server, &config) != ESP_OK) { ESP_LOGE(TAG, "Could not start web server"); return; }
     const httpd_uri_t root = {.uri = "/", .method = HTTP_GET, .handler = page_handler};
     const httpd_uri_t save = {.uri = "/api/settings", .method = HTTP_POST, .handler = settings_handler};
     const httpd_uri_t play = {.uri = "/api/play", .method = HTTP_POST, .handler = play_handler};
+    const httpd_uri_t play_takbeer = {.uri = "/api/play/takbeer", .method = HTTP_POST, .handler = play_handler};
     const httpd_uri_t upload = {.uri = "/api/audio", .method = HTTP_POST, .handler = audio_upload_handler};
+    const httpd_uri_t upload_takbeer = {.uri = "/api/audio/takbeer", .method = HTTP_POST, .handler = audio_upload_handler};
     const httpd_uri_t status = {.uri = "/api/status", .method = HTTP_GET, .handler = status_handler};
     const httpd_uri_t location = {.uri = "/location", .method = HTTP_GET, .handler = location_page_handler};
     const httpd_uri_t wifi = {.uri = "/wifi", .method = HTTP_GET, .handler = wifi_page_handler};
     const httpd_uri_t audio_file = {.uri = "/audio/adhan.mp3", .method = HTTP_GET, .handler = audio_file_handler};
+    const httpd_uri_t takbeer_file = {.uri = "/audio/takbeer.mp3", .method = HTTP_GET, .handler = audio_file_handler};
     const httpd_uri_t networks = {.uri = "/api/networks", .method = HTTP_GET, .handler = networks_handler};
     const httpd_uri_t cast_devices = {.uri = "/api/cast-devices", .method = HTTP_GET, .handler = cast_devices_handler};
     const httpd_uri_t firmware_update = {.uri = "/api/update", .method = HTTP_POST, .handler = firmware_update_handler};
-    httpd_register_uri_handler(server, &root); httpd_register_uri_handler(server, &save); httpd_register_uri_handler(server, &play); httpd_register_uri_handler(server, &upload); httpd_register_uri_handler(server, &status); httpd_register_uri_handler(server, &location); httpd_register_uri_handler(server, &wifi); httpd_register_uri_handler(server, &audio_file); httpd_register_uri_handler(server, &networks); httpd_register_uri_handler(server, &cast_devices); httpd_register_uri_handler(server, &firmware_update);
+    httpd_register_uri_handler(server, &root); httpd_register_uri_handler(server, &save); httpd_register_uri_handler(server, &play); httpd_register_uri_handler(server, &play_takbeer); httpd_register_uri_handler(server, &upload); httpd_register_uri_handler(server, &upload_takbeer); httpd_register_uri_handler(server, &status); httpd_register_uri_handler(server, &location); httpd_register_uri_handler(server, &wifi); httpd_register_uri_handler(server, &audio_file); httpd_register_uri_handler(server, &takbeer_file); httpd_register_uri_handler(server, &networks); httpd_register_uri_handler(server, &cast_devices); httpd_register_uri_handler(server, &firmware_update);
     ESP_LOGI(TAG, "Web setup interface is ready");
 }

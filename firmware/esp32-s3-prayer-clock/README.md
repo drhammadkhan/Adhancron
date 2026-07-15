@@ -21,14 +21,25 @@ not require Docker, Home Assistant, or another computer after setup.
 - Full-screen LVGL dashboard with an `HH:MM:SS` clock, date, saved location, Fajr, sunrise, Dhuhr, Asr, Maghrib, Isha, next prayer, countdown, and Wi-Fi/audio status.
 - User-configured Ramadan start and end dates. During the inclusive 29- or 30-day period, the display adds the Ramadan day number while retaining the canonical Fajr and Maghrib prayer names. The Web UI separately explains when Sehri ends and Iftar begins.
 - A seconds-accurate event panel during the final ten minutes before Fajr and Maghrib, showing `SEHRI ENDS IN` or `IFTAR IN` while the prayer table continues to identify the prayers correctly.
+- User-defined Eid al-Fitr and Eid al-Adha dates. On either date the display
+  shows `EID MUBARAK`, then presents the next takbeer slot from ten minutes
+  before the configured playback window.
+- Configurable Eid takbeer start time, finish time, and 5-120 minute repeat
+  interval. Takbeer is an additional Eid event and does not suppress the five
+  normal prayer adhans.
 - Fixed-width clock digits that do not move as the seconds change.
 - The device IP address in a centred footer so the browser dashboard is easy to find.
 - Once-per-prayer scheduling with individual prayer enable switches and a
   two-minute recovery window after a reboot or delayed clock synchronisation.
 - Local MP3 playback from the 8 MB internal flash storage partition through the ES8311 speaker path.
 - Optional direct Google Cast playback, with speaker discovery on the local network and automatic fallback to the attached speaker if Cast is unavailable.
-- Browser MP3 upload, manual playback, status/timetable API, and byte-range audio serving.
-- Automatic one-time import of `/sdcard/adhan.mp3` when internal audio is empty.
+- Separate browser upload and manual playback controls for adhan and Eid
+  takbeer, status/timetable API, and byte-range audio serving for both files.
+- The original 65-second Eid takbeer recording is bundled with the firmware and
+  seeds internal storage when no user recording exists. User replacements are
+  preserved by future updates.
+- Automatic one-time import of `/sdcard/adhan.mp3` or `/sdcard/takbeer.mp3`
+  when the corresponding internal recording is empty.
 - Wi-Fi reconnect, optional SD import, NVS recovery, and BOOT-button factory setup reset.
 
 The ES3N28P has no touch panel. The board silkscreen is shared with the touch
@@ -43,8 +54,12 @@ recovery behaviour rather than normal navigation.
 3. After joining the home network, the clock exposes the same full dashboard at `http://adhancron.local` and shows its numerical IP address at the bottom of the display.
 4. The user searches for a location or enters coordinates. The clock saves the coordinates, timezone, and display name, then calculates prayer times locally each day.
 5. At each enabled prayer, the scheduler starts the saved output: either the attached speaker or the selected Google Cast receiver.
-6. For Cast playback, the ESP32 discovers the receiver, starts the Default Media Receiver, and serves `/audio/adhan.mp3` from internal flash with HTTP range support. If discovery or playback fails, it automatically uses the attached speaker.
-7. If the home network later becomes unavailable, the prayer display and local schedule continue running. After 20 seconds the recovery setup network appears, while the clock keeps its saved location and settings.
+6. On either user-configured Eid date, the scheduler also plays the separate
+   takbeer recording at every slot in the selected time window. Each slot fires
+   once, including the start and finish times when they align with the interval.
+   A two-minute recovery window covers brief reboots or delayed clock sync.
+7. For Cast playback, the ESP32 discovers the receiver, starts the Default Media Receiver, and serves `/audio/adhan.mp3` or `/audio/takbeer.mp3` from internal flash with HTTP range support. If discovery or playback fails, it automatically uses the attached speaker.
+8. If the home network later becomes unavailable, the prayer display and local schedule continue running. After 20 seconds the recovery setup network appears, while the clock keeps its saved location and settings.
 
 ## Display architecture
 
@@ -150,18 +165,22 @@ shows the setup instructions or prayer clock on the display.
 4. Search for the home town, city, or postcode and save it.
 5. Use the dashboard to choose the attached speaker or a discovered Google
    Cast speaker, test playback, select automatic prayers, set volume, choose
-   the first and final fasting days for Ramadan, or replace the MP3.
+   the first and final fasting days for Ramadan, configure both Eid dates and
+   the takbeer window, or replace either MP3.
 
 The dashboard also shows connection state, saved location, today's calculated
 times, audio-storage state, and the currently selected playback output. All
 normal configuration is available on both the home network and the recovery
 setup network.
 
-The dashboard stores an uploaded MP3 in the device's dedicated 8 MB internal
-flash partition. It is used for manual tests, scheduled playback, and the
-`/audio/adhan.mp3` endpoint. A microSD card is optional: when internal audio is
-empty, the firmware imports `/sdcard/adhan.mp3` from an inserted FAT32 card and
-keeps the card's copy as a backup. The card can be removed after import.
+The dashboard stores the adhan and Eid takbeer MP3s independently in the
+device's dedicated 8 MB internal flash partition. They are used for manual
+tests, scheduled playback, and the `/audio/adhan.mp3` and
+`/audio/takbeer.mp3` endpoints. The bundled takbeer is installed automatically
+when that slot is empty. A microSD card is optional: when either internal file
+is missing, the firmware imports `/sdcard/adhan.mp3` or `/sdcard/takbeer.mp3`
+from an inserted FAT32 card and keeps the card's copy as a backup. The card can
+be removed after import.
 
 Hold BOOT for three seconds during startup to clear saved setup. If home Wi-Fi
 cannot be reached for 20 seconds, the recovery setup network is enabled without
@@ -185,6 +204,15 @@ cc -std=c11 -D_DEFAULT_SOURCE -I main tests/ramadan_host_test.c main/ramadan.c -
 /tmp/adhancron-ramadan-test
 ```
 
+The Eid fixture test covers both Eid types, date matching, inclusive start and
+finish slots, interval alignment, two-minute recovery, invalid schedules, and
+next-slot calculation:
+
+```bash
+cc -std=c11 -D_DEFAULT_SOURCE -I main tests/eid_host_test.c main/eid.c main/ramadan.c -o /tmp/adhancron-eid-test
+/tmp/adhancron-eid-test
+```
+
 Battery percentage and charging-trend logic can be checked without ESP-IDF:
 
 ```bash
@@ -194,7 +222,7 @@ cc -std=c11 -I main tests/battery_status_host_test.c main/battery_status.c -o /t
 
 For Google Cast playback, the ESP32 discovers compatible receivers with mDNS,
 launches Google's Default Media Receiver over the local Cast V2 connection,
-and gives it the device's own `/audio/adhan.mp3` URL. The receiver and prayer
+and gives it the device's own adhan or takbeer audio URL. The receiver and prayer
 clock must be on networks that can reach one another. The saved receiver is
 rediscovered before every adhan so DHCP address changes are harmless. If the
 receiver is offline or playback cannot be confirmed, the attached speaker is
