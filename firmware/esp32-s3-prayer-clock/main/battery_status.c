@@ -48,33 +48,49 @@ void battery_estimator_update(
 
     if (measured_millivolts < 2500 || measured_millivolts > 4500) {
         estimator->filtered_millivolts = 0;
+        estimator->filtered_millivolts_q8 = 0;
         estimator->trend_reference_millivolts = 0;
         estimator->trend_samples = 0;
         estimator->rising_windows = 0;
+        estimator->stable_windows = 0;
         estimator->charging = false;
         return;
     }
 
     if (estimator->filtered_millivolts == 0) {
         estimator->filtered_millivolts = measured_millivolts;
+        estimator->filtered_millivolts_q8 = measured_millivolts * 256;
         estimator->trend_reference_millivolts = measured_millivolts;
     } else {
+        estimator->filtered_millivolts_q8 =
+            (estimator->filtered_millivolts_q8 * 7 +
+                measured_millivolts * 256) / 8;
         estimator->filtered_millivolts =
-            (estimator->filtered_millivolts * 7 + measured_millivolts) / 8;
+            (estimator->filtered_millivolts_q8 + 128) / 256;
     }
 
     estimator->trend_samples++;
     if (estimator->trend_samples >= 30) {
         const int change = estimator->filtered_millivolts -
             estimator->trend_reference_millivolts;
-        if (change >= 8) {
+        // The TP4054's rise can be only a few millivolts per minute near the
+        // top of the charge curve. Two filtered rising windows reject noise.
+        if (change >= 2) {
             estimator->rising_windows++;
+            estimator->stable_windows = 0;
             if (estimator->rising_windows >= 2) estimator->charging = true;
-        } else if (change <= -5) {
+        } else if (change <= -3) {
             estimator->rising_windows = 0;
+            estimator->stable_windows = 0;
             estimator->charging = false;
-        } else if (!estimator->charging) {
-            estimator->rising_windows = 0;
+        } else {
+            estimator->stable_windows++;
+            if (estimator->charging && estimator->stable_windows >= 10) {
+                estimator->charging = false;
+                estimator->rising_windows = 0;
+            } else if (!estimator->charging && estimator->stable_windows >= 2) {
+                estimator->rising_windows = 0;
+            }
         }
         estimator->trend_reference_millivolts = estimator->filtered_millivolts;
         estimator->trend_samples = 0;

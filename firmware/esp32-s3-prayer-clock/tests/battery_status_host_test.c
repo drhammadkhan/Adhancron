@@ -32,6 +32,13 @@ int main(void) {
     assert(status.percentage == 25);
     assert(!status.charging);
 
+    battery_estimator_t slow_charge_estimator = {0};
+    status = update_repeatedly(&slow_charge_estimator, 3700, 30);
+    status = update_repeatedly(&slow_charge_estimator, 3704, 30);
+    assert(!status.charging);
+    status = update_repeatedly(&slow_charge_estimator, 3708, 30);
+    assert(status.charging);
+
     status = update_repeatedly(&estimator, 3750, 30);
     assert(!status.charging);
     status = update_repeatedly(&estimator, 3800, 30);

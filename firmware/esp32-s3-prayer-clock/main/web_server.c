@@ -13,6 +13,7 @@
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "audio_storage.h"
+#include "battery_monitor.h"
 #include "cast_sender.h"
 #include "firmware_update.h"
 #include "prayer_times.h"
@@ -56,7 +57,7 @@ static const char LOCATION_PAGE[] =
     "document.getElementById('place').addEventListener('keydown',function(e){if(e.key==='Enter'){e.preventDefault();findPlace()}})</script></main></body></html>";
 
 static const char DASHBOARD_PAGE[] =
-    "<h1>Adhancron Prayer Clock</h1><p id=place-name><b>Loading saved location...</b></p><p id=summary class=small>Loading today&apos;s timetable...</p><div id=times></div>"
+    "<h1>Adhancron Prayer Clock</h1><p id=place-name><b>Loading saved location...</b></p><p id=summary class=small>Loading today&apos;s timetable...</p><p id=battery-status class=small></p><div id=times></div>"
     "<button type=button onclick=testPlayback()>Play Adhan Now</button><p id=test-result class=small></p>"
     "<form method=post action='/api/settings'><input type=hidden name=step value=playback>"
     "<fieldset><legend>Playback</legend><label class='check choice'><input type=radio name=output value=attached %s onchange=outputChanged()>Attached speaker</label>"
@@ -76,7 +77,7 @@ static const char DASHBOARD_PAGE[] =
     "<button>Save settings</button></form>"
     "<fieldset><legend>Adhan audio</legend><input id=audio type=file accept='audio/mpeg,.mp3'><button type=button onclick=uploadAudio()>Upload MP3</button><p id=upload class=small></p></fieldset>"
     "<p class=small><a href='/location'>Change location</a> &middot; <a href='/wifi'>Change Wi-Fi</a></p>"
-    "<script>let savedCastId='',savedCastName='';async function refresh(){let s=await fetch('/api/status',{cache:'no-store'}).then(r=>r.json());savedCastId=s.cast_device_id||'';savedCastName=s.cast_device_name||'';document.getElementById('place-name').textContent=s.location?'Prayer times for '+s.location:'Location not configured';summary.textContent=s.message;times.innerHTML=s.prayers.map(p=>'<p><b>'+p.name+'</b> '+p.time+'</p>').join('');document.getElementById('ramadan-status').textContent=s.ramadan_message||'Ramadan status unavailable';document.getElementById('firmware-status').textContent='Version '+(s.firmware_version||'unknown')+' - '+(s.update_status||'Update status unavailable');document.getElementById('update-button').disabled=!!s.update_running}"
+    "<script>let savedCastId='',savedCastName='';async function refresh(){let s=await fetch('/api/status',{cache:'no-store'}).then(r=>r.json());savedCastId=s.cast_device_id||'';savedCastName=s.cast_device_name||'';document.getElementById('place-name').textContent=s.location?'Prayer times for '+s.location:'Location not configured';summary.textContent=s.message;let b=document.getElementById('battery-status');b.textContent=s.battery_available?'Battery '+s.battery_percentage+'%% - '+(s.battery_millivolts/1000).toFixed(2)+' V - '+(s.battery_charging?'charging detected':s.battery_full?'fully charged':'battery connected'):'';times.innerHTML=s.prayers.map(p=>'<p><b>'+p.name+'</b> '+p.time+'</p>').join('');document.getElementById('ramadan-status').textContent=s.ramadan_message||'Ramadan status unavailable';document.getElementById('firmware-status').textContent='Version '+(s.firmware_version||'unknown')+' - '+(s.update_status||'Update status unavailable');document.getElementById('update-button').disabled=!!s.update_running}"
     "function outputChanged(){let cast=document.querySelector('input[name=output]:checked').value==='cast';document.getElementById('cast-controls').classList.toggle('hidden',!cast);document.getElementById('cast-device').disabled=!cast;document.getElementById('cast-name').disabled=!cast}"
     "function castSelectionChanged(){let s=document.getElementById('cast-device'),o=s.options[s.selectedIndex];document.getElementById('cast-name').value=o&&o.dataset.name||''}"
     "async function scanCastDevices(){let s=document.getElementById('cast-device'),r=document.getElementById('cast-result');s.innerHTML='<option value=\"\">Scanning...</option>';r.textContent='Looking for speakers on this network...';try{let x=await fetch('/api/cast-devices',{cache:'no-store'});if(!x.ok)throw Error(await x.text());let j=await x.json();s.innerHTML='<option value=\"\">Choose a speaker</option>';j.devices.forEach(d=>{let o=document.createElement('option');o.value=d.id;o.dataset.name=d.name;o.textContent=d.name+(d.group?' (speaker group)':'')+(d.model?' - '+d.model:'');if(d.id===savedCastId)o.selected=true;s.appendChild(o)});if(savedCastId&&!j.devices.some(d=>d.id===savedCastId)){let o=document.createElement('option');o.value=savedCastId;o.dataset.name=savedCastName;o.textContent=savedCastName+' (currently unavailable)';o.selected=true;s.appendChild(o)}castSelectionChanged();r.textContent=j.devices.length?j.devices.length+' Cast speaker'+(j.devices.length===1?'':'s')+' found.':'No Cast speakers found.'}catch(e){r.textContent=e.message}}"
@@ -319,6 +320,18 @@ static esp_err_t status_handler(httpd_req_t *request) {
     }
     written = snprintf(json + length, sizeof(json) - length,
         ",\"update_running\":%s", firmware.running ? "true" : "false");
+    if (written < 0 || (size_t)written >= sizeof(json) - length) {
+        return httpd_resp_send_err(request, HTTPD_500_INTERNAL_SERVER_ERROR, "Could not render status");
+    }
+    length += written;
+    battery_status_t battery = {0};
+    battery_monitor_get_status(&battery);
+    written = snprintf(json + length, sizeof(json) - length,
+        ",\"battery_available\":%s,\"battery_percentage\":%d,"
+        "\"battery_millivolts\":%d,\"battery_charging\":%s,\"battery_full\":%s",
+        battery.available ? "true" : "false", battery.percentage,
+        battery.millivolts, battery.charging ? "true" : "false",
+        battery.full ? "true" : "false");
     if (written < 0 || (size_t)written >= sizeof(json) - length) {
         return httpd_resp_send_err(request, HTTPD_500_INTERNAL_SERVER_ERROR, "Could not render status");
     }

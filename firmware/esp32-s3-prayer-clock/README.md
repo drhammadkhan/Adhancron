@@ -72,6 +72,8 @@ LiPo is connected, changes colour at 15%, and uses a charging bolt after a
 sustained voltage rise is detected. The board's TP4054 charging-status output is
 not connected to the ESP32, so charging is inferred from the voltage trend and
 can take about one minute to appear after USB power is connected.
+The dashboard and `/api/status` expose the same percentage, measured voltage,
+and detected charging state for diagnostics.
 
 ## Install Firmware
 
