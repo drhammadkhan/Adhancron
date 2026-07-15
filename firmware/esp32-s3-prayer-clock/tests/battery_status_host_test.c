@@ -27,27 +27,30 @@ int main(void) {
     battery_estimator_update(&estimator, 0, &status);
     assert(!status.available);
 
-    status = update_repeatedly(&estimator, 3700, 30);
+    status = update_repeatedly(&estimator, 3700, 60);
     assert(status.available);
     assert(status.percentage == 25);
     assert(!status.charging);
 
     battery_estimator_t slow_charge_estimator = {0};
-    status = update_repeatedly(&slow_charge_estimator, 3700, 30);
-    status = update_repeatedly(&slow_charge_estimator, 3704, 30);
+    status = update_repeatedly(&slow_charge_estimator, 3700, 60);
+    status = update_repeatedly(&slow_charge_estimator, 3704, 60);
     assert(!status.charging);
-    status = update_repeatedly(&slow_charge_estimator, 3708, 30);
+    status = update_repeatedly(&slow_charge_estimator, 3714, 60);
     assert(status.charging);
 
-    status = update_repeatedly(&estimator, 3750, 30);
+    battery_estimator_t startup_settle_estimator = {0};
+    battery_estimator_update(&startup_settle_estimator, 3900, &status);
+    status = update_repeatedly(&startup_settle_estimator, 3980, 119);
     assert(!status.charging);
-    status = update_repeatedly(&estimator, 3800, 30);
+
+    status = update_repeatedly(&estimator, 3800, 60);
     assert(status.charging);
 
-    status = update_repeatedly(&estimator, 3700, 30);
+    status = update_repeatedly(&estimator, 3700, 60);
     assert(!status.charging);
 
-    status = update_repeatedly(&estimator, 4200, 90);
+    status = update_repeatedly(&estimator, 4200, 120);
     assert(status.full);
     assert(!status.charging);
 

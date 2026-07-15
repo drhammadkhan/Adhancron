@@ -71,7 +71,8 @@ driver. It shows a battery symbol and estimated percentage whenever a 3.7 V
 LiPo is connected, changes colour at 15%, and uses a charging bolt after a
 sustained voltage rise is detected. The board's TP4054 charging-status output is
 not connected to the ESP32, so charging is inferred from the voltage trend and
-can take about one minute to appear after USB power is connected.
+can take about one minute to appear after USB power is connected, or about two
+minutes when the clock has just started and its ADC baseline is still settling.
 The dashboard and `/api/status` expose the same percentage, measured voltage,
 and detected charging state for diagnostics.
 

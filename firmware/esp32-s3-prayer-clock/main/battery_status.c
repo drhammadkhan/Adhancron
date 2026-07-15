@@ -51,8 +51,8 @@ void battery_estimator_update(
         estimator->filtered_millivolts_q8 = 0;
         estimator->trend_reference_millivolts = 0;
         estimator->trend_samples = 0;
-        estimator->rising_windows = 0;
         estimator->stable_windows = 0;
+        estimator->trend_ready = false;
         estimator->charging = false;
         return;
     }
@@ -70,26 +70,29 @@ void battery_estimator_update(
     }
 
     estimator->trend_samples++;
-    if (estimator->trend_samples >= 30) {
+    if (!estimator->trend_ready && estimator->trend_samples >= 60) {
+        // Ignore filter settling and ADC warm-up after boot before measuring a
+        // trend. Without this baseline, startup drift can resemble charging.
+        estimator->trend_reference_millivolts =
+            estimator->filtered_millivolts;
+        estimator->trend_samples = 0;
+        estimator->trend_ready = true;
+    } else if (estimator->trend_ready && estimator->trend_samples >= 60) {
         const int change = estimator->filtered_millivolts -
             estimator->trend_reference_millivolts;
-        // The TP4054's rise can be only a few millivolts per minute near the
-        // top of the charge curve. Two filtered rising windows reject noise.
-        if (change >= 2) {
-            estimator->rising_windows++;
+        // GPIO 9 has no USB-present or TP4054 status signal. An 8 mV filtered
+        // rise over one minute is conservative enough to reject observed ADC
+        // noise while still detecting the board's roughly 290 mA charger.
+        if (change >= 8) {
             estimator->stable_windows = 0;
-            if (estimator->rising_windows >= 2) estimator->charging = true;
-        } else if (change <= -3) {
-            estimator->rising_windows = 0;
+            estimator->charging = true;
+        } else if (change <= -5) {
             estimator->stable_windows = 0;
             estimator->charging = false;
         } else {
             estimator->stable_windows++;
-            if (estimator->charging && estimator->stable_windows >= 10) {
+            if (estimator->charging && estimator->stable_windows >= 5) {
                 estimator->charging = false;
-                estimator->rising_windows = 0;
-            } else if (!estimator->charging && estimator->stable_windows >= 2) {
-                estimator->rising_windows = 0;
             }
         }
         estimator->trend_reference_millivolts = estimator->filtered_millivolts;

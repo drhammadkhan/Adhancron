@@ -15,8 +15,8 @@ typedef struct {
     int filtered_millivolts_q8;
     int trend_reference_millivolts;
     int trend_samples;
-    int rising_windows;
     int stable_windows;
+    bool trend_ready;
     bool charging;
 } battery_estimator_t;
 
