@@ -39,7 +39,11 @@ It provides:
 - The current device IP address on the display so the full settings dashboard is easy to find.
 - User-defined first and final fasting days, with automatic Ramadan day numbering and separate Sehri/Iftar context while retaining the canonical prayer names.
 - Ten-minute, seconds-accurate Ramadan countdowns to the end of Sehri and the beginning of Iftar.
-- A battery symbol and estimated charge percentage for an attached 3.7 V LiPo, including low-charge and detected-charging states.
+- A battery symbol and estimated charge percentage for an attached protected
+  single-cell 3.7 V LiPo, including low-charge and detected-charging states.
+  USB powers the board while its TP4054 charges the cell at approximately
+  290-300 mA; unplugging USB automatically transfers the clock to battery
+  power. See the firmware guide's [power and battery notes](firmware/esp32-s3-prayer-clock/README.md#power-and-battery) before connecting a cell.
 
 It runs independently from the Docker and desktop editions and needs no home server or Home Assistant. See [firmware/esp32-s3-prayer-clock/README.md](firmware/esp32-s3-prayer-clock/README.md) for hardware, setup, build, and recovery details.
 

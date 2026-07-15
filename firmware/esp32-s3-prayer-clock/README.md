@@ -66,15 +66,34 @@ audio playback, Wi-Fi, and the web server remain independent of the renderer.
 | Status LED | 42 |
 | Battery ADC | 9 |
 
+## Power and battery
+
+Use a protected single-cell 3.7 V LiPo with the board's battery connector. The
+[LCDWIKI board manual](https://www.lcdwiki.com/res/ES3C28P/2.8inch_IPS_ESP32-S3_ES3C28P_ES3N28P_User_Manual.pdf)
+shows a TP4054 charger with a 3.3 kOhm programming resistor and specifies a
+charge current of approximately 290-300 mA. While USB is connected, USB VBUS
+powers the board and the charger charges the cell. The Q3 power-path MOSFET
+isolates the system load from the battery; removing USB automatically lets the
+battery power the board without a firmware-controlled switchover.
+
+The published schematic does not show a dedicated cell-protection IC, and the
+firmware does not currently shut the device down at a low battery voltage. A
+protected LiPo is therefore required to provide over-discharge protection; do
+not rely on the TP4054 charger or the on-screen percentage for cell protection.
+
 The status bar reads the battery through GPIO 9 using ESP-IDF's calibrated ADC
-driver. It shows a battery symbol and estimated percentage whenever a 3.7 V
-LiPo is connected, changes colour at 15%, and uses a charging bolt after a
-sustained voltage rise is detected. The board's TP4054 charging-status output is
-not connected to the ESP32, so charging is inferred from the voltage trend and
-can take about one minute to appear after USB power is connected, or about two
-minutes when the clock has just started and its ADC baseline is still settling.
-The dashboard and `/api/status` expose the same percentage, measured voltage,
-and detected charging state for diagnostics.
+driver and the board's 200 kOhm/200 kOhm divider. It shows a battery symbol and
+estimated percentage whenever a 3.7 V LiPo is connected, changes colour at 15%,
+and uses a charging bolt after a sustained voltage rise is detected. This is a
+voltage estimate rather than a fuel-gauge measurement, so load, temperature,
+and battery chemistry can move the displayed percentage.
+
+The TP4054 charging-status output is not connected to the ESP32. Charging is
+therefore inferred from the filtered voltage trend and can take about one minute
+to appear after USB power is connected, or about two minutes when the clock has
+just started and its ADC baseline is still settling. The dashboard and
+`/api/status` expose the same percentage, measured voltage, full estimate, and
+detected charging state for diagnostics.
 
 ## Install Firmware
 
