@@ -6,7 +6,7 @@ DATA_DIR="${ADHAN_DATA_DIR:-/data}"
 ENV_FILE="$DATA_DIR/adhan.env"
 
 mkdir -p "$DATA_DIR"
-touch "$DATA_DIR/adhan.log" "$DATA_DIR/adhan_update.log"
+touch "$DATA_DIR/adhan.log" "$DATA_DIR/adhan_update.log" "$DATA_DIR/eid_takbeer.log"
 
 write_env_file() {
   umask 077
@@ -29,6 +29,8 @@ write_env_file() {
     printf 'export ADHAN_AUDIO_BASE_URL=%q\n' "${ADHAN_AUDIO_BASE_URL:-}"
     printf 'export ADHAN_AUDIO_URL=%q\n' "${ADHAN_AUDIO_URL:-}"
     printf 'export ADHAN_AUDIO_FILE=%q\n' "${ADHAN_AUDIO_FILE:-adhan_final.mp3}"
+    printf 'export ADHAN_TAKBEER_URL=%q\n' "${ADHAN_TAKBEER_URL:-}"
+    printf 'export ADHAN_TAKBEER_FILE=%q\n' "${ADHAN_TAKBEER_FILE:-eid_takbeer.mp3}"
     printf 'export ADHAN_VOLUME=%q\n' "${ADHAN_VOLUME:-0.8}"
     printf 'export PRAYER_TIMES_FILE=%q\n' "${PRAYER_TIMES_FILE:-$DATA_DIR/prayer_times.json}"
     printf 'export ADHAN_LATITUDE=%q\n' "${ADHAN_LATITUDE:-}"
@@ -41,6 +43,7 @@ write_env_file() {
 
 install_manager_cron() {
   local update_line="5 0 * * * cd $APP_DIR && . $ENV_FILE && /usr/local/bin/python /app/update_adhan.py >> $DATA_DIR/adhan_update.log 2>&1"
+  local eid_line="* * * * * cd $APP_DIR && . $ENV_FILE && /usr/local/bin/python /app/eid_schedule.py >> $DATA_DIR/eid_takbeer.log 2>&1"
   local current
   current="$(crontab -l 2>/dev/null || true)"
 
@@ -49,6 +52,15 @@ install_manager_cron() {
       printf '%s\n' "$current"
       printf '# [Adhan Manager Update]\n'
       printf '%s\n' "$update_line"
+    } | sed '/^$/N;/^\n$/D' | crontab -
+    current="$(crontab -l 2>/dev/null || true)"
+  fi
+
+  if ! grep -qF '# [Adhan Eid Scheduler]' <<< "$current"; then
+    {
+      printf '%s\n' "$current"
+      printf '# [Adhan Eid Scheduler]\n'
+      printf '%s\n' "$eid_line"
     } | sed '/^$/N;/^\n$/D' | crontab -
   fi
 }

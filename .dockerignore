@@ -6,6 +6,11 @@ __pycache__/
 wifi_secrets.py
 cron_state.json
 data/
+build/
+dist/
+fixed-dist/
+firmware/
+desktop/
 adhan_web_ui/__pycache__/
 adhan_web_ui/tests/__pycache__/
 adhan_web_ui/web_ui.log

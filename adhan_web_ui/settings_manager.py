@@ -17,7 +17,13 @@ class SettingsManager:
         "playback_method",
         "google_cast_host",
         "google_cast_port",
+        "eid_fitr_date",
+        "eid_adha_date",
+        "eid_takbeer_start",
+        "eid_takbeer_end",
+        "eid_takbeer_interval",
     }
+    CLEARABLE_KEYS = {"eid_fitr_date", "eid_adha_date"}
 
     def __init__(self, path: str | Path) -> None:
         self.path = Path(path)
@@ -47,6 +53,8 @@ class SettingsManager:
                 clean_value = value.strip()
                 if clean_value:
                     data[key] = clean_value
+                elif key in self.CLEARABLE_KEYS:
+                    data.pop(key, None)
 
             self.path.parent.mkdir(parents=True, exist_ok=True)
             with open(self.path, "w", encoding="utf-8") as f:

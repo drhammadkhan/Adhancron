@@ -16,6 +16,11 @@ The Home Assistant long-lived access token can be saved from the web UI after th
 ${PUBLIC_BASE_URL}/audio/adhan_final.mp3
 ```
 
+It also bundles and serves the separate Eid takbeer at
+`${PUBLIC_BASE_URL}/audio/eid_takbeer.mp3`. Configure the two locally observed
+Eid dates and takbeer window from the dashboard; no additional environment
+variables are required.
+
 ## Build
 
 ```bash
@@ -54,6 +59,7 @@ http://localhost:8090
 
 - A cron daemon for prayer-time jobs.
 - A daily updater at `00:05` that refreshes today's prayer times from `prayer_times.json`.
+- A once-per-minute Eid dispatcher that only acts on configured Eid dates and slots.
 - A FastAPI web UI on port `8090`.
 - An `/audio/{filename}` endpoint with byte-range support for speaker playback.
 
@@ -66,6 +72,9 @@ The `/data` volume stores:
 - `adhan_update_status.json`: status displayed by the web UI.
 - `adhan_overrides.json`: manual override flags from the web UI.
 - `adhan_settings.json`: Home Assistant URL, entity, and saved access token. This file is written with owner-only permissions.
+- `eid_takbeer.log`: Eid scheduler and playback output.
+- `eid_takbeer_state.json`: last claimed Eid slot for duplicate prevention.
+- `eid_takbeer.mp3`: optional user replacement for the bundled recording.
 
 ## Useful Commands
 

@@ -101,11 +101,12 @@
 
       <section class="hero-shell overflow-hidden rounded-[1.8rem] lg:grid lg:grid-cols-[1.25fr_.75fr]">
         <div class="hero-copy px-6 py-8 sm:px-9 sm:py-10">
-          <p class="eyebrow text-xs font-bold uppercase">Daily prayer times and adhan playback</p>
-          <h1 class="mt-4 max-w-xl font-display text-4xl leading-[1.05] text-white sm:text-5xl">Your home prayer schedule.</h1>
+          <p id="heroEyebrow" class="eyebrow text-xs font-bold uppercase">Daily prayer times and adhan playback</p>
+          <h1 id="heroTitle" class="mt-4 max-w-xl font-display text-4xl leading-[1.05] text-white sm:text-5xl">Your home prayer schedule.</h1>
           <p class="mt-4 max-w-xl text-sm leading-6 text-emerald-50 sm:text-base">Adhancron calculates daily prayer times for your location and plays the adhan through your chosen home speaker.</p>
           <div class="action-bar mt-7 flex flex-col gap-2 pt-5 sm:flex-row sm:flex-wrap">
-            <button id="playBtn" type="button" onclick="handlePlay(event)" class="btn border-0 bg-[var(--gold)] text-[var(--ink)] hover:bg-[#ddb062]">Test Adhan</button>
+            <button id="playBtn" type="button" onclick="handlePlay(event, 'adhan')" class="btn border-0 bg-[var(--gold)] text-[var(--ink)] hover:bg-[#ddb062]">Test Adhan</button>
+            <button id="playTakbeerBtn" type="button" onclick="handlePlay(event, 'takbeer')" class="btn btn-outline border-white/40 bg-transparent text-white hover:border-white hover:bg-white hover:text-[var(--ink)]">Test Eid Takbeer</button>
             <button id="saveBtn" type="button" class="btn btn-outline border-white/30 bg-transparent text-white hover:border-white hover:bg-white hover:text-[var(--ink)]" disabled>Save Schedule</button>
             <button id="refreshBtn" type="button" class="btn btn-ghost text-emerald-50 hover:bg-white/10">Refresh</button>
           </div>
@@ -214,6 +215,23 @@
             </div>
             <p id="locationHint" class="mt-3 text-sm text-slate-500">Timings are calculated locally from the saved coordinates and update each day. Location searches use OpenStreetMap; you can also enter coordinates directly.</p>
           </details>
+          <details class="rounded-lg border border-slate-200 bg-white/45 px-4 py-3">
+            <summary class="cursor-pointer text-sm font-medium text-slate-600">Eid days and takbeer</summary>
+            <p class="mt-3 text-sm text-slate-600">Choose the locally observed dates for Eid al-Fitr and Eid al-Adha. On either day, Adhancron keeps the normal prayer adhans and additionally repeats the separate takbeer recording during the selected window.</p>
+            <div class="mt-3 grid gap-4 sm:grid-cols-2">
+              <label class="form-control"><span class="label-text text-sm font-medium">Eid al-Fitr date</span><input id="eidFitrDateInput" type="date" class="input input-bordered mt-2 w-full bg-white/80" /></label>
+              <label class="form-control"><span class="label-text text-sm font-medium">Eid al-Adha date</span><input id="eidAdhaDateInput" type="date" class="input input-bordered mt-2 w-full bg-white/80" /></label>
+              <label class="form-control"><span class="label-text text-sm font-medium">Takbeer starts</span><input id="eidTakbeerStartInput" type="time" class="input input-bordered mt-2 w-full bg-white/80" value="07:00" /></label>
+              <label class="form-control"><span class="label-text text-sm font-medium">Takbeer finishes</span><input id="eidTakbeerEndInput" type="time" class="input input-bordered mt-2 w-full bg-white/80" value="09:00" /></label>
+              <label class="form-control sm:col-span-2"><span class="label-text text-sm font-medium">Repeat every</span><select id="eidTakbeerIntervalInput" class="select select-bordered mt-2 w-full bg-white/80"><option value="5">5 minutes</option><option value="10">10 minutes</option><option value="15" selected>15 minutes</option><option value="20">20 minutes</option><option value="30">30 minutes</option><option value="60">60 minutes</option><option value="120">120 minutes</option></select></label>
+            </div>
+            <p id="eidStatus" class="mt-3 text-sm text-slate-500">Loading Eid settings...</p>
+            <div class="mt-4 rounded-lg border border-slate-200 bg-white/60 p-4">
+              <p id="takbeerAudioStatus" class="text-sm text-slate-600">Checking the takbeer recording...</p>
+              <input id="takbeerAudioInput" type="file" accept="audio/mpeg,.mp3" class="file-input file-input-bordered mt-3 w-full" />
+              <button id="uploadTakbeerBtn" type="button" class="btn btn-outline btn-success mt-3 w-full sm:w-auto">Replace takbeer recording</button>
+            </div>
+          </details>
           <div id="homeAssistantTokenFields">
             <label class="form-control">
               <div class="label">
@@ -294,9 +312,9 @@
     </main>
 
     <script>
-      async function handlePlay(event) {
+      async function handlePlay(event, track = "adhan") {
         event.preventDefault();
-        const button = document.getElementById("playBtn");
+        const button = document.getElementById(track === "takbeer" ? "playTakbeerBtn" : "playBtn");
         button.disabled = true;
         try {
           const playbackMethod = document.getElementById("playbackMethodInput")?.value;
@@ -319,10 +337,10 @@
             if (!settingsResponse.ok) throw new Error(settingsPayload.detail || "Unable to save Google Cast settings");
             if (typeof renderSettings === "function") renderSettings(settingsPayload, "Direct Google Cast saved");
           }
-          const response = await fetch("api/play", { method: "POST" });
+          const response = await fetch(track === "takbeer" ? "api/play/takbeer" : "api/play", { method: "POST" });
           const payload = await response.json();
-          if (!response.ok) throw new Error(payload.detail || "Unable to trigger adhan");
-          setStatus("Adhan triggered", "success");
+          if (!response.ok) throw new Error(payload.detail || `Unable to trigger ${track}`);
+          setStatus(track === "takbeer" ? "Eid takbeer triggered" : "Adhan triggered", "success");
         } catch (error) {
           setStatus(error.message, "error");
         } finally {
@@ -331,6 +349,6 @@
         return false;
       }
     </script>
-    <script src="static/app.js?v=19"></script>
+    <script src="static/app.js?v=20"></script>
   </body>
 </html>

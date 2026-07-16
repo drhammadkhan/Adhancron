@@ -40,6 +40,7 @@ class DesktopScheduler:
         from apply_adhan_cron import apply_updates
         from generate_prayer_times import generate_configured_times
         from trigger_ha import trigger
+        from eid_schedule import dispatch_eid_if_due
 
         now = datetime.now()
         date_key = now.date().isoformat()
@@ -55,6 +56,12 @@ class DesktopScheduler:
             self._fired.clear()
 
         minute_key = now.strftime("%H:%M")
+        threading.Thread(
+            target=dispatch_eid_if_due,
+            kwargs={"now": now},
+            name="eid-takbeer-scheduler",
+            daemon=True,
+        ).start()
         for job in manager.list_jobs():
             key = f"{date_key}:{job.label}:{job.time}"
             if not job.enabled or job.time != minute_key or key in self._fired:

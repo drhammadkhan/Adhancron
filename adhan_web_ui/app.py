@@ -13,7 +13,8 @@ from fastapi.responses import StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
-from adhan_config import APP_DIR, DATA_DIR, DEFAULT_VOLUME, OVERRIDE_FILE, PRAYER_TIMES_FILE, PUBLIC_BASE_URL, SETTINGS_FILE, STATUS_FILE, default_audio_url, trigger_command
+from adhan_config import APP_DIR, DATA_DIR, DEFAULT_TAKBEER_FILE, DEFAULT_VOLUME, OVERRIDE_FILE, PRAYER_TIMES_FILE, PUBLIC_BASE_URL, SETTINGS_FILE, STATUS_FILE, default_audio_url, default_takbeer_url, trigger_command
+from eid_schedule import DEFAULT_END, DEFAULT_INTERVAL, DEFAULT_START, next_slot, status_for_date, validate_eid_settings
 from generate_prayer_times import generate_configured_times, location_from_values
 from apply_adhan_cron import apply_updates
 from trigger_ha import trigger
@@ -28,6 +29,7 @@ except ImportError:
 
 BASE_DIR = Path(__file__).resolve().parent
 AUDIO_DIR = APP_DIR
+TAKBEER_OVERRIDE_FILE = DATA_DIR / DEFAULT_TAKBEER_FILE
 VERSION_FILE = APP_DIR / "VERSION"
 
 app = FastAPI(title="Adhan Cron Manager")
@@ -59,6 +61,11 @@ class SettingsUpdate(BaseModel):
     playback_method: str | None = None
     google_cast_host: str | None = None
     google_cast_port: str | None = None
+    eid_fitr_date: str | None = None
+    eid_adha_date: str | None = None
+    eid_takbeer_start: str | None = None
+    eid_takbeer_end: str | None = None
+    eid_takbeer_interval: str | None = None
 
 
 class LocationSearchRequest(BaseModel):
@@ -86,6 +93,7 @@ def version() -> dict:
             "saved_home_assistant_token": True,
             "local_location_based_timings": True,
             "direct_google_cast": True,
+            "eid_takbeer": True,
         },
     }
 
@@ -101,6 +109,9 @@ def _settings_response(request: Request | None = None) -> dict:
     current = settings.get_settings()
     saved_token = bool(current.get("ha_token"))
     env_token = bool(os.getenv("HA_TOKEN"))
+    now = datetime.now()
+    eid = status_for_date(current, now.date())
+    upcoming_takbeer = next_slot(current, now)
     return {
         "ha_token_set": saved_token or env_token,
         "ha_token_source": "saved" if saved_token else "environment" if env_token else "missing",
@@ -118,6 +129,17 @@ def _settings_response(request: Request | None = None) -> dict:
         "longitude": current.get("longitude") or os.getenv("ADHAN_LONGITUDE", ""),
         "timezone": os.getenv("TZ", "UTC"),
         "audio_url": default_audio_url(_request_base_url(request) if request is not None else ""),
+        "takbeer_audio_url": default_takbeer_url(_request_base_url(request) if request is not None else ""),
+        "takbeer_audio_available": _audio_path(DEFAULT_TAKBEER_FILE).exists(),
+        "takbeer_audio_custom": TAKBEER_OVERRIDE_FILE.exists(),
+        "eid_fitr_date": current.get("eid_fitr_date", ""),
+        "eid_adha_date": current.get("eid_adha_date", ""),
+        "eid_takbeer_start": current.get("eid_takbeer_start") or DEFAULT_START,
+        "eid_takbeer_end": current.get("eid_takbeer_end") or DEFAULT_END,
+        "eid_takbeer_interval": current.get("eid_takbeer_interval") or str(DEFAULT_INTERVAL),
+        "eid_active": eid.active,
+        "eid_kind": eid.kind,
+        "eid_next_takbeer": upcoming_takbeer.isoformat() if upcoming_takbeer else None,
     }
 
 
@@ -182,6 +204,17 @@ def update_settings(payload: SettingsUpdate, request: Request) -> dict:
             location_from_values(latitude.strip(), longitude.strip())
         except ValueError as exc:
             raise HTTPException(status_code=400, detail=str(exc)) from exc
+    eid_candidate = {
+        "eid_fitr_date": payload.eid_fitr_date if payload.eid_fitr_date is not None else current.get("eid_fitr_date", ""),
+        "eid_adha_date": payload.eid_adha_date if payload.eid_adha_date is not None else current.get("eid_adha_date", ""),
+        "eid_takbeer_start": payload.eid_takbeer_start if payload.eid_takbeer_start is not None else current.get("eid_takbeer_start", DEFAULT_START),
+        "eid_takbeer_end": payload.eid_takbeer_end if payload.eid_takbeer_end is not None else current.get("eid_takbeer_end", DEFAULT_END),
+        "eid_takbeer_interval": payload.eid_takbeer_interval if payload.eid_takbeer_interval is not None else current.get("eid_takbeer_interval", str(DEFAULT_INTERVAL)),
+    }
+    try:
+        validate_eid_settings(eid_candidate)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
     updates = payload.model_dump()
     if updates["public_base_url"] is None and not current.get("public_base_url") and not PUBLIC_BASE_URL:
         # Persist the dashboard LAN address once so cron can use it without a
@@ -214,6 +247,18 @@ def update_settings(payload: SettingsUpdate, request: Request) -> dict:
 def play_adhan(request: Request) -> dict:
     audio_url = default_audio_url(_request_base_url(request))
 
+    try:
+        trigger(audio_url, float(DEFAULT_VOLUME))
+        return {"status": "playing", "audio_url": audio_url}
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
+
+
+@app.post("/api/play/takbeer")
+def play_takbeer(request: Request) -> dict:
+    if not _audio_path(DEFAULT_TAKBEER_FILE).exists():
+        raise HTTPException(status_code=404, detail="Eid takbeer recording is unavailable")
+    audio_url = default_takbeer_url(_request_base_url(request))
     try:
         trigger(audio_url, float(DEFAULT_VOLUME))
         return {"status": "playing", "audio_url": audio_url}
@@ -321,11 +366,42 @@ def _log_audio_request(
         f.write(json.dumps(payload) + "\n")
 
 
+def _audio_path(filename: str) -> Path:
+    if filename == DEFAULT_TAKBEER_FILE and TAKBEER_OVERRIDE_FILE.exists():
+        return TAKBEER_OVERRIDE_FILE
+    return (AUDIO_DIR / filename).resolve()
+
+
+@app.post("/api/audio/takbeer")
+async def upload_takbeer(request: Request) -> dict:
+    content_length = request.headers.get("content-length", "")
+    try:
+        declared_length = int(content_length)
+    except ValueError:
+        declared_length = 0
+    if declared_length > 7 * 1024 * 1024:
+        raise HTTPException(status_code=413, detail="Choose an MP3 smaller than 7 MB")
+    content = await request.body()
+    if not content:
+        raise HTTPException(status_code=400, detail="Choose an Eid takbeer MP3")
+    if len(content) > 7 * 1024 * 1024:
+        raise HTTPException(status_code=413, detail="Choose an MP3 smaller than 7 MB")
+    if not (content.startswith(b"ID3") or (content[0] == 0xFF and len(content) > 1 and content[1] & 0xE0 == 0xE0)):
+        raise HTTPException(status_code=400, detail="The uploaded file does not look like an MP3")
+    DATA_DIR.mkdir(parents=True, exist_ok=True)
+    temporary = TAKBEER_OVERRIDE_FILE.with_suffix(".tmp")
+    temporary.write_bytes(content)
+    os.chmod(temporary, 0o600)
+    temporary.replace(TAKBEER_OVERRIDE_FILE)
+    return {"status": "saved", "size": len(content), "filename": DEFAULT_TAKBEER_FILE}
+
+
 @app.get("/audio/{filename}")
 @app.head("/audio/{filename}")
 def audio(filename: str, request: Request):
-    path = (AUDIO_DIR / filename).resolve()
-    if path.parent != AUDIO_DIR or path.suffix.lower() != ".mp3" or not path.exists():
+    path = _audio_path(filename)
+    allowed_parent = path.parent in {AUDIO_DIR, DATA_DIR}
+    if not allowed_parent or path.suffix.lower() != ".mp3" or not path.exists():
         raise HTTPException(status_code=404, detail="Audio file not found")
 
     file_size = path.stat().st_size
@@ -474,8 +550,37 @@ def dashboard_status() -> dict:
         playback_label = "Home Assistant speaker"
 
     enabled_count = sum(1 for job in jobs if job.enabled)
+    now = datetime.now()
+    eid = status_for_date(current, now.date())
+    upcoming_takbeer = next_slot(current, now)
+    seconds_until_takbeer = (
+        max(0, int((upcoming_takbeer - now).total_seconds()))
+        if upcoming_takbeer else None
+    )
+    if eid.active:
+        eid_message = (
+            f"{eid.kind} today. Takbeer runs from "
+            f"{current.get('eid_takbeer_start') or DEFAULT_START} to "
+            f"{current.get('eid_takbeer_end') or DEFAULT_END} every "
+            f"{current.get('eid_takbeer_interval') or DEFAULT_INTERVAL} minutes."
+        )
+    elif eid.fitr_configured or eid.adha_configured:
+        eid_message = (
+            f"Eid al-Fitr: {current.get('eid_fitr_date') or 'not set'}; "
+            f"Eid al-Adha: {current.get('eid_adha_date') or 'not set'}."
+        )
+    else:
+        eid_message = "Set your locally observed Eid dates to enable the greeting and takbeer schedule."
     return {
         "next_adhan": _next_enabled_job(jobs),
+        "eid": {
+            "active": eid.active,
+            "kind": eid.kind,
+            "message": eid_message,
+            "next_takbeer": upcoming_takbeer.isoformat() if upcoming_takbeer else None,
+            "seconds_until_takbeer": seconds_until_takbeer,
+            "audio_available": _audio_path(DEFAULT_TAKBEER_FILE).exists(),
+        },
         "setup": {
             "location_ready": location_ready,
             "playback_ready": playback_ready,

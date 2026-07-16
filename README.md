@@ -70,6 +70,10 @@ That USB installation enables safe over-the-air updates. Afterwards the clock ch
 - Logs playback triggers and audio fetches for troubleshooting.
 - Uses Home Assistant's `announce` playback and confirms playback by polling the speaker's state.
 - Can bypass Home Assistant and send the MP3 directly to a Google Cast speaker by IP address or hostname.
+- Saves separate locally observed dates for Eid al-Fitr and Eid al-Adha.
+- Shows an all-day Eid greeting and a ten-minute countdown to the next takbeer slot.
+- Repeats the bundled 65-second Eid takbeer during a configurable window while leaving all five normal prayer adhans active.
+- Lets the user test or replace the takbeer recording independently; custom audio survives Docker rebuilds and desktop upgrades.
 
 Older ESP32, MAX7219, Wi-Fi, and hardware test files are still present from earlier experiments, but they are not required for the Docker/Home Assistant workflow.
 
@@ -78,7 +82,7 @@ Older ESP32, MAX7219, Wi-Fi, and hardware test files are still present from earl
 Adhancron has four moving parts:
 
 1. **FastAPI web UI**
-   The dashboard runs on port `8090`. It shows the prayer cron jobs, lets you edit them, saves Home Assistant settings, exposes the MP3 file, and provides a **Play Adhan Now** test button.
+   The dashboard runs on port `8090`. It shows the prayer cron jobs, lets you edit them, saves playback and Eid settings, exposes both MP3 files, and provides separate adhan and takbeer test buttons.
 
 2. **Cron scheduler**
    The container runs cron internally. Each prayer has a cron entry that calls `trigger_ha.py` with the public MP3 URL and volume.
@@ -109,6 +113,11 @@ At prayer time:
 
 6. Adhancron logs the playback trigger and the speaker’s audio request.
 
+On either saved Eid date, the Eid scheduler additionally checks the configured
+takbeer window every minute. Each inclusive slot is played once through the same
+speaker route, with a two-minute recovery window after a delayed start. Its
+persisted slot marker prevents duplicate playback.
+
 ## Web UI
 
 Open:
@@ -123,6 +132,8 @@ The dashboard includes:
 - Time inputs for each prayer.
 - A switch to enable or disable each cron job.
 - A manual override switch to prevent auto-update from changing a custom time.
+- Eid al-Fitr and Eid al-Adha date fields, a takbeer start/finish window, and a 5-120 minute repeat interval.
+- Separate **Test Eid Takbeer** and replacement-MP3 controls.
 - A Home Assistant settings panel.
 - A **Play Adhan Now** button.
 - A visible app version badge.
@@ -286,6 +297,7 @@ However you installed, finish setup from the web dashboard at `http://YOUR_HOST_
 5. Ensure the container `TZ` value matches your home timezone. Cron uses this timezone when it runs the saved local times.
 6. Click **Play Adhan Now** to test. The speaker should play the adhan within a few seconds.
 7. Check that the prayer cards show today's times. The schedule auto-updates daily at `00:05`; you can also edit any time manually and toggle a **Manual** override so the daily update leaves it alone.
+8. Under **Eid days and takbeer**, enter the dates observed by your community. The default takbeer window is `07:00` through `09:00`, every 15 minutes, and includes both aligned endpoints.
 
 If nothing plays, see [Troubleshooting](#troubleshooting) — the trigger log at `/data/adhan.log` will say whether playback was confirmed.
 
@@ -304,6 +316,7 @@ Environment variables:
 | `PUBLIC_BASE_URL` | Optional advanced audio URL override | automatic dashboard URL |
 | `ADHAN_VOLUME` | Playback volume, `0.0` to `1.0` | `0.8` |
 | `ADHAN_AUDIO_FILE` | Audio file served from `/audio` | `adhan_final.mp3` |
+| `ADHAN_TAKBEER_FILE` | Bundled Eid takbeer filename | `eid_takbeer.mp3` |
 | `ADHAN_LATITUDE` | Home latitude when not saved through the web UI | empty |
 | `ADHAN_LONGITUDE` | Home longitude when not saved through the web UI | empty |
 | `ADHAN_USE_ANNOUNCE` | Use Home Assistant `announce: true` playback first | `true` |
@@ -324,6 +337,9 @@ The `/data` volume contains:
 | --- | --- |
 | `adhan.env` | Environment file sourced by cron jobs |
 | `adhan.log` | Playback trigger logs from prayer cron jobs |
+| `eid_takbeer.log` | Docker Eid scheduler and playback output |
+| `eid_takbeer_state.json` | Last claimed Eid slot, preventing duplicates |
+| `eid_takbeer.mp3` | Optional user replacement for the bundled takbeer |
 | `adhan_access.log` | Audio endpoint access logs from speakers/Cast devices |
 | `adhan_update.log` | Daily updater output |
 | `adhan_settings.json` | Saved Home Assistant settings and token |
@@ -339,6 +355,7 @@ The app serves:
 
 ```text
 http://YOUR_DOCKER_HOST_IP:8090/audio/adhan_final.mp3
+http://YOUR_DOCKER_HOST_IP:8090/audio/eid_takbeer.mp3
 ```
 
 The endpoint supports:

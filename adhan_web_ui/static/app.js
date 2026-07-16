@@ -33,6 +33,17 @@ const locationResults = document.getElementById("locationResults");
 const locationHint = document.getElementById("locationHint");
 const haTokenInput = document.getElementById("haTokenInput");
 const saveSettingsBtn = document.getElementById("saveSettingsBtn");
+const eidFitrDateInput = document.getElementById("eidFitrDateInput");
+const eidAdhaDateInput = document.getElementById("eidAdhaDateInput");
+const eidTakbeerStartInput = document.getElementById("eidTakbeerStartInput");
+const eidTakbeerEndInput = document.getElementById("eidTakbeerEndInput");
+const eidTakbeerIntervalInput = document.getElementById("eidTakbeerIntervalInput");
+const eidStatus = document.getElementById("eidStatus");
+const takbeerAudioStatus = document.getElementById("takbeerAudioStatus");
+const takbeerAudioInput = document.getElementById("takbeerAudioInput");
+const uploadTakbeerBtn = document.getElementById("uploadTakbeerBtn");
+const heroEyebrow = document.getElementById("heroEyebrow");
+const heroTitle = document.getElementById("heroTitle");
 
 function setStatus(message, type = "ghost") {
   statusBadge.className = `badge badge-${type} px-4 py-3 text-xs sm:text-sm`;
@@ -62,6 +73,25 @@ function renderSettings(settings, overrideMessage = null) {
   syncPlaybackMethod(settings.playback_method || "home_assistant");
   if (latitudeInput) latitudeInput.value = settings.latitude || "";
   if (longitudeInput) longitudeInput.value = settings.longitude || "";
+  if (eidFitrDateInput) eidFitrDateInput.value = settings.eid_fitr_date || "";
+  if (eidAdhaDateInput) eidAdhaDateInput.value = settings.eid_adha_date || "";
+  if (eidTakbeerStartInput) eidTakbeerStartInput.value = settings.eid_takbeer_start || "07:00";
+  if (eidTakbeerEndInput) eidTakbeerEndInput.value = settings.eid_takbeer_end || "09:00";
+  if (eidTakbeerIntervalInput) eidTakbeerIntervalInput.value = settings.eid_takbeer_interval || "15";
+  if (eidStatus) {
+    eidStatus.textContent = settings.eid_active
+      ? `${settings.eid_kind} today. The next configured takbeer will play automatically.`
+      : settings.eid_fitr_date || settings.eid_adha_date
+      ? `Eid al-Fitr: ${settings.eid_fitr_date || "not set"}; Eid al-Adha: ${settings.eid_adha_date || "not set"}.`
+      : "Set your locally observed Eid dates to enable the greeting and takbeer schedule.";
+  }
+  if (takbeerAudioStatus) {
+    takbeerAudioStatus.textContent = settings.takbeer_audio_available
+      ? settings.takbeer_audio_custom
+        ? "Custom Eid takbeer recording ready."
+        : "Bundled Eid takbeer recording ready."
+      : "Eid takbeer recording is unavailable.";
+  }
   if (locationHint) locationHint.textContent = `Timings are calculated locally from the saved coordinates and update each day. Time zone: ${settings.timezone || "unknown"}. Location searches use OpenStreetMap; you can also enter coordinates directly.`;
   haTokenInput.value = "";
   if (settings.playback_method === "google_cast") {
@@ -243,6 +273,11 @@ async function saveSettings() {
     playback_method: playbackMethodInput ? playbackMethodInput.value : "home_assistant",
     ha_url: haUrlInput.value,
     ha_entity_id: haEntityInput.value,
+    eid_fitr_date: eidFitrDateInput ? eidFitrDateInput.value : "",
+    eid_adha_date: eidAdhaDateInput ? eidAdhaDateInput.value : "",
+    eid_takbeer_start: eidTakbeerStartInput ? eidTakbeerStartInput.value : "07:00",
+    eid_takbeer_end: eidTakbeerEndInput ? eidTakbeerEndInput.value : "09:00",
+    eid_takbeer_interval: eidTakbeerIntervalInput ? eidTakbeerIntervalInput.value : "15",
   };
   if (publicBaseUrlInput?.value.trim()) payload.public_base_url = publicBaseUrlInput.value.trim();
   if (payload.playback_method === "google_cast") {
@@ -349,8 +384,17 @@ async function loadDashboardStatus() {
     const data = await response.json();
     if (!response.ok) throw new Error(data.detail || "Unable to load dashboard status");
 
+    const eid = data.eid || {};
+    const showTakbeer = eid.active && eid.next_takbeer && eid.seconds_until_takbeer <= 10 * 60;
+    if (heroEyebrow) heroEyebrow.textContent = eid.active ? eid.kind : "Daily prayer times and adhan playback";
+    if (heroTitle) heroTitle.textContent = eid.active ? "Eid Mubarak." : "Your home prayer schedule.";
     const next = data.next_adhan;
-    if (next) {
+    if (showTakbeer) {
+      const when = new Date(eid.next_takbeer);
+      nextAdhanTitle.textContent = `Eid Takbeer at ${when.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}`;
+      nextAdhanDetail.textContent = `${eid.kind} on your configured speaker. Normal prayer adhans remain enabled.`;
+      nextAdhanCountdown.textContent = formatCountdown(eid.next_takbeer);
+    } else if (next) {
       nextAdhanTitle.textContent = `${next.label} at ${next.time}`;
       nextAdhanDetail.textContent = `${next.is_tomorrow ? "Tomorrow" : "Today"} on your configured speaker.`;
       nextAdhanCountdown.textContent = formatCountdown(next.when);
@@ -377,6 +421,29 @@ async function loadDashboardStatus() {
     nextAdhanCountdown.textContent = "";
     setupStatus.innerHTML = "";
     setupHint.textContent = "Refresh the dashboard to try again.";
+  }
+}
+
+async function uploadTakbeer() {
+  const file = takbeerAudioInput?.files?.[0];
+  if (!file) {
+    setSettingsStatus("Choose an Eid takbeer MP3 first", "warning");
+    return;
+  }
+  if (!uploadTakbeerBtn) return;
+  uploadTakbeerBtn.disabled = true;
+  setSettingsStatus("Uploading Eid takbeer...", "ghost");
+  try {
+    const response = await fetch("api/audio/takbeer", { method: "POST", body: file });
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.detail || "Unable to upload the takbeer recording");
+    setSettingsStatus("Eid takbeer recording saved", "success");
+    if (takbeerAudioInput) takbeerAudioInput.value = "";
+    await loadSettings();
+  } catch (error) {
+    setSettingsStatus(error.message, "error");
+  } finally {
+    uploadTakbeerBtn.disabled = false;
   }
 }
 
@@ -450,6 +517,7 @@ refreshBtn.addEventListener("click", () => {
 });
 saveBtn.addEventListener("click", saveJobs);
 if (saveSettingsBtn) saveSettingsBtn.addEventListener("click", saveSettings);
+if (uploadTakbeerBtn) uploadTakbeerBtn.addEventListener("click", uploadTakbeer);
 if (playbackMethodInput) {
   playbackMethodInput.addEventListener("change", () => {
     syncPlaybackMethod(playbackMethodInput.value);

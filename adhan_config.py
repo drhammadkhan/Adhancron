@@ -27,6 +27,7 @@ PRAYER_ORDER = ["Fajr", "Dhuhr", "Asr", "Maghrib", "Isha"]
 
 DEFAULT_VOLUME = os.getenv("ADHAN_VOLUME", "0.8")
 DEFAULT_AUDIO_FILE = os.getenv("ADHAN_AUDIO_FILE", "adhan_final.mp3")
+DEFAULT_TAKBEER_FILE = os.getenv("ADHAN_TAKBEER_FILE", "eid_takbeer.mp3")
 
 PUBLIC_BASE_URL = os.getenv("PUBLIC_BASE_URL", "").rstrip("/")
 ADHAN_AUDIO_BASE_URL = os.getenv("ADHAN_AUDIO_BASE_URL", "").rstrip("/")
@@ -41,20 +42,30 @@ def saved_setting(name: str) -> str:
     return value.strip() if isinstance(value, str) else ""
 
 
-def default_audio_url(request_base_url: str = "") -> str:
-    explicit_url = os.getenv("ADHAN_AUDIO_URL")
+def audio_url_for(filename: str, request_base_url: str = "") -> str:
+    explicit_url = os.getenv(
+        "ADHAN_AUDIO_URL" if filename == DEFAULT_AUDIO_FILE else "ADHAN_TAKBEER_URL"
+    )
     if explicit_url:
         return explicit_url
     if ADHAN_AUDIO_BASE_URL:
-        return f"{ADHAN_AUDIO_BASE_URL}/{DEFAULT_AUDIO_FILE}"
+        return f"{ADHAN_AUDIO_BASE_URL}/{filename}"
     saved_public_base_url = saved_setting("public_base_url").rstrip("/")
     if saved_public_base_url:
-        return f"{saved_public_base_url}/audio/{DEFAULT_AUDIO_FILE}"
+        return f"{saved_public_base_url}/audio/{filename}"
     if PUBLIC_BASE_URL:
-        return f"{PUBLIC_BASE_URL}/audio/{DEFAULT_AUDIO_FILE}"
+        return f"{PUBLIC_BASE_URL}/audio/{filename}"
     if request_base_url:
-        return f"{request_base_url.rstrip('/')}/audio/{DEFAULT_AUDIO_FILE}"
-    return f"http://127.0.0.1:8090/audio/{DEFAULT_AUDIO_FILE}"
+        return f"{request_base_url.rstrip('/')}/audio/{filename}"
+    return f"http://127.0.0.1:8090/audio/{filename}"
+
+
+def default_audio_url(request_base_url: str = "") -> str:
+    return audio_url_for(DEFAULT_AUDIO_FILE, request_base_url)
+
+
+def default_takbeer_url(request_base_url: str = "") -> str:
+    return audio_url_for(DEFAULT_TAKBEER_FILE, request_base_url)
 
 
 def trigger_command(audio_url: str | None = None, volume: str | None = None) -> str:

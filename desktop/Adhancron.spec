@@ -7,6 +7,7 @@ ROOT = Path(SPECPATH).parent
 datas = [
     (str(ROOT / "adhan_web_ui" / "static"), "adhan_web_ui/static"),
     (str(ROOT / "adhan_final.mp3"), "."),
+    (str(ROOT / "eid_takbeer.mp3"), "."),
     (str(ROOT / "VERSION"), "."),
 ]
 
