@@ -21,6 +21,25 @@ class SettingsManagerTests(unittest.TestCase):
         self.assertEqual(updated["ha_url"], "http://homeassistant.test:8123")
         self.assertEqual(updated["eid_takbeer_start"], "07:00")
 
+    def test_network_speaker_settings_can_be_saved_and_cleared(self):
+        with tempfile.TemporaryDirectory() as directory:
+            manager = SettingsManager(Path(directory) / "settings.json")
+            saved = manager.update_settings({
+                "playback_method": "dlna",
+                "dlna_location": "http://192.168.1.40:1400/xml/device_description.xml",
+                "dlna_device_name": "Living Room",
+                "airplay_identifier": "airplay-id",
+            })
+            cleared = manager.update_settings({
+                "dlna_location": "",
+                "dlna_device_name": "",
+            })
+        self.assertEqual(saved["playback_method"], "dlna")
+        self.assertEqual(saved["dlna_device_name"], "Living Room")
+        self.assertNotIn("dlna_location", cleared)
+        self.assertNotIn("dlna_device_name", cleared)
+        self.assertEqual(cleared["airplay_identifier"], "airplay-id")
+
 
 if __name__ == "__main__":
     unittest.main()

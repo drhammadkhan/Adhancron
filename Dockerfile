@@ -2,7 +2,7 @@ FROM python:3.11-slim
 
 LABEL org.opencontainers.image.title="Adhancron" \
       org.opencontainers.image.source="https://github.com/drhammadkhan/Adhancron" \
-      org.opencontainers.image.version="2026.07.16"
+      org.opencontainers.image.version="2026.07.16.1"
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
@@ -14,6 +14,8 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     HA_ENTITY_ID=media_player.bedroom_speaker \
     ADHAN_PLAYBACK_METHOD=home_assistant \
     GOOGLE_CAST_PORT=8009 \
+    ADHAN_AIRPLAY_TIMEOUT=5 \
+    ADHAN_DLNA_TIMEOUT=5 \
     ADHAN_AUDIO_FILE=adhan_final.mp3 \
     ADHAN_VOLUME=0.8 \
     ADHAN_USE_ANNOUNCE=true \
@@ -23,17 +25,18 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     ADHAN_PLAYBACK_POLL_INTERVAL=1 \
     ADHAN_MEDIA_CONTENT_TYPE=audio/mpeg
 
+WORKDIR /app
+
+COPY requirements.txt .
 RUN apt-get update \
     && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
         cron \
         curl \
+        g++ \
         tzdata \
+    && pip install --no-cache-dir -r requirements.txt \
+    && apt-get purge -y --auto-remove g++ \
     && rm -rf /var/lib/apt/lists/*
-
-WORKDIR /app
-
-COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
 
 COPY . .
 RUN chmod +x /app/docker-entrypoint.sh \

@@ -6,7 +6,8 @@
 #include "nvs.h"
 
 #define SETTINGS_NAMESPACE "adhan"
-#define SETTINGS_VERSION 8
+#define SETTINGS_VERSION 9
+#define LEGACY_SETTINGS_VERSION_8 8
 #define LEGACY_SETTINGS_VERSION_7 7
 #define LEGACY_SETTINGS_VERSION_6 6
 #define LEGACY_SETTINGS_VERSION_5 5
@@ -86,6 +87,29 @@ typedef struct {
 } legacy_settings_v7_t;
 
 typedef struct {
+    char wifi_ssid[33];
+    char wifi_password[65];
+    char timezone[64];
+    char location_name[64];
+    double latitude;
+    double longitude;
+    bool location_configured;
+    int volume;
+    bool enabled[5];
+    adhan_output_t output;
+    char cast_device_id[48];
+    char cast_device_name[64];
+    bool automatic_updates;
+    char ramadan_start_date[11];
+    char ramadan_end_date[11];
+    char eid_fitr_date[11];
+    char eid_adha_date[11];
+    int eid_takbeer_start_minute;
+    int eid_takbeer_end_minute;
+    int eid_takbeer_interval_minutes;
+} legacy_settings_v8_t;
+
+typedef struct {
     uint32_t version;
     legacy_settings_v3_t value;
 } stored_settings_v3_t;
@@ -109,6 +133,11 @@ typedef struct {
     uint32_t version;
     legacy_settings_v7_t value;
 } stored_settings_v7_t;
+
+typedef struct {
+    uint32_t version;
+    legacy_settings_v8_t value;
+} stored_settings_v8_t;
 
 typedef struct {
     uint32_t version;
@@ -146,6 +175,52 @@ bool settings_load(adhan_settings_t *settings) {
         nvs_close(handle);
         if (result != ESP_OK || stored.version != SETTINGS_VERSION) return false;
         *settings = stored.value;
+        return true;
+    }
+    if (length == sizeof(stored_settings_v8_t)) {
+        stored_settings_v8_t stored = {0};
+        const esp_err_t result = nvs_get_blob(
+            handle, "settings", &stored, &length);
+        nvs_close(handle);
+        if (result != ESP_OK ||
+                stored.version != LEGACY_SETTINGS_VERSION_8) return false;
+        memcpy(settings->wifi_ssid, stored.value.wifi_ssid,
+            sizeof(settings->wifi_ssid));
+        memcpy(settings->wifi_password, stored.value.wifi_password,
+            sizeof(settings->wifi_password));
+        memcpy(settings->timezone, stored.value.timezone,
+            sizeof(settings->timezone));
+        memcpy(settings->location_name, stored.value.location_name,
+            sizeof(settings->location_name));
+        settings->latitude = stored.value.latitude;
+        settings->longitude = stored.value.longitude;
+        settings->location_configured = stored.value.location_configured;
+        settings->volume = stored.value.volume;
+        memcpy(settings->enabled, stored.value.enabled,
+            sizeof(settings->enabled));
+        settings->output = stored.value.output;
+        memcpy(settings->cast_device_id, stored.value.cast_device_id,
+            sizeof(settings->cast_device_id));
+        memcpy(settings->cast_device_name, stored.value.cast_device_name,
+            sizeof(settings->cast_device_name));
+        settings->automatic_updates = stored.value.automatic_updates;
+        memcpy(settings->ramadan_start_date,
+            stored.value.ramadan_start_date,
+            sizeof(settings->ramadan_start_date));
+        memcpy(settings->ramadan_end_date,
+            stored.value.ramadan_end_date,
+            sizeof(settings->ramadan_end_date));
+        memcpy(settings->eid_fitr_date, stored.value.eid_fitr_date,
+            sizeof(settings->eid_fitr_date));
+        memcpy(settings->eid_adha_date, stored.value.eid_adha_date,
+            sizeof(settings->eid_adha_date));
+        settings->eid_takbeer_start_minute =
+            stored.value.eid_takbeer_start_minute;
+        settings->eid_takbeer_end_minute =
+            stored.value.eid_takbeer_end_minute;
+        settings->eid_takbeer_interval_minutes =
+            stored.value.eid_takbeer_interval_minutes;
+        settings_save(settings);
         return true;
     }
     if (length == sizeof(stored_settings_v7_t)) {

@@ -1,6 +1,8 @@
 # Adhancron Desktop
 
-The desktop edition uses the same dashboard, prayer-time calculator, Home Assistant integration, and direct Google Cast playback as the Docker edition.
+The desktop edition uses the same dashboard, prayer-time calculator, Home
+Assistant integration, Google Cast, AirPlay, and Sonos/UPnP-DLNA playback as
+the Docker edition.
 
 ## Run for development
 
@@ -37,4 +39,8 @@ GitHub Actions produces separate `Adhancron-macOS-Apple-Silicon` and `Adhancron-
 
 ## Local-network playback
 
-For Google Cast playback, the desktop app automatically uses the computer's LAN address to serve the adhan or takbeer audio file. Allow Adhancron through the operating system firewall when prompted so the speaker can reach it.
+For Google Cast, AirPlay, and Sonos/DLNA playback, the desktop app
+automatically uses the computer's LAN address to serve the adhan or takbeer
+audio file. Allow Adhancron through the operating system firewall when prompted
+so the speaker can reach it. AirPlay pairing credentials are stored alongside
+the rest of the user's Adhancron application data.

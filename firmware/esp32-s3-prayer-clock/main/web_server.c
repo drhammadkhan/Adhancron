@@ -16,6 +16,7 @@
 #include "audio_storage.h"
 #include "battery_monitor.h"
 #include "cast_sender.h"
+#include "dlna_sender.h"
 #include "eid.h"
 #include "firmware_update.h"
 #include "prayer_times.h"
@@ -65,8 +66,11 @@ static const char DASHBOARD_PAGE[] =
     "<form method=post action='/api/settings'><input type=hidden name=step value=playback>"
     "<fieldset><legend>Playback</legend><label class='check choice'><input type=radio name=output value=attached %s onchange=outputChanged()>Attached speaker</label>"
     "<label class='check choice'><input type=radio name=output value=cast %s onchange=outputChanged()>Google Cast speaker</label>"
+    "<label class='check choice'><input type=radio name=output value=dlna %s onchange=outputChanged()>Sonos / DLNA speaker</label>"
     "<div id=cast-controls><label>Cast speaker</label><select id=cast-device name=cast_device_id onchange=castSelectionChanged()><option value=''>Scanning for speakers...</option></select>"
     "<input id=cast-name name=cast_device_name type=hidden><button type=button onclick=scanCastDevices()>Scan again</button><p id=cast-result class=small></p></div>"
+    "<div id=dlna-controls><label>Sonos or DLNA speaker</label><select id=dlna-device name=dlna_device_url onchange=dlnaSelectionChanged()><option value=''>Scan to find network speakers</option></select>"
+    "<input id=dlna-name name=dlna_device_name type=hidden><button type=button onclick=scanDlnaDevices()>Scan again</button><p id=dlna-result class=small>Works with compatible Sonos, hi-fi, and UPnP/DLNA speakers.</p></div>"
     "<label>Playback volume</label><input name=volume type=number min=0 max=100 value='%d'></fieldset>"
     "<fieldset><legend>Automatic adhan</legend>"
     "<label class=check><input type=checkbox name=fajr %s>Fajr</label><label class=check><input type=checkbox name=dhuhr %s>Dhuhr</label><label class=check><input type=checkbox name=asr %s>Asr</label><label class=check><input type=checkbox name=maghrib %s>Maghrib</label><label class=check><input type=checkbox name=isha %s>Isha</label>"
@@ -88,15 +92,17 @@ static const char DASHBOARD_PAGE[] =
     "<fieldset><legend>Audio recordings</legend><p id=adhan-audio-status class=small></p><label>Adhan MP3</label><input id=adhan-audio type=file accept='audio/mpeg,.mp3'><button type=button onclick=\"uploadAudio('adhan-audio','/api/audio','adhan-upload')\">Upload adhan MP3</button><p id=adhan-upload class=small></p>"
     "<p id=takbeer-audio-status class=small></p><label>Eid takbeer MP3</label><input id=takbeer-audio type=file accept='audio/mpeg,.mp3'><button type=button onclick=\"uploadAudio('takbeer-audio','/api/audio/takbeer','takbeer-upload')\">Upload takbeer MP3</button><p id=takbeer-upload class=small></p></fieldset>"
     "<p class=small><a href='/location'>Change location</a> &middot; <a href='/wifi'>Change Wi-Fi</a></p>"
-    "<script>let savedCastId='',savedCastName='';async function refresh(){let s=await fetch('/api/status',{cache:'no-store'}).then(r=>r.json());savedCastId=s.cast_device_id||'';savedCastName=s.cast_device_name||'';document.getElementById('place-name').textContent=s.location?'Prayer times for '+s.location:'Location not configured';summary.textContent=s.message;let b=document.getElementById('battery-status');b.textContent=s.battery_available?'Battery '+s.battery_percentage+'%% - '+(s.battery_millivolts/1000).toFixed(2)+' V - '+(s.battery_charging?'charging detected':s.battery_full?'fully charged':'battery connected'):'';times.innerHTML=s.prayers.map(p=>'<p><b>'+p.name+'</b> '+p.time+'</p>').join('');document.getElementById('ramadan-status').textContent=s.ramadan_message||'Ramadan status unavailable';document.getElementById('eid-status').textContent=s.eid_message||'Eid status unavailable';document.getElementById('adhan-audio-status').textContent=s.adhan_audio_available?'Adhan recording ready.':'No adhan recording saved.';document.getElementById('takbeer-audio-status').textContent=s.takbeer_audio_available?'Eid takbeer recording ready.':'Upload an Eid takbeer recording before the configured date.';document.getElementById('firmware-status').textContent='Version '+(s.firmware_version||'unknown')+' - '+(s.update_status||'Update status unavailable');document.getElementById('update-button').disabled=!!s.update_running}"
-    "function outputChanged(){let cast=document.querySelector('input[name=output]:checked').value==='cast';document.getElementById('cast-controls').classList.toggle('hidden',!cast);document.getElementById('cast-device').disabled=!cast;document.getElementById('cast-name').disabled=!cast}"
+    "<script>let savedCastId='',savedCastName='',savedDlnaUrl='',savedDlnaName='';async function refresh(){let s=await fetch('/api/status',{cache:'no-store'}).then(r=>r.json());savedCastId=s.cast_device_id||'';savedCastName=s.cast_device_name||'';savedDlnaUrl=s.dlna_device_url||'';savedDlnaName=s.dlna_device_name||'';document.getElementById('place-name').textContent=s.location?'Prayer times for '+s.location:'Location not configured';summary.textContent=s.message;let b=document.getElementById('battery-status');b.textContent=s.battery_available?'Battery '+s.battery_percentage+'%% - '+(s.battery_millivolts/1000).toFixed(2)+' V - '+(s.battery_charging?'charging detected':s.battery_full?'fully charged':'battery connected'):'';times.innerHTML=s.prayers.map(p=>'<p><b>'+p.name+'</b> '+p.time+'</p>').join('');document.getElementById('ramadan-status').textContent=s.ramadan_message||'Ramadan status unavailable';document.getElementById('eid-status').textContent=s.eid_message||'Eid status unavailable';document.getElementById('adhan-audio-status').textContent=s.adhan_audio_available?'Adhan recording ready.':'No adhan recording saved.';document.getElementById('takbeer-audio-status').textContent=s.takbeer_audio_available?'Eid takbeer recording ready.':'Upload an Eid takbeer recording before the configured date.';document.getElementById('firmware-status').textContent='Version '+(s.firmware_version||'unknown')+' - '+(s.update_status||'Update status unavailable');document.getElementById('update-button').disabled=!!s.update_running}"
+    "function outputChanged(){let output=document.querySelector('input[name=output]:checked').value,cast=output==='cast',dlna=output==='dlna';document.getElementById('cast-controls').classList.toggle('hidden',!cast);document.getElementById('cast-device').disabled=!cast;document.getElementById('cast-name').disabled=!cast;document.getElementById('dlna-controls').classList.toggle('hidden',!dlna);document.getElementById('dlna-device').disabled=!dlna;document.getElementById('dlna-name').disabled=!dlna}"
     "function castSelectionChanged(){let s=document.getElementById('cast-device'),o=s.options[s.selectedIndex];document.getElementById('cast-name').value=o&&o.dataset.name||''}"
     "async function scanCastDevices(){let s=document.getElementById('cast-device'),r=document.getElementById('cast-result');s.innerHTML='<option value=\"\">Scanning...</option>';r.textContent='Looking for speakers on this network...';try{let x=await fetch('/api/cast-devices',{cache:'no-store'});if(!x.ok)throw Error(await x.text());let j=await x.json();s.innerHTML='<option value=\"\">Choose a speaker</option>';j.devices.forEach(d=>{let o=document.createElement('option');o.value=d.id;o.dataset.name=d.name;o.textContent=d.name+(d.group?' (speaker group)':'')+(d.model?' - '+d.model:'');if(d.id===savedCastId)o.selected=true;s.appendChild(o)});if(savedCastId&&!j.devices.some(d=>d.id===savedCastId)){let o=document.createElement('option');o.value=savedCastId;o.dataset.name=savedCastName;o.textContent=savedCastName+' (currently unavailable)';o.selected=true;s.appendChild(o)}castSelectionChanged();r.textContent=j.devices.length?j.devices.length+' Cast speaker'+(j.devices.length===1?'':'s')+' found.':'No Cast speakers found.'}catch(e){r.textContent=e.message}}"
+    "function dlnaSelectionChanged(){let s=document.getElementById('dlna-device'),o=s.options[s.selectedIndex];document.getElementById('dlna-name').value=o&&o.dataset.name||''}"
+    "async function scanDlnaDevices(){let s=document.getElementById('dlna-device'),r=document.getElementById('dlna-result');s.innerHTML='<option value=\"\">Scanning...</option>';r.textContent='Looking for Sonos and DLNA speakers...';try{let x=await fetch('/api/dlna-devices',{cache:'no-store'});if(!x.ok)throw Error(await x.text());let j=await x.json();s.innerHTML='<option value=\"\">Choose a speaker</option>';j.devices.forEach(d=>{let o=document.createElement('option');o.value=d.location;o.dataset.name=d.name;o.textContent=d.name+(d.model?' - '+d.model:'');if(d.location===savedDlnaUrl)o.selected=true;s.appendChild(o)});if(savedDlnaUrl&&!j.devices.some(d=>d.location===savedDlnaUrl)){let o=document.createElement('option');o.value=savedDlnaUrl;o.dataset.name=savedDlnaName;o.textContent=(savedDlnaName||'Saved speaker')+' (currently unavailable)';o.selected=true;s.appendChild(o)}dlnaSelectionChanged();r.textContent=j.devices.length?j.devices.length+' compatible speaker'+(j.devices.length===1?'':'s')+' found.':'No compatible speakers found.'}catch(e){r.textContent=e.message}}"
     "async function testPlayback(track){let r=document.getElementById('test-result');r.textContent='Starting playback...';try{let x=await fetch(track==='takbeer'?'/api/play/takbeer':'/api/play',{method:'POST'});r.textContent=await x.text()}catch(e){r.textContent=e.message}}"
     "async function checkUpdate(){let b=document.getElementById('update-button'),r=document.getElementById('update-result');b.disabled=true;r.textContent='Starting update check...';try{let x=await fetch('/api/update',{method:'POST'});r.textContent=await x.text()}catch(e){r.textContent=e.message}setTimeout(refresh,1000)}"
     "function clearRamadan(){document.getElementById('ramadan-start').value='';document.getElementById('ramadan-end').value='';document.getElementById('ramadan-status').textContent='Save settings to turn Ramadan mode off.'}"
     "function clearEid(){document.getElementById('eid-fitr').value='';document.getElementById('eid-adha').value='';document.getElementById('eid-status').textContent='Save settings to clear both Eid dates.'}"
-    "async function uploadAudio(inputId,endpoint,resultId){let f=document.getElementById(inputId).files[0],r=document.getElementById(resultId);if(!f)return;r.textContent='Uploading...';let x=await fetch(endpoint,{method:'POST',body:f});r.textContent=await x.text();await refresh()}async function init(){await refresh();outputChanged();await scanCastDevices()}init();setInterval(refresh,30000)</script></main></body></html>";
+    "async function uploadAudio(inputId,endpoint,resultId){let f=document.getElementById(inputId).files[0],r=document.getElementById(resultId);if(!f)return;r.textContent='Uploading...';let x=await fetch(endpoint,{method:'POST',body:f});r.textContent=await x.text();await refresh()}async function init(){await refresh();outputChanged();let output=document.querySelector('input[name=output]:checked').value;if(output==='cast')await scanCastDevices();if(output==='dlna')await scanDlnaDevices()}init();setInterval(refresh,30000)</script></main></body></html>";
 
 static void restart_task(void *unused) {
     vTaskDelay(pdMS_TO_TICKS(1200));
@@ -108,7 +114,7 @@ typedef enum { PAGE_AUTOMATIC, PAGE_LOCATION, PAGE_WIFI } page_kind_t;
 static void format_minutes(int minutes, char output[6]);
 
 static esp_err_t render_page(httpd_req_t *request, page_kind_t kind) {
-    const size_t page_capacity = 20000;
+    const size_t page_capacity = 24000;
     char *page = malloc(page_capacity);
     if (page == NULL) return httpd_resp_send_err(request, HTTPD_500_INTERNAL_SERVER_ERROR, "Not enough memory to render the page");
     int length = snprintf(page, page_capacity, "%s", STYLE);
@@ -124,6 +130,7 @@ static esp_err_t render_page(httpd_req_t *request, page_kind_t kind) {
         length += snprintf(page + length, page_capacity - length, DASHBOARD_PAGE,
             current_settings->output == ADHAN_OUTPUT_ATTACHED ? "checked" : "",
             current_settings->output == ADHAN_OUTPUT_CAST ? "checked" : "",
+            current_settings->output == ADHAN_OUTPUT_DLNA ? "checked" : "",
             current_settings->volume,
             current_settings->enabled[0]?"checked":"",current_settings->enabled[1]?"checked":"",current_settings->enabled[2]?"checked":"",current_settings->enabled[3]?"checked":"",current_settings->enabled[4]?"checked":"",
             current_settings->ramadan_start_date,
@@ -221,10 +228,10 @@ static bool parse_time_value(const char *value, int *minutes) {
 }
 
 static esp_err_t settings_handler(httpd_req_t *request) {
-    if (request->content_len > 1536) {
+    if (request->content_len > 3072) {
         return httpd_resp_send_err(request, HTTPD_400_BAD_REQUEST, "Settings are too large");
     }
-    char body[1537] = {0};
+    char body[3073] = {0};
     int received = 0;
     while (received < request->content_len) {
         const int count = httpd_req_recv(request, body + received, request->content_len - received);
@@ -313,7 +320,9 @@ static esp_err_t settings_handler(httpd_req_t *request) {
         current_settings->eid_takbeer_interval_minutes = (int)eid_interval;
         get_value(body, "output", value, sizeof(value));
         current_settings->output = strcmp(value, "cast") == 0
-            ? ADHAN_OUTPUT_CAST : ADHAN_OUTPUT_ATTACHED;
+            ? ADHAN_OUTPUT_CAST
+            : strcmp(value, "dlna") == 0
+                ? ADHAN_OUTPUT_DLNA : ADHAN_OUTPUT_ATTACHED;
         if (current_settings->output == ADHAN_OUTPUT_CAST) {
             get_value(body, "cast_device_id", current_settings->cast_device_id,
                 sizeof(current_settings->cast_device_id));
@@ -328,8 +337,28 @@ static esp_err_t settings_handler(httpd_req_t *request) {
                     current_settings->cast_device_id,
                     sizeof(current_settings->cast_device_name));
             }
+        } else if (current_settings->output == ADHAN_OUTPUT_DLNA) {
+            get_value(body, "dlna_device_url",
+                current_settings->dlna_device_url,
+                sizeof(current_settings->dlna_device_url));
+            get_value(body, "dlna_device_name",
+                current_settings->dlna_device_name,
+                sizeof(current_settings->dlna_device_name));
+            if (strncmp(current_settings->dlna_device_url, "http://", 7) != 0 &&
+                    strncmp(current_settings->dlna_device_url, "https://", 8) != 0) {
+                return httpd_resp_send_err(
+                    request, HTTPD_400_BAD_REQUEST,
+                    "Choose a Sonos or DLNA speaker");
+            }
+            if (current_settings->dlna_device_name[0] == '\0') {
+                strlcpy(current_settings->dlna_device_name, "DLNA speaker",
+                    sizeof(current_settings->dlna_device_name));
+            }
         }
-    } else return httpd_resp_send_err(request, HTTPD_400_BAD_REQUEST, "Unknown setup step");
+    } else {
+        return httpd_resp_send_err(
+            request, HTTPD_400_BAD_REQUEST, "Unknown setup step");
+    }
     current_settings->volume = current_settings->volume < 0 ? 0 : (current_settings->volume > 100 ? 100 : current_settings->volume);
     if (!settings_save(current_settings)) return httpd_resp_send_err(request, HTTPD_500_INTERNAL_SERVER_ERROR, "Could not save settings");
     httpd_resp_sendstr(request, wifi_step
@@ -344,15 +373,18 @@ static bool append_json_string(char *json, size_t capacity, size_t *length, cons
 static void format_minutes(int minutes, char output[6]) { unsigned value=(unsigned)(((minutes%1440)+1440)%1440); snprintf(output, 6, "%02u:%02u", value/60, value%60); }
 
 static esp_err_t status_handler(httpd_req_t *request) {
-    char json[3200];
+    char json[3800];
     size_t length = strlcpy(json, "{\"location\":", sizeof(json));
     if (!append_json_string(json, sizeof(json), &length,
             (const uint8_t *)current_settings->location_name)) {
         return httpd_resp_send_err(request, HTTPD_500_INTERNAL_SERVER_ERROR, "Could not render status");
     }
+    const char *playback_output =
+        current_settings->output == ADHAN_OUTPUT_CAST ? "cast" :
+        current_settings->output == ADHAN_OUTPUT_DLNA ? "dlna" : "attached";
     int written = snprintf(json + length, sizeof(json) - length,
         ",\"playback_output\":\"%s\",\"cast_device_id\":",
-        current_settings->output == ADHAN_OUTPUT_CAST ? "cast" : "attached");
+        playback_output);
     if (written < 0 || (size_t)written >= sizeof(json) - length) {
         return httpd_resp_send_err(request, HTTPD_500_INTERNAL_SERVER_ERROR, "Could not render status");
     }
@@ -368,6 +400,26 @@ static esp_err_t status_handler(httpd_req_t *request) {
     length += written;
     if (!append_json_string(json, sizeof(json), &length,
             (const uint8_t *)current_settings->cast_device_name)) {
+        return httpd_resp_send_err(request, HTTPD_500_INTERNAL_SERVER_ERROR, "Could not render status");
+    }
+    written = snprintf(
+        json + length, sizeof(json) - length, ",\"dlna_device_url\":");
+    if (written < 0 || (size_t)written >= sizeof(json) - length) {
+        return httpd_resp_send_err(request, HTTPD_500_INTERNAL_SERVER_ERROR, "Could not render status");
+    }
+    length += written;
+    if (!append_json_string(json, sizeof(json), &length,
+            (const uint8_t *)current_settings->dlna_device_url)) {
+        return httpd_resp_send_err(request, HTTPD_500_INTERNAL_SERVER_ERROR, "Could not render status");
+    }
+    written = snprintf(
+        json + length, sizeof(json) - length, ",\"dlna_device_name\":");
+    if (written < 0 || (size_t)written >= sizeof(json) - length) {
+        return httpd_resp_send_err(request, HTTPD_500_INTERNAL_SERVER_ERROR, "Could not render status");
+    }
+    length += written;
+    if (!append_json_string(json, sizeof(json), &length,
+            (const uint8_t *)current_settings->dlna_device_name)) {
         return httpd_resp_send_err(request, HTTPD_500_INTERNAL_SERVER_ERROR, "Could not render status");
     }
     firmware_update_status_t firmware = {0};
@@ -638,6 +690,62 @@ static esp_err_t cast_devices_handler(httpd_req_t *request) {
     return result;
 }
 
+static esp_err_t dlna_devices_handler(httpd_req_t *request) {
+    dlna_device_t *devices = calloc(DLNA_MAX_DEVICES, sizeof(*devices));
+    if (devices == NULL) {
+        return httpd_resp_send_err(request, HTTPD_500_INTERNAL_SERVER_ERROR,
+            "Not enough memory for network speaker discovery");
+    }
+    const size_t device_count = dlna_sender_discover(
+        devices, DLNA_MAX_DEVICES, 4000);
+    const size_t capacity = 7168;
+    char *json = malloc(capacity);
+    if (json == NULL) {
+        free(devices);
+        return httpd_resp_send_err(request, HTTPD_500_INTERNAL_SERVER_ERROR,
+            "Not enough memory for network speaker results");
+    }
+    size_t length = strlcpy(json, "{\"devices\":[", capacity);
+    for (size_t index = 0; index < device_count; index++) {
+        const int prefix = snprintf(json + length, capacity - length,
+            "%s{\"id\":", index == 0 ? "" : ",");
+        if (prefix < 0 || (size_t)prefix >= capacity - length) break;
+        length += prefix;
+        if (!append_json_string(json, capacity, &length,
+                (const uint8_t *)devices[index].id)) break;
+        int written = snprintf(json + length, capacity - length, ",\"name\":");
+        if (written < 0 || (size_t)written >= capacity - length) break;
+        length += written;
+        if (!append_json_string(json, capacity, &length,
+                (const uint8_t *)devices[index].name)) break;
+        written = snprintf(json + length, capacity - length, ",\"model\":");
+        if (written < 0 || (size_t)written >= capacity - length) break;
+        length += written;
+        if (!append_json_string(json, capacity, &length,
+                (const uint8_t *)devices[index].model)) break;
+        written = snprintf(json + length, capacity - length, ",\"location\":");
+        if (written < 0 || (size_t)written >= capacity - length) break;
+        length += written;
+        if (!append_json_string(json, capacity, &length,
+                (const uint8_t *)devices[index].location)) break;
+        if (length + 2 >= capacity) break;
+        json[length++] = '}';
+        json[length] = '\0';
+    }
+    free(devices);
+    if (length + 3 >= capacity) {
+        free(json);
+        return httpd_resp_send_err(request, HTTPD_500_INTERNAL_SERVER_ERROR,
+            "Too many network speakers to display");
+    }
+    memcpy(json + length, "]}", 3);
+    httpd_resp_set_type(request, "application/json");
+    httpd_resp_set_hdr(request, "Cache-Control", "no-store");
+    const esp_err_t result = httpd_resp_sendstr(request, json);
+    free(json);
+    return result;
+}
+
 static void play_task(void *argument) {
     play_audio((audio_track_t)(intptr_t)argument);
     vTaskDelete(NULL);
@@ -806,7 +914,8 @@ void web_server_start(adhan_settings_t *settings, bool *storage_is_mounted, bool
     const httpd_uri_t takbeer_file = {.uri = "/audio/takbeer.mp3", .method = HTTP_GET, .handler = audio_file_handler};
     const httpd_uri_t networks = {.uri = "/api/networks", .method = HTTP_GET, .handler = networks_handler};
     const httpd_uri_t cast_devices = {.uri = "/api/cast-devices", .method = HTTP_GET, .handler = cast_devices_handler};
+    const httpd_uri_t dlna_devices = {.uri = "/api/dlna-devices", .method = HTTP_GET, .handler = dlna_devices_handler};
     const httpd_uri_t firmware_update = {.uri = "/api/update", .method = HTTP_POST, .handler = firmware_update_handler};
-    httpd_register_uri_handler(server, &root); httpd_register_uri_handler(server, &save); httpd_register_uri_handler(server, &play); httpd_register_uri_handler(server, &play_takbeer); httpd_register_uri_handler(server, &upload); httpd_register_uri_handler(server, &upload_takbeer); httpd_register_uri_handler(server, &status); httpd_register_uri_handler(server, &location); httpd_register_uri_handler(server, &wifi); httpd_register_uri_handler(server, &audio_file); httpd_register_uri_handler(server, &takbeer_file); httpd_register_uri_handler(server, &networks); httpd_register_uri_handler(server, &cast_devices); httpd_register_uri_handler(server, &firmware_update);
+    httpd_register_uri_handler(server, &root); httpd_register_uri_handler(server, &save); httpd_register_uri_handler(server, &play); httpd_register_uri_handler(server, &play_takbeer); httpd_register_uri_handler(server, &upload); httpd_register_uri_handler(server, &upload_takbeer); httpd_register_uri_handler(server, &status); httpd_register_uri_handler(server, &location); httpd_register_uri_handler(server, &wifi); httpd_register_uri_handler(server, &audio_file); httpd_register_uri_handler(server, &takbeer_file); httpd_register_uri_handler(server, &networks); httpd_register_uri_handler(server, &cast_devices); httpd_register_uri_handler(server, &dlna_devices); httpd_register_uri_handler(server, &firmware_update);
     ESP_LOGI(TAG, "Web setup interface is ready");
 }

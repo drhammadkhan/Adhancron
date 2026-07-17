@@ -200,6 +200,28 @@ class TriggerHATests(unittest.TestCase):
             ):
                 trigger_ha._trigger_google_cast("http://host/audio/adhan_final.mp3", 0.8)
 
+    def test_airplay_bypasses_home_assistant(self):
+        speaker_module = types.SimpleNamespace(play_airplay=mock.Mock())
+        with mock.patch.object(trigger_ha, "_playback_method", return_value="airplay"), \
+             mock.patch.object(trigger_ha, "_airplay_identifier", return_value="speaker-id"), \
+             mock.patch.dict(sys.modules, {"network_speakers": speaker_module}):
+            trigger_ha.trigger("http://host/audio/adhan_final.mp3", 0.8)
+        speaker_module.play_airplay.assert_called_once_with(
+            "speaker-id", "http://host/audio/adhan_final.mp3", 0.8
+        )
+
+    def test_dlna_bypasses_home_assistant(self):
+        device = types.SimpleNamespace(name="Living Room")
+        speaker_module = types.SimpleNamespace(play_dlna=mock.Mock(return_value=device))
+        location = "http://192.168.1.40:1400/description.xml"
+        with mock.patch.object(trigger_ha, "_playback_method", return_value="dlna"), \
+             mock.patch.object(trigger_ha, "_dlna_location", return_value=location), \
+             mock.patch.dict(sys.modules, {"network_speakers": speaker_module}):
+            trigger_ha.trigger("http://host/audio/adhan_final.mp3", 0.8)
+        speaker_module.play_dlna.assert_called_once_with(
+            location, "http://host/audio/adhan_final.mp3", 0.8
+        )
+
 
 if __name__ == "__main__":
     unittest.main()

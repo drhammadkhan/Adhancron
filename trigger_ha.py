@@ -41,6 +41,8 @@ PLAYBACK_POLL_INTERVAL = float(os.getenv("ADHAN_PLAYBACK_POLL_INTERVAL", "1"))
 PLAYING_STATES = {"playing", "buffering"}
 PLAYBACK_METHOD_HOME_ASSISTANT = "home_assistant"
 PLAYBACK_METHOD_GOOGLE_CAST = "google_cast"
+PLAYBACK_METHOD_AIRPLAY = "airplay"
+PLAYBACK_METHOD_DLNA = "dlna"
 
 
 def _load_settings() -> dict:
@@ -134,6 +136,14 @@ def _google_cast_port() -> int:
     if not 1 <= port <= 65535:
         raise RuntimeError("Google Cast port must be between 1 and 65535")
     return port
+
+
+def _airplay_identifier() -> str:
+    return _setting("airplay_identifier", "AIRPLAY_IDENTIFIER")
+
+
+def _dlna_location() -> str:
+    return _setting("dlna_location", "DLNA_LOCATION")
 
 
 def _post_service(service: str, payload: dict) -> requests.Response:
@@ -246,6 +256,32 @@ def trigger(media_url: str, volume: float = 0.8) -> None:
             f"{os.getenv('ADHAN_SETTINGS_FILE', str(SETTINGS_FILE))}"
         )
         _trigger_google_cast(media_url, volume)
+        return
+    if playback_method == PLAYBACK_METHOD_AIRPLAY:
+        from network_speakers import play_airplay
+
+        identifier = _airplay_identifier()
+        _log(
+            "Trigger start: "
+            f"method=airplay, media_url={media_url}, volume={volume}, "
+            f"identifier={identifier or 'missing'}"
+        )
+        play_airplay(identifier, media_url, volume)
+        _log("Trigger complete: AirPlay playback finished")
+        return
+    if playback_method == PLAYBACK_METHOD_DLNA:
+        from network_speakers import play_dlna
+
+        location = _dlna_location()
+        if not location:
+            raise RuntimeError("Choose a DLNA or Sonos speaker")
+        _log(
+            "Trigger start: "
+            f"method=dlna, media_url={media_url}, volume={volume}, "
+            f"location={location}"
+        )
+        device = play_dlna(location, media_url, volume)
+        _log(f"Trigger complete: DLNA playback started on {device.name}")
         return
     if playback_method != PLAYBACK_METHOD_HOME_ASSISTANT:
         raise RuntimeError(f"Unsupported playback method: {playback_method}")

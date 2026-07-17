@@ -37,6 +37,7 @@
 #include "board_config.h"
 #include "cast_sender.h"
 #include "display_ui.h"
+#include "dlna_sender.h"
 #include "eid.h"
 #include "firmware_update.h"
 #include "prayer_times.h"
@@ -461,6 +462,27 @@ static void play_audio(audio_track_t track) {
             return;
         }
         ESP_LOGW(TAG, "Cast playback failed%s%s; using attached speaker",
+            error[0] != '\0' ? ": " : "", error);
+    } else if (settings.output == ADHAN_OUTPUT_DLNA) {
+        char media_url[96];
+        char error[160] = {0};
+        ESP_LOGI(TAG, "Starting %s DLNA playback on %s",
+            audio_track_title(track), settings.dlna_device_name);
+        bool dlna_started = false;
+        if (!wifi_connected) {
+            strlcpy(error, "Wi-Fi is offline", sizeof(error));
+        } else if (!current_media_url(track, media_url, sizeof(media_url))) {
+            strlcpy(error, "the device audio URL is unavailable", sizeof(error));
+        } else {
+            dlna_started = dlna_sender_play(
+                settings.dlna_device_url, media_url, settings.volume,
+                error, sizeof(error));
+        }
+        if (dlna_started) {
+            xSemaphoreGive(playback_mutex);
+            return;
+        }
+        ESP_LOGW(TAG, "DLNA playback failed%s%s; using attached speaker",
             error[0] != '\0' ? ": " : "", error);
     }
     play_audio_from_storage(track);

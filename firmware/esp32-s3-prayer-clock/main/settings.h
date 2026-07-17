@@ -6,6 +6,7 @@
 typedef enum {
     ADHAN_OUTPUT_ATTACHED = 0,
     ADHAN_OUTPUT_CAST = 1,
+    ADHAN_OUTPUT_DLNA = 2,
 } adhan_output_t;
 
 typedef struct {
@@ -21,6 +22,8 @@ typedef struct {
     adhan_output_t output;
     char cast_device_id[48];
     char cast_device_name[64];
+    char dlna_device_url[256];
+    char dlna_device_name[64];
     bool automatic_updates;
     char ramadan_start_date[11];
     char ramadan_end_date[11];

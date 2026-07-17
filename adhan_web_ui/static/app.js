@@ -25,6 +25,18 @@ const googleCastHostInput = document.getElementById("googleCastHostInput");
 const homeAssistantFields = document.getElementById("homeAssistantFields");
 const homeAssistantTokenFields = document.getElementById("homeAssistantTokenFields");
 const googleCastFields = document.getElementById("googleCastFields");
+const airplayFields = document.getElementById("airplayFields");
+const airplayDeviceInput = document.getElementById("airplayDeviceInput");
+const scanAirplayBtn = document.getElementById("scanAirplayBtn");
+const pairAirplayBtn = document.getElementById("pairAirplayBtn");
+const airplayPinFields = document.getElementById("airplayPinFields");
+const airplayPinInput = document.getElementById("airplayPinInput");
+const finishAirplayPairBtn = document.getElementById("finishAirplayPairBtn");
+const airplayStatus = document.getElementById("airplayStatus");
+const dlnaFields = document.getElementById("dlnaFields");
+const dlnaDeviceInput = document.getElementById("dlnaDeviceInput");
+const scanDlnaBtn = document.getElementById("scanDlnaBtn");
+const dlnaStatus = document.getElementById("dlnaStatus");
 const latitudeInput = document.getElementById("latitudeInput");
 const longitudeInput = document.getElementById("longitudeInput");
 const locationSearchInput = document.getElementById("locationSearchInput");
@@ -44,6 +56,7 @@ const takbeerAudioInput = document.getElementById("takbeerAudioInput");
 const uploadTakbeerBtn = document.getElementById("uploadTakbeerBtn");
 const heroEyebrow = document.getElementById("heroEyebrow");
 const heroTitle = document.getElementById("heroTitle");
+let airplayPairingSession = "";
 
 function setStatus(message, type = "ghost") {
   statusBadge.className = `badge badge-${type} px-4 py-3 text-xs sm:text-sm`;
@@ -57,10 +70,23 @@ function setSettingsStatus(message, type = "ghost") {
 }
 
 function syncPlaybackMethod(method) {
-  const directCast = method === "google_cast";
-  if (homeAssistantFields) homeAssistantFields.classList.toggle("hidden", directCast);
-  if (homeAssistantTokenFields) homeAssistantTokenFields.classList.toggle("hidden", directCast);
-  if (googleCastFields) googleCastFields.classList.toggle("hidden", !directCast);
+  const homeAssistant = method === "home_assistant";
+  if (homeAssistantFields) homeAssistantFields.classList.toggle("hidden", !homeAssistant);
+  if (homeAssistantTokenFields) homeAssistantTokenFields.classList.toggle("hidden", !homeAssistant);
+  if (googleCastFields) googleCastFields.classList.toggle("hidden", method !== "google_cast");
+  if (airplayFields) airplayFields.classList.toggle("hidden", method !== "airplay");
+  if (dlnaFields) dlnaFields.classList.toggle("hidden", method !== "dlna");
+}
+
+function ensureSpeakerOption(select, value, name) {
+  if (!select || !value) return;
+  let option = Array.from(select.options).find((item) => item.value === value);
+  if (!option) {
+    option = new Option(name || value, value, true, true);
+    option.dataset.name = name || value;
+    select.add(option);
+  }
+  option.selected = true;
 }
 
 function renderSettings(settings, overrideMessage = null) {
@@ -70,6 +96,8 @@ function renderSettings(settings, overrideMessage = null) {
   if (publicBaseUrlInput) publicBaseUrlInput.value = settings.public_base_url || "";
   if (playbackMethodInput) playbackMethodInput.value = settings.playback_method || "home_assistant";
   if (googleCastHostInput) googleCastHostInput.value = settings.google_cast_host || "";
+  ensureSpeakerOption(airplayDeviceInput, settings.airplay_identifier, settings.airplay_device_name);
+  ensureSpeakerOption(dlnaDeviceInput, settings.dlna_location, settings.dlna_device_name);
   syncPlaybackMethod(settings.playback_method || "home_assistant");
   if (latitudeInput) latitudeInput.value = settings.latitude || "";
   if (longitudeInput) longitudeInput.value = settings.longitude || "";
@@ -98,6 +126,22 @@ function renderSettings(settings, overrideMessage = null) {
     const configured = Boolean(settings.google_cast_host);
     setSettingsStatus(
       overrideMessage || (configured ? "Direct Google Cast ready" : "Set Google Cast speaker address"),
+      configured ? "success" : "warning",
+    );
+    return;
+  }
+  if (settings.playback_method === "airplay") {
+    const configured = Boolean(settings.airplay_identifier);
+    setSettingsStatus(
+      overrideMessage || (configured ? `AirPlay ready: ${settings.airplay_device_name || "speaker"}` : "Choose an AirPlay speaker"),
+      configured ? "success" : "warning",
+    );
+    return;
+  }
+  if (settings.playback_method === "dlna") {
+    const configured = Boolean(settings.dlna_location);
+    setSettingsStatus(
+      overrideMessage || (configured ? `Network speaker ready: ${settings.dlna_device_name || "DLNA device"}` : "Choose a Sonos or DLNA speaker"),
       configured ? "success" : "warning",
     );
     return;
@@ -282,6 +326,14 @@ async function saveSettings() {
   if (publicBaseUrlInput?.value.trim()) payload.public_base_url = publicBaseUrlInput.value.trim();
   if (payload.playback_method === "google_cast") {
     payload.google_cast_host = googleCastHostInput ? googleCastHostInput.value.trim() : "";
+  } else if (payload.playback_method === "airplay") {
+    const option = airplayDeviceInput?.options[airplayDeviceInput.selectedIndex];
+    payload.airplay_identifier = airplayDeviceInput ? airplayDeviceInput.value : "";
+    payload.airplay_device_name = option?.dataset.name || option?.textContent || "";
+  } else if (payload.playback_method === "dlna") {
+    const option = dlnaDeviceInput?.options[dlnaDeviceInput.selectedIndex];
+    payload.dlna_location = dlnaDeviceInput ? dlnaDeviceInput.value : "";
+    payload.dlna_device_name = option?.dataset.name || option?.textContent || "";
   }
   const latitude = latitudeInput ? latitudeInput.value.trim() : "";
   const longitude = longitudeInput ? longitudeInput.value.trim() : "";
@@ -314,6 +366,95 @@ async function saveSettings() {
     setSettingsStatus(error.message, "error");
   } finally {
     saveSettingsBtn.disabled = false;
+  }
+}
+
+async function scanSpeakers(kind) {
+  const airplay = kind === "airplay";
+  const select = airplay ? airplayDeviceInput : dlnaDeviceInput;
+  const status = airplay ? airplayStatus : dlnaStatus;
+  const savedValue = select?.value || "";
+  if (!select || !status) return;
+  select.innerHTML = `<option value="">Scanning...</option>`;
+  status.textContent = "Looking for speakers on this network...";
+  try {
+    const response = await fetch(`api/speakers/${kind}`, { cache: "no-store" });
+    const payload = await response.json();
+    if (!response.ok) throw new Error(payload.detail || "Speaker scan failed");
+    select.innerHTML = `<option value="">Choose a speaker</option>`;
+    payload.devices.forEach((device) => {
+      const value = airplay ? device.identifier : device.location;
+      const option = new Option(
+        `${device.name}${device.model ? ` - ${device.model}` : ""}`,
+        value,
+      );
+      option.dataset.name = device.name;
+      option.dataset.pairingRequired = device.pairing_required ? "true" : "false";
+      if (value === savedValue) option.selected = true;
+      select.add(option);
+    });
+    if (savedValue && !Array.from(select.options).some((item) => item.value === savedValue)) {
+      ensureSpeakerOption(select, savedValue, "Saved speaker (currently unavailable)");
+    }
+    status.textContent = payload.devices.length
+      ? `${payload.devices.length} compatible speaker${payload.devices.length === 1 ? "" : "s"} found.`
+      : "No compatible speakers were found. Confirm the speaker is online and on this network.";
+  } catch (error) {
+    select.innerHTML = `<option value="">Scan unavailable</option>`;
+    status.textContent = error.message;
+  }
+}
+
+async function startAirplayPairing() {
+  if (!airplayDeviceInput?.value || !airplayStatus) {
+    if (airplayStatus) airplayStatus.textContent = "Choose an AirPlay speaker first.";
+    return;
+  }
+  airplayStatus.textContent = "Starting AirPlay pairing...";
+  try {
+    const response = await fetch("api/speakers/airplay/pair/start", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ identifier: airplayDeviceInput.value }),
+    });
+    const payload = await response.json();
+    if (!response.ok) throw new Error(payload.detail || "Unable to start AirPlay pairing");
+    if (payload.paired || !payload.pairing_required) {
+      airplayStatus.textContent = "This AirPlay speaker is ready and does not require a new PIN.";
+      airplayPinFields?.classList.add("hidden");
+      return;
+    }
+    airplayPairingSession = payload.session_id;
+    airplayPinFields?.classList.remove("hidden");
+    airplayStatus.textContent = payload.device_provides_pin
+      ? "Enter the PIN shown by the speaker or TV."
+      : "Enter the displayed PIN on the receiver, then type the same PIN here.";
+    airplayPinInput?.focus();
+  } catch (error) {
+    airplayStatus.textContent = error.message;
+  }
+}
+
+async function finishAirplayPairing() {
+  if (!airplayPairingSession || !airplayPinInput?.value.trim() || !airplayStatus) return;
+  airplayStatus.textContent = "Finishing AirPlay pairing...";
+  try {
+    const response = await fetch("api/speakers/airplay/pair/finish", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        session_id: airplayPairingSession,
+        pin: airplayPinInput.value.trim(),
+      }),
+    });
+    const payload = await response.json();
+    if (!response.ok) throw new Error(payload.detail || "AirPlay pairing failed");
+    airplayPairingSession = "";
+    airplayPinInput.value = "";
+    airplayPinFields?.classList.add("hidden");
+    airplayStatus.textContent = "AirPlay pairing complete. Save Settings to use this speaker.";
+  } catch (error) {
+    airplayStatus.textContent = error.message;
   }
 }
 
@@ -518,11 +659,19 @@ refreshBtn.addEventListener("click", () => {
 saveBtn.addEventListener("click", saveJobs);
 if (saveSettingsBtn) saveSettingsBtn.addEventListener("click", saveSettings);
 if (uploadTakbeerBtn) uploadTakbeerBtn.addEventListener("click", uploadTakbeer);
+if (scanAirplayBtn) scanAirplayBtn.addEventListener("click", () => scanSpeakers("airplay"));
+if (scanDlnaBtn) scanDlnaBtn.addEventListener("click", () => scanSpeakers("dlna"));
+if (pairAirplayBtn) pairAirplayBtn.addEventListener("click", startAirplayPairing);
+if (finishAirplayPairBtn) finishAirplayPairBtn.addEventListener("click", finishAirplayPairing);
 if (playbackMethodInput) {
   playbackMethodInput.addEventListener("change", () => {
     syncPlaybackMethod(playbackMethodInput.value);
     if (playbackMethodInput.value === "google_cast") {
       setSettingsStatus("Save the Google Cast speaker address before testing", "warning");
+    } else if (playbackMethodInput.value === "airplay") {
+      setSettingsStatus("Scan, choose, and pair an AirPlay speaker before testing", "warning");
+    } else if (playbackMethodInput.value === "dlna") {
+      setSettingsStatus("Scan and choose a Sonos or DLNA speaker before testing", "warning");
     }
   });
 }

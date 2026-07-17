@@ -2,7 +2,7 @@
 
 Adhancron is a complete prayer clock and adhan scheduler available in three editions: a Docker home-server service, a native desktop application, and a standalone ESP32-S3 appliance. Every edition calculates daily prayer times locally from the user's location and can schedule adhan playback without relying on an external prayer-time service.
 
-Docker and desktop can play through Home Assistant or Google Cast. The standalone ESP32-S3 edition adds an always-on 240x320 prayer display, its own browser-based setup, internal adhan storage, an attached speaker, and direct Google Cast playback served entirely by the device.
+Docker and desktop can play through Home Assistant, Google Cast, AirPlay, or Sonos/UPnP-DLNA. The standalone ESP32-S3 edition adds an always-on 240x320 prayer display, its own browser-based setup, internal adhan storage, an attached speaker, and direct Google Cast or Sonos/DLNA playback served entirely by the device.
 
 ## Editions
 
@@ -34,8 +34,8 @@ It provides:
 - Location search by town, city, postcode, or coordinates, including automatic timezone and daylight-saving handling.
 - Local prayer-time calculation and once-per-prayer scheduling.
 - An 8 MB internal audio partition for the adhan MP3, with browser upload and optional one-time microSD import.
-- Scheduled or manual playback through the attached speaker or a discovered Google Cast receiver.
-- Byte-range HTTP audio serving directly from the ESP32, plus automatic fallback to the attached speaker when Cast is unavailable.
+- Scheduled or manual playback through the attached speaker, a discovered Google Cast receiver, or a Sonos/UPnP-DLNA speaker.
+- Byte-range HTTP audio serving directly from the ESP32, plus automatic fallback to the attached speaker when a network receiver is unavailable.
 - The current device IP address on the display so the full settings dashboard is easy to find.
 - User-defined first and final fasting days, with automatic Ramadan day numbering and separate Sehri/Iftar context while retaining the canonical prayer names.
 - Ten-minute, seconds-accurate Ramadan countdowns to the end of Sehri and the beginning of Iftar.
@@ -63,13 +63,15 @@ That USB installation enables safe over-the-air updates. Afterwards the clock ch
 - Lets you manually edit prayer times from the web UI.
 - Lets you disable or re-enable individual prayer jobs.
 - Supports manual overrides so auto-update does not overwrite a custom time.
-- Saves Home Assistant or direct Google Cast settings from the web UI.
+- Discovers and saves Home Assistant, Google Cast, AirPlay, or Sonos/UPnP-DLNA playback from the web UI.
 - Stores the Home Assistant long-lived access token in `/data`, not in the GitHub repo.
 - Serves `adhan_final.mp3` at `/audio/adhan_final.mp3`.
 - Supports byte-range and `HEAD` requests for Cast/media-player playback.
 - Logs playback triggers and audio fetches for troubleshooting.
 - Uses Home Assistant's `announce` playback and confirms playback by polling the speaker's state.
 - Can bypass Home Assistant and send the MP3 directly to a Google Cast speaker by IP address or hostname.
+- Can discover AirPlay receivers, complete PIN pairing when required, and keep credentials in the persistent data folder.
+- Can discover Sonos and other UPnP/DLNA MediaRenderer speakers and control them directly.
 - Saves separate locally observed dates for Eid al-Fitr and Eid al-Adha.
 - Shows an all-day Eid greeting and a ten-minute countdown to the next takbeer slot.
 - Repeats the bundled 65-second Eid takbeer during a configurable window while leaving all five normal prayer adhans active.
@@ -91,7 +93,7 @@ Adhancron has four moving parts:
    The dashboard saves the home latitude and longitude, then calculates a local timetable and stores it in `/data/prayer_times.json`. It uses Fajr 90 minutes before sunrise, Zuhr five minutes after solar noon, standard Asr, Maghrib one minute after sunset, and the Moonsighting Committee seasonal Isha adjustment. The solar-position library can differ from Alislam by up to two minutes. At `00:05` every day, cron runs `update_adhan.py`, checks that the calendar covers the current and following year, and updates the prayer cron entries. Manual overrides are preserved.
 
 4. **Playback trigger**
-   `trigger_ha.py` uses the saved playback method. With **Home Assistant**, it calls the REST API, sets volume, sends `media_player.play_media` with `announce: true`, and polls the speaker state until it reports `playing`. If the speaker never reaches a playing state (or the integration does not support `announce`), it falls back to a plain `play_media`. With **Direct Google Cast**, it connects directly to the configured Google Cast device on its local IP/hostname and port `8009`, sets volume, and sends it the public MP3 URL.
+   `trigger_ha.py` uses the saved playback method. **Home Assistant** uses its REST API and confirmed announcement playback. **Google Cast** connects to port `8009`. **AirPlay** uses the selected paired RAOP/AirPlay receiver. **Sonos / DLNA** sends standard UPnP `SetAVTransportURI` and `Play` commands. Every network route points the speaker at Adhancron's local MP3 URL.
 
 ## Playback Flow
 
@@ -107,7 +109,7 @@ At prayer time:
 
 3. With Home Assistant selected, it contacts Home Assistant at the configured `HA_URL`, which tells the configured `media_player` entity to play the public audio URL using `announce: true`.
 
-4. With Direct Google Cast selected, it contacts the Google Cast speaker directly at its configured IP address or hostname.
+4. With Google Cast, AirPlay, or Sonos/DLNA selected, Adhancron contacts the saved receiver directly over the local network.
 
 5. The speaker fetches the MP3 from Adhancron’s `/audio/adhan_final.mp3` endpoint.
 
@@ -178,6 +180,26 @@ Adhancron automatically uses the address you used to open its dashboard, for exa
 
 Direct Google Cast starts a normal media session. It will interrupt existing audio on that speaker and does not restore previous playback afterwards. Choose Home Assistant when you specifically want its `announce` behavior or want to target Home Assistant speaker groups.
 
+### AirPlay
+
+Choose **AirPlay**, select **Scan for speakers**, and choose the receiver. Use
+**Pair selected speaker** only when the receiver requests a PIN. Pairing
+credentials are kept in the persistent `/data` folder. AirPlay and the
+Adhancron host must be on the same reachable local network.
+
+### Sonos / DLNA
+
+Choose **Sonos / DLNA**, scan, and select a compatible speaker or hi-fi. This
+uses the standard UPnP MediaRenderer interface and does not require a cloud
+account or Home Assistant. The receiver must be able to fetch Adhancron's MP3
+URL from the local network. Sonos compatibility depends on the model exposing
+its normal UPnP AVTransport service.
+
+Speaker scans rely on local multicast discovery. The CasaOS template uses
+Linux host networking for this reason. With a custom Docker installation, use
+host networking on Linux if AirPlay or DLNA scans are empty even though the
+native desktop app can see the same speakers.
+
 ## Before You Install
 
 You will need three things from your existing setup. Have them ready before you start:
@@ -217,7 +239,7 @@ The CasaOS template builds the Docker image directly from this GitHub repository
 
    You can leave `HA_TOKEN` empty and save it later in the web UI (recommended), or paste it here.
 
-4. Confirm the port mapping is `8090:8090` and the data volume maps to `/DATA/AppData/adhan-manager:/data`.
+4. Confirm the app uses **host networking** and the data volume maps to `/DATA/AppData/adhan-manager:/data`. Host networking lets local speaker discovery reach the CasaOS LAN. The dashboard still uses port `8090`.
 
 5. Install the app, then open:
 
@@ -286,13 +308,14 @@ Then open `http://YOUR_DOCKER_HOST_IP:8090` and complete the [First-Run Setup](#
 
 However you installed, finish setup from the web dashboard at `http://YOUR_HOST_IP:8090`:
 
-1. In the **Playback** panel, choose either **Home Assistant** or **Direct Google Cast**.
+1. In the **Playback** panel, choose **Home Assistant**, **Direct Google Cast**, **AirPlay**, or **Sonos / DLNA**.
 2. For **Home Assistant**, fill in:
    - **Home Assistant URL** (e.g. `http://192.168.1.22:8123`)
    - **Speaker Entity** (e.g. `media_player.bedroom_speaker`)
    - **Access Token** — paste your long-lived token here if you did not set `HA_TOKEN`.
    - **Latitude** and **Longitude** — enter these manually or choose **Use This Device's Location**.
 3. For **Direct Google Cast**, fill in the speaker IP/hostname and leave the port at `8009`. The Home Assistant fields are not needed.
+   For **AirPlay** or **Sonos / DLNA**, scan for receivers and choose one by name. Pair AirPlay only when prompted.
 4. Click **Save Settings**. The playback settings and location are written to `/data/adhan_settings.json` (owner-only); the app calculates and saves the timetable at `/data/prayer_times.json`, then applies today's cron schedule.
 5. Ensure the container `TZ` value matches your home timezone. Cron uses this timezone when it runs the saved local times.
 6. Click **Play Adhan Now** to test. The speaker should play the adhan within a few seconds.
@@ -310,9 +333,13 @@ Environment variables:
 | `HA_URL` | Home Assistant base URL | `http://homeassistant.local:8123` |
 | `HA_ENTITY_ID` | Target media player entity | `media_player.bedroom_speaker` |
 | `HA_TOKEN` | Optional Home Assistant token | empty |
-| `ADHAN_PLAYBACK_METHOD` | `home_assistant` or `google_cast` | `home_assistant` |
+| `ADHAN_PLAYBACK_METHOD` | `home_assistant`, `google_cast`, `airplay`, or `dlna` | `home_assistant` |
 | `GOOGLE_CAST_HOST` | Google Cast speaker IP address or hostname | empty |
 | `GOOGLE_CAST_PORT` | Advanced Google Cast control-port override | `8009` |
+| `AIRPLAY_IDENTIFIER` | Optional saved AirPlay receiver identifier | empty |
+| `DLNA_LOCATION` | Optional UPnP device-description URL | empty |
+| `ADHAN_AIRPLAY_TIMEOUT` | AirPlay discovery timeout in seconds | `5` |
+| `ADHAN_DLNA_TIMEOUT` | DLNA HTTP timeout in seconds | `5` |
 | `PUBLIC_BASE_URL` | Optional advanced audio URL override | automatic dashboard URL |
 | `ADHAN_VOLUME` | Playback volume, `0.0` to `1.0` | `0.8` |
 | `ADHAN_AUDIO_FILE` | Audio file served from `/audio` | `adhan_final.mp3` |
@@ -327,7 +354,7 @@ Environment variables:
 | `ADHAN_MEDIA_CONTENT_TYPE` | Media type sent to Home Assistant | `audio/mpeg` |
 | `TZ` | Container timezone | `Europe/London` |
 
-Settings saved from the web UI take priority for the playback method, Home Assistant URL/entity/token, Google Cast host/port, audio URL override, latitude, and longitude.
+Settings saved from the web UI take priority for the playback method, selected network speaker, Home Assistant details, audio URL override, latitude, and longitude.
 
 ## Persistent Data
 
@@ -530,7 +557,8 @@ http://YOUR_DOCKER_HOST_IP:8090/audio/adhan_final.mp3 • volume 0.8
 | `adhan_web_ui/settings_manager.py` | Secure settings persistence |
 | `adhan_web_ui/override_manager.py` | Manual override persistence |
 | `adhan_config.py` | Shared runtime paths and command builder |
-| `trigger_ha.py` | Home Assistant playback trigger |
+| `trigger_ha.py` | Shared Home Assistant and direct-speaker playback trigger |
+| `network_speakers.py` | AirPlay pairing/playback and Sonos/UPnP-DLNA discovery/control |
 | `apply_adhan_cron.py` | Prayer schedule updater |
 | `update_adhan.py` | Wrapper used by cron/startup |
 | `prayer_times.json` | Prayer time data |

@@ -150,6 +150,8 @@
             <select id="playbackMethodInput" class="select select-bordered w-full bg-white/80">
               <option value="home_assistant">Home Assistant</option>
               <option value="google_cast">Direct Google Cast</option>
+              <option value="airplay">AirPlay</option>
+              <option value="dlna">Sonos / DLNA</option>
             </select>
           </label>
           <div id="homeAssistantFields" class="grid gap-4 lg:grid-cols-[1.1fr_1fr]">
@@ -173,6 +175,36 @@
               </div>
               <input id="googleCastHostInput" type="text" class="input input-bordered w-full bg-white/80" placeholder="192.168.1.24" />
             </label>
+          </div>
+          <div id="airplayFields" class="hidden rounded-lg border border-slate-200 bg-white/45 p-4">
+            <label class="form-control">
+              <span class="label-text text-sm font-medium">AirPlay speaker</span>
+              <select id="airplayDeviceInput" class="select select-bordered mt-2 w-full bg-white/80">
+                <option value="">Scan to find AirPlay speakers</option>
+              </select>
+            </label>
+            <div class="mt-3 flex flex-col gap-2 sm:flex-row">
+              <button id="scanAirplayBtn" type="button" class="btn btn-outline btn-success">Scan for speakers</button>
+              <button id="pairAirplayBtn" type="button" class="btn btn-outline">Pair selected speaker</button>
+            </div>
+            <div id="airplayPinFields" class="mt-3 hidden">
+              <label class="form-control">
+                <span class="label-text text-sm font-medium">AirPlay PIN</span>
+                <input id="airplayPinInput" inputmode="numeric" autocomplete="one-time-code" class="input input-bordered mt-2 w-full bg-white/80" placeholder="PIN shown by the speaker or TV" />
+              </label>
+              <button id="finishAirplayPairBtn" type="button" class="btn btn-success mt-3">Finish pairing</button>
+            </div>
+            <p id="airplayStatus" class="mt-3 text-sm text-slate-500">Choose Scan for speakers. Pairing is only needed when the receiver requests it.</p>
+          </div>
+          <div id="dlnaFields" class="hidden rounded-lg border border-slate-200 bg-white/45 p-4">
+            <label class="form-control">
+              <span class="label-text text-sm font-medium">Sonos or DLNA speaker</span>
+              <select id="dlnaDeviceInput" class="select select-bordered mt-2 w-full bg-white/80">
+                <option value="">Scan to find network speakers</option>
+              </select>
+            </label>
+            <button id="scanDlnaBtn" type="button" class="btn btn-outline btn-success mt-3">Scan for speakers</button>
+            <p id="dlnaStatus" class="mt-3 text-sm text-slate-500">Works with compatible Sonos, hi-fi, and UPnP/DLNA MediaRenderer devices.</p>
           </div>
           <details class="rounded-lg border border-slate-200 bg-white/45 px-4 py-3">
             <summary class="cursor-pointer text-sm font-medium text-slate-600">Advanced audio address</summary>
@@ -318,24 +350,34 @@
         button.disabled = true;
         try {
           const playbackMethod = document.getElementById("playbackMethodInput")?.value;
-          if (playbackMethod === "google_cast") {
+          if (["google_cast", "airplay", "dlna"].includes(playbackMethod)) {
             const host = document.getElementById("googleCastHostInput")?.value.trim();
-            if (!host) throw new Error("Enter the Google Cast speaker IP address or hostname first");
+            const airplaySelect = document.getElementById("airplayDeviceInput");
+            const dlnaSelect = document.getElementById("dlnaDeviceInput");
+            if (playbackMethod === "google_cast" && !host) throw new Error("Enter the Google Cast speaker IP address or hostname first");
+            if (playbackMethod === "airplay" && !airplaySelect?.value) throw new Error("Choose an AirPlay speaker first");
+            if (playbackMethod === "dlna" && !dlnaSelect?.value) throw new Error("Choose a Sonos or DLNA speaker first");
 
-            // Persist the direct-Cast choice before the trigger. This keeps the
+            // Persist the direct-speaker choice before the trigger. This keeps the
             // test button and the scheduled cron command on the same route.
+            const selectedAirplay = airplaySelect?.options[airplaySelect.selectedIndex];
+            const selectedDlna = dlnaSelect?.options[dlnaSelect.selectedIndex];
             const settingsResponse = await fetch("api/settings", {
               method: "PUT",
               headers: { "Content-Type": "application/json" },
               body: JSON.stringify({
-                playback_method: "google_cast",
-                google_cast_host: host,
+                playback_method: playbackMethod,
+                google_cast_host: playbackMethod === "google_cast" ? host : null,
+                airplay_identifier: playbackMethod === "airplay" ? airplaySelect.value : null,
+                airplay_device_name: playbackMethod === "airplay" ? selectedAirplay?.dataset.name || selectedAirplay?.textContent : null,
+                dlna_location: playbackMethod === "dlna" ? dlnaSelect.value : null,
+                dlna_device_name: playbackMethod === "dlna" ? selectedDlna?.dataset.name || selectedDlna?.textContent : null,
                 public_base_url: document.getElementById("publicBaseUrlInput")?.value.trim() || null,
               }),
             });
             const settingsPayload = await settingsResponse.json();
-            if (!settingsResponse.ok) throw new Error(settingsPayload.detail || "Unable to save Google Cast settings");
-            if (typeof renderSettings === "function") renderSettings(settingsPayload, "Direct Google Cast saved");
+            if (!settingsResponse.ok) throw new Error(settingsPayload.detail || "Unable to save speaker settings");
+            if (typeof renderSettings === "function") renderSettings(settingsPayload, "Speaker settings saved");
           }
           const response = await fetch(track === "takbeer" ? "api/play/takbeer" : "api/play", { method: "POST" });
           const payload = await response.json();
@@ -349,6 +391,6 @@
         return false;
       }
     </script>
-    <script src="static/app.js?v=20"></script>
+    <script src="static/app.js?v=21"></script>
   </body>
 </html>

@@ -61,6 +61,10 @@ class SettingsUpdate(BaseModel):
     playback_method: str | None = None
     google_cast_host: str | None = None
     google_cast_port: str | None = None
+    airplay_identifier: str | None = None
+    airplay_device_name: str | None = None
+    dlna_location: str | None = None
+    dlna_device_name: str | None = None
     eid_fitr_date: str | None = None
     eid_adha_date: str | None = None
     eid_takbeer_start: str | None = None
@@ -70,6 +74,15 @@ class SettingsUpdate(BaseModel):
 
 class LocationSearchRequest(BaseModel):
     query: str
+
+
+class AirPlayPairStart(BaseModel):
+    identifier: str
+
+
+class AirPlayPairFinish(BaseModel):
+    session_id: str
+    pin: str
 
 
 def _app_version() -> str:
@@ -93,6 +106,8 @@ def version() -> dict:
             "saved_home_assistant_token": True,
             "local_location_based_timings": True,
             "direct_google_cast": True,
+            "airplay": True,
+            "dlna": True,
             "eid_takbeer": True,
         },
     }
@@ -122,6 +137,10 @@ def _settings_response(request: Request | None = None) -> dict:
         "playback_method": current.get("playback_method") or os.getenv("ADHAN_PLAYBACK_METHOD", "home_assistant"),
         "google_cast_host": current.get("google_cast_host") or os.getenv("GOOGLE_CAST_HOST", ""),
         "google_cast_port": current.get("google_cast_port") or os.getenv("GOOGLE_CAST_PORT", "8009"),
+        "airplay_identifier": current.get("airplay_identifier") or os.getenv("AIRPLAY_IDENTIFIER", ""),
+        "airplay_device_name": current.get("airplay_device_name", ""),
+        "dlna_location": current.get("dlna_location") or os.getenv("DLNA_LOCATION", ""),
+        "dlna_device_name": current.get("dlna_device_name", ""),
         "public_base_url": current.get("public_base_url") or PUBLIC_BASE_URL or (
             _request_base_url(request) if request is not None else ""
         ),
@@ -185,8 +204,11 @@ def search_location(payload: LocationSearchRequest) -> dict:
 def update_settings(payload: SettingsUpdate, request: Request) -> dict:
     current = settings.get_settings()
     playback_method = payload.playback_method or current.get("playback_method") or os.getenv("ADHAN_PLAYBACK_METHOD", "home_assistant")
-    if playback_method not in {"home_assistant", "google_cast"}:
-        raise HTTPException(status_code=400, detail="Playback method must be Home Assistant or Google Cast")
+    if playback_method not in {"home_assistant", "google_cast", "airplay", "dlna"}:
+        raise HTTPException(
+            status_code=400,
+            detail="Playback method must be Home Assistant, Google Cast, AirPlay, or DLNA",
+        )
     if playback_method == "google_cast":
         cast_host = payload.google_cast_host if payload.google_cast_host is not None else current.get("google_cast_host", "")
         cast_port = payload.google_cast_port if payload.google_cast_port is not None else current.get("google_cast_port", "8009")
@@ -197,6 +219,22 @@ def update_settings(payload: SettingsUpdate, request: Request) -> dict:
                 raise ValueError
         except ValueError as exc:
             raise HTTPException(status_code=400, detail="Google Cast port must be between 1 and 65535") from exc
+    if playback_method == "airplay":
+        identifier = (
+            payload.airplay_identifier
+            if payload.airplay_identifier is not None
+            else current.get("airplay_identifier", "")
+        )
+        if not identifier.strip():
+            raise HTTPException(status_code=400, detail="Choose an AirPlay speaker")
+    if playback_method == "dlna":
+        location = (
+            payload.dlna_location
+            if payload.dlna_location is not None
+            else current.get("dlna_location", "")
+        )
+        if not location.strip().startswith(("http://", "https://")):
+            raise HTTPException(status_code=400, detail="Choose a DLNA or Sonos speaker")
     if payload.latitude is not None or payload.longitude is not None:
         latitude = payload.latitude if payload.latitude is not None else current.get("latitude", "")
         longitude = payload.longitude if payload.longitude is not None else current.get("longitude", "")
@@ -241,6 +279,46 @@ def update_settings(payload: SettingsUpdate, request: Request) -> dict:
     if location_updated:
         response["prayer_times_message"] = generation.summary
     return response
+
+
+@app.get("/api/speakers/airplay")
+def airplay_speakers() -> dict:
+    from network_speakers import discover_airplay_devices
+
+    try:
+        return {"devices": discover_airplay_devices()}
+    except Exception as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+
+
+@app.post("/api/speakers/airplay/pair/start")
+def airplay_pair_start(payload: AirPlayPairStart) -> dict:
+    from network_speakers import start_airplay_pairing
+
+    try:
+        return start_airplay_pairing(payload.identifier.strip())
+    except Exception as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+
+
+@app.post("/api/speakers/airplay/pair/finish")
+def airplay_pair_finish(payload: AirPlayPairFinish) -> dict:
+    from network_speakers import finish_airplay_pairing
+
+    try:
+        return finish_airplay_pairing(payload.session_id, payload.pin.strip())
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@app.get("/api/speakers/dlna")
+def dlna_speakers() -> dict:
+    from network_speakers import discover_dlna_devices
+
+    try:
+        return {"devices": discover_dlna_devices()}
+    except Exception as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
 
 
 @app.post("/api/play")
@@ -541,6 +619,12 @@ def dashboard_status() -> dict:
     if method == "google_cast":
         playback_ready = bool(current.get("google_cast_host") or os.getenv("GOOGLE_CAST_HOST"))
         playback_label = "Google Cast speaker"
+    elif method == "airplay":
+        playback_ready = bool(current.get("airplay_identifier") or os.getenv("AIRPLAY_IDENTIFIER"))
+        playback_label = "AirPlay speaker"
+    elif method == "dlna":
+        playback_ready = bool(current.get("dlna_location") or os.getenv("DLNA_LOCATION"))
+        playback_label = "DLNA or Sonos speaker"
     else:
         playback_ready = bool(
             (current.get("ha_url") or os.getenv("HA_URL"))

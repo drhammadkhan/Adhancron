@@ -6,8 +6,7 @@ services:
     image: adhancron:latest
     container_name: adhan-manager
     restart: unless-stopped
-    ports:
-      - "8090:8090"
+    network_mode: host
     volumes:
       - /DATA/AppData/adhan-manager:/data
     environment:
@@ -17,6 +16,10 @@ services:
       ADHAN_PLAYBACK_METHOD: "home_assistant"
       GOOGLE_CAST_HOST: ""
       GOOGLE_CAST_PORT: "8009"
+      AIRPLAY_IDENTIFIER: ""
+      DLNA_LOCATION: ""
+      ADHAN_AIRPLAY_TIMEOUT: "5"
+      ADHAN_DLNA_TIMEOUT: "5"
       ADHAN_VOLUME: "0.8"
       ADHAN_LATITUDE: ""
       ADHAN_LONGITUDE: ""

@@ -17,13 +17,24 @@ class SettingsManager:
         "playback_method",
         "google_cast_host",
         "google_cast_port",
+        "airplay_identifier",
+        "airplay_device_name",
+        "dlna_location",
+        "dlna_device_name",
         "eid_fitr_date",
         "eid_adha_date",
         "eid_takbeer_start",
         "eid_takbeer_end",
         "eid_takbeer_interval",
     }
-    CLEARABLE_KEYS = {"eid_fitr_date", "eid_adha_date"}
+    CLEARABLE_KEYS = {
+        "eid_fitr_date",
+        "eid_adha_date",
+        "airplay_identifier",
+        "airplay_device_name",
+        "dlna_location",
+        "dlna_device_name",
+    }
 
     def __init__(self, path: str | Path) -> None:
         self.path = Path(path)

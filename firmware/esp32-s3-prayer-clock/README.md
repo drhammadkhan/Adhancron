@@ -7,7 +7,7 @@ ILI9341 display, microSD, and an ES8311 audio codec with a speaker amplifier.
 It is intentionally separate from the Docker and desktop applications while
 remaining part of the same repository. The firmware is a complete appliance:
 it calculates and schedules prayer times, stores and serves its own MP3, drives
-the screen and attached speaker, and can control Google Cast directly. It does
+the screen and attached speaker, and can control Google Cast or Sonos/DLNA directly. It does
 not require Docker, Home Assistant, or another computer after setup.
 
 ## Functionality
@@ -32,7 +32,7 @@ not require Docker, Home Assistant, or another computer after setup.
 - Once-per-prayer scheduling with individual prayer enable switches and a
   two-minute recovery window after a reboot or delayed clock synchronisation.
 - Local MP3 playback from the 8 MB internal flash storage partition through the ES8311 speaker path.
-- Optional direct Google Cast playback, with speaker discovery on the local network and automatic fallback to the attached speaker if Cast is unavailable.
+- Optional direct Google Cast and Sonos/UPnP-DLNA playback, with local discovery and automatic fallback to the attached speaker if the selected network receiver is unavailable.
 - Separate browser upload and manual playback controls for adhan and Eid
   takbeer, status/timetable API, and byte-range audio serving for both files.
 - The original 65-second Eid takbeer recording is bundled with the firmware and
@@ -53,12 +53,12 @@ recovery behaviour rather than normal navigation.
 2. The user joins it from a phone or computer, opens `192.168.4.1`, chooses a scanned Wi-Fi network, and saves its password.
 3. After joining the home network, the clock exposes the same full dashboard at `http://adhancron.local` and shows its numerical IP address at the bottom of the display.
 4. The user searches for a location or enters coordinates. The clock saves the coordinates, timezone, and display name, then calculates prayer times locally each day.
-5. At each enabled prayer, the scheduler starts the saved output: either the attached speaker or the selected Google Cast receiver.
+5. At each enabled prayer, the scheduler starts the saved output: the attached speaker, selected Google Cast receiver, or selected Sonos/DLNA receiver.
 6. On either user-configured Eid date, the scheduler also plays the separate
    takbeer recording at every slot in the selected time window. Each slot fires
    once, including the start and finish times when they align with the interval.
    A two-minute recovery window covers brief reboots or delayed clock sync.
-7. For Cast playback, the ESP32 discovers the receiver, starts the Default Media Receiver, and serves `/audio/adhan.mp3` or `/audio/takbeer.mp3` from internal flash with HTTP range support. If discovery or playback fails, it automatically uses the attached speaker.
+7. For network playback, the ESP32 controls the Cast V2 or standard UPnP AVTransport receiver and serves `/audio/adhan.mp3` or `/audio/takbeer.mp3` from internal flash with HTTP range support. If discovery or playback fails, it automatically uses the attached speaker.
 8. If the home network later becomes unavailable, the prayer display and local schedule continue running. After 20 seconds the recovery setup network appears, while the clock keeps its saved location and settings.
 
 ## Display architecture
@@ -163,8 +163,8 @@ shows the setup instructions or prayer clock on the display.
    its password. Hidden and open networks are also supported.
 3. After restart, open `http://adhancron.local`.
 4. Search for the home town, city, or postcode and save it.
-5. Use the dashboard to choose the attached speaker or a discovered Google
-   Cast speaker, test playback, select automatic prayers, set volume, choose
+5. Use the dashboard to choose the attached speaker, a discovered Google Cast
+   speaker, or a Sonos/UPnP-DLNA speaker; test playback, select automatic prayers, set volume, choose
    the first and final fasting days for Ramadan, configure both Eid dates and
    the takbeer window, or replace either MP3.
 
@@ -227,3 +227,9 @@ clock must be on networks that can reach one another. The saved receiver is
 rediscovered before every adhan so DHCP address changes are harmless. If the
 receiver is offline or playback cannot be confirmed, the attached speaker is
 used automatically instead.
+
+For Sonos and UPnP/DLNA playback, the ESP32 discovers MediaRenderer devices
+with SSDP, reads their standard device description, and sends
+`SetAVTransportURI` followed by `Play`. The speaker then fetches the MP3
+directly from the clock. The selected device-description URL is saved in NVS;
+if it is unavailable at prayer time, the attached speaker is used instead.
