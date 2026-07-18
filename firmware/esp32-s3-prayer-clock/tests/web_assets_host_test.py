@@ -61,6 +61,12 @@ class WebAssetsTest(unittest.TestCase):
         }
         self.assertTrue(expected.issubset(names))
 
+    def test_mobile_save_dock_is_viewport_centred(self):
+        css = (WEB / "app.css").read_text()
+        self.assertIn(".save-dock {", css)
+        self.assertIn("transform: translateX(-50%)", css)
+        self.assertIn("env(safe-area-inset-bottom", css)
+
 
 if __name__ == "__main__":
     unittest.main()
