@@ -6,7 +6,8 @@
 #include "nvs.h"
 
 #define SETTINGS_NAMESPACE "adhan"
-#define SETTINGS_VERSION 9
+#define SETTINGS_VERSION 10
+#define LEGACY_SETTINGS_VERSION_9 9
 #define LEGACY_SETTINGS_VERSION_8 8
 #define LEGACY_SETTINGS_VERSION_7 7
 #define LEGACY_SETTINGS_VERSION_6 6
@@ -110,6 +111,31 @@ typedef struct {
 } legacy_settings_v8_t;
 
 typedef struct {
+    char wifi_ssid[33];
+    char wifi_password[65];
+    char timezone[64];
+    char location_name[64];
+    double latitude;
+    double longitude;
+    bool location_configured;
+    int volume;
+    bool enabled[5];
+    adhan_output_t output;
+    char cast_device_id[48];
+    char cast_device_name[64];
+    char dlna_device_url[256];
+    char dlna_device_name[64];
+    bool automatic_updates;
+    char ramadan_start_date[11];
+    char ramadan_end_date[11];
+    char eid_fitr_date[11];
+    char eid_adha_date[11];
+    int eid_takbeer_start_minute;
+    int eid_takbeer_end_minute;
+    int eid_takbeer_interval_minutes;
+} legacy_settings_v9_t;
+
+typedef struct {
     uint32_t version;
     legacy_settings_v3_t value;
 } stored_settings_v3_t;
@@ -141,6 +167,11 @@ typedef struct {
 
 typedef struct {
     uint32_t version;
+    legacy_settings_v9_t value;
+} stored_settings_v9_t;
+
+typedef struct {
+    uint32_t version;
     adhan_settings_t value;
 } stored_settings_t;
 
@@ -150,6 +181,7 @@ void settings_defaults(adhan_settings_t *settings) {
     settings->volume = 80;
     settings->output = ADHAN_OUTPUT_ATTACHED;
     settings->automatic_updates = true;
+    settings->display_style = ADHAN_DISPLAY_DETAILED;
     settings->eid_takbeer_start_minute = 7 * 60;
     settings->eid_takbeer_end_minute = 9 * 60;
     settings->eid_takbeer_interval_minutes = 15;
@@ -175,6 +207,18 @@ bool settings_load(adhan_settings_t *settings) {
         nvs_close(handle);
         if (result != ESP_OK || stored.version != SETTINGS_VERSION) return false;
         *settings = stored.value;
+        return true;
+    }
+    if (length == sizeof(stored_settings_v9_t)) {
+        stored_settings_v9_t stored = {0};
+        const esp_err_t result = nvs_get_blob(
+            handle, "settings", &stored, &length);
+        nvs_close(handle);
+        if (result != ESP_OK ||
+                stored.version != LEGACY_SETTINGS_VERSION_9) return false;
+        memcpy(settings, &stored.value, sizeof(stored.value));
+        settings->display_style = ADHAN_DISPLAY_DETAILED;
+        settings_save(settings);
         return true;
     }
     if (length == sizeof(stored_settings_v8_t)) {

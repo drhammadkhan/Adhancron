@@ -1,0 +1,192 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="theme-color" content="#123c34">
+  <title>Adhan Clock</title>
+  <link rel="stylesheet" href="/ui.css">
+</head>
+<body data-page="dashboard">
+  <header class="site-header">
+    <div class="header-inner">
+      <a class="brand" href="/" aria-label="Adhan Clock home">
+        <span class="brand-mark" aria-hidden="true"></span>
+        <span><strong>Adhan Clock</strong><small id="place-name">Loading location...</small></span>
+      </a>
+      <div class="device-state">
+        <span class="status-dot" aria-hidden="true"></span>
+        <span id="connection-label">Connected</span>
+        <span id="battery-chip" class="status-chip hidden"></span>
+      </div>
+    </div>
+  </header>
+
+  <main class="page-shell">
+    <section class="today-band" aria-labelledby="today-title">
+      <div class="today-copy">
+        <p class="eyebrow">Today</p>
+        <h1 id="today-title">Your prayer day</h1>
+        <p id="today-date" class="muted">Synchronising the clock...</p>
+      </div>
+      <div class="next-prayer">
+        <div>
+          <span class="next-label">Next prayer</span>
+          <strong id="next-name">--</strong>
+        </div>
+        <div class="next-time-wrap">
+          <strong id="next-time">--:--</strong>
+          <span id="next-countdown">Calculating...</span>
+        </div>
+      </div>
+      <div id="prayer-times" class="prayer-grid" aria-label="Today's prayer times">
+        <div class="prayer-placeholder"></div><div class="prayer-placeholder"></div>
+        <div class="prayer-placeholder"></div><div class="prayer-placeholder"></div>
+        <div class="prayer-placeholder"></div><div class="prayer-placeholder"></div>
+      </div>
+    </section>
+
+    <section class="quick-actions" aria-labelledby="quick-title">
+      <div>
+        <p class="eyebrow">Quick actions</p>
+        <h2 id="quick-title">Test your clock</h2>
+        <p id="playback-summary" class="muted">Loading playback destination...</p>
+      </div>
+      <div class="action-buttons">
+        <button class="button button-primary" type="button" data-play="adhan">
+          <span class="play-icon" aria-hidden="true"></span>Play Adhan
+        </button>
+        <button class="button button-secondary" type="button" data-play="takbeer">
+          <span class="play-icon" aria-hidden="true"></span>Play Takbeer
+        </button>
+      </div>
+      <p id="test-result" class="notice hidden" role="status"></p>
+    </section>
+
+    <section class="settings-area" aria-labelledby="settings-title">
+      <div class="section-heading">
+        <div><p class="eyebrow">Configuration</p><h2 id="settings-title">Settings</h2></div>
+        <p class="muted">Open a section to make changes.</p>
+      </div>
+
+      <form id="settings-form" method="post" action="/api/settings">
+        <input type="hidden" name="step" value="playback">
+
+        <details class="settings-panel">
+          <summary><span class="summary-icon speaker-icon" aria-hidden="true"></span><span><strong>Playback</strong><small>Speaker, destination and volume</small></span><span class="chevron"></span></summary>
+          <div class="panel-content">
+            <fieldset class="plain-fieldset">
+              <legend>Where should the adhan play?</legend>
+              <div class="segmented-control">
+                <label><input type="radio" name="output" value="attached"><span>Attached</span></label>
+                <label><input type="radio" name="output" value="cast"><span>Google Cast</span></label>
+                <label><input type="radio" name="output" value="dlna"><span>Sonos / DLNA</span></label>
+              </div>
+            </fieldset>
+
+            <div id="cast-controls" class="receiver-panel hidden">
+              <label for="cast-device">Google Cast speaker</label>
+              <div class="inline-control"><select id="cast-device" name="cast_device_id"><option value="">Scan to find speakers</option></select><button class="icon-button" type="button" id="scan-cast" aria-label="Scan for Google Cast speakers" title="Scan for speakers"><span class="scan-icon"></span></button></div>
+              <input id="cast-name" name="cast_device_name" type="hidden">
+              <p id="cast-result" class="field-note">Choose Scan to discover speakers on this network.</p>
+            </div>
+
+            <div id="dlna-controls" class="receiver-panel hidden">
+              <label for="dlna-device">Sonos or DLNA speaker</label>
+              <div class="inline-control"><select id="dlna-device" name="dlna_device_url"><option value="">Scan to find speakers</option></select><button class="icon-button" type="button" id="scan-dlna" aria-label="Scan for Sonos and DLNA speakers" title="Scan for speakers"><span class="scan-icon"></span></button></div>
+              <input id="dlna-name" name="dlna_device_name" type="hidden">
+              <p id="dlna-result" class="field-note">Compatible Sonos, hi-fi and UPnP/DLNA receivers will appear here.</p>
+            </div>
+
+            <label for="volume">Playback volume <output id="volume-value">80%</output></label>
+            <input id="volume" name="volume" type="range" min="0" max="100" value="80">
+          </div>
+        </details>
+
+        <details class="settings-panel">
+          <summary><span class="summary-icon display-icon" aria-hidden="true"></span><span><strong>Display</strong><small>Choose the clock face shown on the device</small></span><span class="chevron"></span></summary>
+          <div class="panel-content">
+            <fieldset class="plain-fieldset display-choices">
+              <legend>Clock face</legend>
+              <label class="display-choice">
+                <input type="radio" name="display_style" value="detailed">
+                <span class="display-preview detailed-preview" aria-hidden="true"><i></i><b>12:48</b><em></em><em></em><em></em></span>
+                <span><strong>Prayer list</strong><small>Time, next prayer and the full daily timetable</small></span>
+              </label>
+              <label class="display-choice">
+                <input type="radio" name="display_style" value="focus">
+                <span class="display-preview focus-preview" aria-hidden="true"><i></i><b>12:48</b><strong>ASR</strong><em></em></span>
+                <span><strong>Focus</strong><small>A quieter face centred on the next prayer</small></span>
+              </label>
+            </fieldset>
+          </div>
+        </details>
+
+        <details class="settings-panel">
+          <summary><span class="summary-icon schedule-icon" aria-hidden="true"></span><span><strong>Automatic Adhan</strong><small>Choose which prayers trigger playback</small></span><span class="chevron"></span></summary>
+          <div class="panel-content">
+            <div class="toggle-list">
+              <label class="toggle-row"><span><strong>Fajr</strong><small>At the start of the prayer</small></span><input type="checkbox" name="fajr"><span class="switch"></span></label>
+              <label class="toggle-row"><span><strong>Dhuhr</strong><small>At solar noon</small></span><input type="checkbox" name="dhuhr"><span class="switch"></span></label>
+              <label class="toggle-row"><span><strong>Asr</strong><small>Afternoon prayer</small></span><input type="checkbox" name="asr"><span class="switch"></span></label>
+              <label class="toggle-row"><span><strong>Maghrib</strong><small>At sunset</small></span><input type="checkbox" name="maghrib"><span class="switch"></span></label>
+              <label class="toggle-row"><span><strong>Isha</strong><small>Night prayer</small></span><input type="checkbox" name="isha"><span class="switch"></span></label>
+            </div>
+          </div>
+        </details>
+
+        <details class="settings-panel">
+          <summary><span class="summary-icon moon-icon" aria-hidden="true"></span><span><strong>Ramadan</strong><small>Fasting dates and countdown display</small></span><span class="chevron"></span></summary>
+          <div class="panel-content">
+            <p class="field-note">Set the first and final fasting day observed by your community. Both dates are inclusive.</p>
+            <div class="field-grid"><label>First fasting day<input id="ramadan-start" name="ramadan_start" type="date"></label><label>Final fasting day<input id="ramadan-end" name="ramadan_end" type="date"></label></div>
+            <p id="ramadan-status" class="notice notice-neutral">Loading Ramadan status...</p>
+            <button class="text-button" type="button" id="clear-ramadan">Turn Ramadan mode off</button>
+          </div>
+        </details>
+
+        <details class="settings-panel">
+          <summary><span class="summary-icon star-icon" aria-hidden="true"></span><span><strong>Eid and Takbeer</strong><small>Eid dates and scheduled takbeer</small></span><span class="chevron"></span></summary>
+          <div class="panel-content">
+            <p class="field-note">On either saved Eid date the display shows an Eid greeting and plays the separate takbeer recording during the chosen window.</p>
+            <div class="field-grid"><label>Eid al-Fitr<input id="eid-fitr" name="eid_fitr" type="date"></label><label>Eid al-Adha<input id="eid-adha" name="eid_adha" type="date"></label></div>
+            <div class="field-grid three"><label>Starts<input id="eid-start" name="eid_takbeer_start" type="time" required></label><label>Finishes<input id="eid-end" name="eid_takbeer_end" type="time" required></label><label>Repeat every<input id="eid-interval" name="eid_takbeer_interval" type="number" min="5" max="120" step="5" required><small>minutes</small></label></div>
+            <p id="eid-status" class="notice notice-neutral">Loading Eid status...</p>
+            <button class="text-button" type="button" id="clear-eid">Clear Eid dates</button>
+          </div>
+        </details>
+
+        <details class="settings-panel">
+          <summary><span class="summary-icon audio-icon" aria-hidden="true"></span><span><strong>Audio Recordings</strong><small>Replace the adhan or takbeer MP3</small></span><span class="chevron"></span></summary>
+          <div class="panel-content">
+            <div class="upload-row"><div><strong>Adhan recording</strong><p id="adhan-audio-status" class="field-note"></p></div><label class="file-button">Choose MP3<input id="adhan-audio" type="file" accept="audio/mpeg,.mp3"></label><button class="button button-secondary compact" type="button" data-upload="adhan">Upload</button></div>
+            <p id="adhan-upload" class="notice hidden" role="status"></p>
+            <div class="divider"></div>
+            <div class="upload-row"><div><strong>Eid takbeer recording</strong><p id="takbeer-audio-status" class="field-note"></p></div><label class="file-button">Choose MP3<input id="takbeer-audio" type="file" accept="audio/mpeg,.mp3"></label><button class="button button-secondary compact" type="button" data-upload="takbeer">Upload</button></div>
+            <p id="takbeer-upload" class="notice hidden" role="status"></p>
+          </div>
+        </details>
+
+        <details class="settings-panel">
+          <summary><span class="summary-icon device-icon" aria-hidden="true"></span><span><strong>Device</strong><small>Location, Wi-Fi and software updates</small></span><span class="chevron"></span></summary>
+          <div class="panel-content">
+            <nav class="device-links"><a href="/location"><strong>Location</strong><small id="location-link-note">Change the calculation location</small></a><a href="/wifi"><strong>Wi-Fi network</strong><small>Connect the clock to another network</small></a></nav>
+            <div class="divider"></div>
+            <div class="update-row"><div><strong>Software updates</strong><p id="firmware-status" class="field-note">Loading firmware status...</p></div><button id="update-button" class="button button-secondary compact" type="button">Check now</button></div>
+            <label class="toggle-row standalone"><span><strong>Automatic updates</strong><small>Install verified firmware over Wi-Fi</small></span><input type="checkbox" name="automatic_updates"><span class="toggle-status" aria-hidden="true"></span><span class="switch"></span></label>
+            <p id="update-result" class="notice hidden" role="status"></p>
+          </div>
+        </details>
+
+        <div id="save-dock" class="save-dock hidden">
+          <span id="save-message">You have unsaved changes</span>
+          <button class="button button-primary compact" type="submit">Save changes</button>
+        </div>
+      </form>
+    </section>
+  </main>
+
+  <footer><span>Adhan Clock</span><span id="footer-version">Firmware</span></footer>
+  <script src="/ui.js" defer></script>
+</body>
+</html>

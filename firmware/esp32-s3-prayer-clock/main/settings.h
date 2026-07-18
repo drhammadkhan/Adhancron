@@ -9,6 +9,11 @@ typedef enum {
     ADHAN_OUTPUT_DLNA = 2,
 } adhan_output_t;
 
+typedef enum {
+    ADHAN_DISPLAY_DETAILED = 0,
+    ADHAN_DISPLAY_FOCUS = 1,
+} adhan_display_style_t;
+
 typedef struct {
     char wifi_ssid[33];
     char wifi_password[65];
@@ -32,6 +37,7 @@ typedef struct {
     int eid_takbeer_start_minute;
     int eid_takbeer_end_minute;
     int eid_takbeer_interval_minutes;
+    adhan_display_style_t display_style;
 } adhan_settings_t;
 
 void settings_defaults(adhan_settings_t *settings);

@@ -18,7 +18,11 @@ not require Docker, Home Assistant, or another computer after setup.
 - Online town/city/postcode search followed by automatic coordinate and timezone storage.
 - NTP clock synchronisation and daylight-saving-aware local time.
 - Local Adhancron prayer calculation: Fajr 90 minutes before sunrise, Dhuhr five minutes after solar noon, standard Asr, Maghrib one minute after sunset, and Moonsighting Committee seasonal Isha.
-- Full-screen LVGL dashboard with an `HH:MM:SS` clock, date, saved location, Fajr, sunrise, Dhuhr, Asr, Maghrib, Isha, next prayer, countdown, and Wi-Fi/audio status.
+- Two selectable LVGL clock faces: **Prayer list**, with an `HH:MM:SS`
+  clock and complete daily timetable; and **Focus**, a high-contrast minimal layout that
+  gives the current time and next prayer greater prominence while retaining a
+  compact high-contrast prayer summary. Both show the saved location, countdown, device
+  address, and connectivity/audio status.
 - User-configured Ramadan start and end dates. During the inclusive 29- or 30-day period, the display adds the Ramadan day number while retaining the canonical Fajr and Maghrib prayer names. The Web UI separately explains when Sehri ends and Iftar begins.
 - A seconds-accurate event panel during the final ten minutes before Fajr and Maghrib, showing `SEHRI ENDS IN` or `IFTAR IN` while the prayer table continues to identify the prayers correctly.
 - User-defined Eid al-Fitr and Eid al-Adha dates. On either date the display
@@ -33,6 +37,8 @@ not require Docker, Home Assistant, or another computer after setup.
   two-minute recovery window after a reboot or delayed clock synchronisation.
 - Local MP3 playback from the 8 MB internal flash storage partition through the ES8311 speaker path.
 - Optional direct Google Cast and Sonos/UPnP-DLNA playback, with local discovery and automatic fallback to the attached speaker if the selected network receiver is unavailable.
+- A responsive, mobile-first device dashboard showing the next prayer, countdown, full daily timetable, current playback destination, battery state, and quick audio tests.
+- A guided Wi-Fi and location setup flow, with advanced settings collapsed into focused playback, schedule, Ramadan, Eid, recordings, and device sections.
 - Separate browser upload and manual playback controls for adhan and Eid
   takbeer, status/timetable API, and byte-range audio serving for both files.
 - The original 65-second Eid takbeer recording is bundled with the firmware and
@@ -67,7 +73,8 @@ The interface uses LVGL 9 through Espressif's `esp_lvgl_port` and the native
 ILI9341 `esp_lcd` driver. The component versions are pinned in
 `main/idf_component.yml` so builds remain reproducible. Two 240 x 32 RGB565 DMA
 buffers allow anti-aliased rendering without reserving a full-screen internal
-framebuffer. The dashboard is defined in `main/display_ui.c`; prayer scheduling,
+framebuffer. Both clock faces are defined in `main/display_ui.c` and share the
+same calculated prayer state; prayer scheduling,
 audio playback, Wi-Fi, and the web server remain independent of the renderer.
 
 ## Board wiring
@@ -164,7 +171,8 @@ shows the setup instructions or prayer clock on the display.
 3. After restart, open `http://adhancron.local`.
 4. Search for the home town, city, or postcode and save it.
 5. Use the dashboard to choose the attached speaker, a discovered Google Cast
-   speaker, or a Sonos/UPnP-DLNA speaker; test playback, select automatic prayers, set volume, choose
+   speaker, or a Sonos/UPnP-DLNA speaker; choose the **Prayer list** or **Focus**
+   clock face; test playback, select automatic prayers, set volume, choose
    the first and final fasting days for Ramadan, configure both Eid dates and
    the takbeer window, or replace either MP3.
 
@@ -218,6 +226,13 @@ Battery percentage and charging-trend logic can be checked without ESP-IDF:
 ```bash
 cc -std=c11 -I main tests/battery_status_host_test.c main/battery_status.c -o /tmp/adhancron-battery-test
 /tmp/adhancron-battery-test
+```
+
+The embedded web assets have a lightweight host-side structure and size check:
+
+```bash
+python3 -m unittest tests/web_assets_host_test.py -v
+node --check main/web/app.js
 ```
 
 For Google Cast playback, the ESP32 discovers compatible receivers with mDNS,

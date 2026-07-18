@@ -29,80 +29,11 @@ static bool *adhan_audio_available;
 static bool *takbeer_audio_available;
 static web_play_callback_t play_audio;
 
-static const char STYLE[] =
-    "<!doctype html><html><head><meta charset=utf-8><meta name=viewport content='width=device-width,initial-scale=1'>"
-    "<style>body{font:16px system-ui;margin:0;background:#f3f6f2;color:#172b26}main{max-width:680px;margin:auto;padding:24px}"
-    "h1{margin-bottom:4px}fieldset{border:1px solid #b9c8bf;border-radius:8px;margin:18px 0;padding:16px}"
-    "label{display:block;margin:12px 0 4px}input,select,button{box-sizing:border-box;width:100%;padding:11px;font:inherit;border-radius:6px;border:1px solid #9caaa2}"
-    "button{background:#176b52;color:white;font-weight:700;border:0;margin-top:18px}.small{color:#52635a;font-size:.9rem}.check{display:flex;gap:8px;align-items:center}.check input{width:auto}.choice{padding:9px 0}.hidden{display:none}</style></head><body><main>";
-
-static const char WIFI_PAGE[] =
-    "<h1>Welcome to Adhancron</h1><p class=small>First, connect this prayer clock to your home Wi-Fi. You will choose its location after it is online.</p>"
-    "<form method=post action='/api/settings'><input type=hidden name=step value=wifi><fieldset><legend>Home Wi-Fi</legend>"
-    "<label>Network</label><select id=ssid name=ssid required><option value=''>Scanning for networks...</option></select><button type=button onclick=scanNetworks()>Scan again</button>"
-    "<label>Wi-Fi password</label><input type=password name=password autocomplete='current-password'><p class=small>Leave this blank only for an open network.</p>"
-    "<details><summary>Network not listed?</summary><label>Enter a hidden network name</label><input id=manual autocomplete='username' oninput=useManual(this.value)></details></fieldset>"
-    "<button>Connect and continue</button></form><script>function useManual(v){let s=document.getElementById('ssid'),o=document.getElementById('manualOption');if(!o){o=document.createElement('option');o.id='manualOption';s.appendChild(o)}o.value=v;o.textContent=v||'Hidden network';if(v)o.selected=true}async function scanNetworks(){let s=document.getElementById('ssid');s.innerHTML='<option value=\"\">Scanning...</option>';try{let r=await fetch('/api/networks',{cache:'no-store'});if(!r.ok)throw Error(await r.text());let j=await r.json();s.innerHTML='<option value=\"\">Choose your home network</option>';j.networks.forEach(n=>{let o=document.createElement('option');o.value=n.ssid;o.textContent=n.ssid+' - '+(n.secure?'secured':'open')+' - '+n.signal;s.appendChild(o)});if(!j.networks.length)throw Error('No networks found')}catch(e){s.innerHTML='<option value=\"\">Scan unavailable</option>';document.getElementById('manual').focus()}}scanNetworks()</script></main></body></html>";
-
-static const char LOCATION_PAGE[] =
-    "<h1>Set your location</h1><p class=small>Search for your town, city, or postcode. Adhancron obtains the coordinates and timezone online and applies its established prayer-time rules.</p>"
-    "<form method=post action='/api/settings'><input type=hidden name=step value=location><fieldset><legend>Home location</legend>"
-    "<label>Town, city, or UK postcode</label><input id=place autocomplete=postal-code><button type=button onclick=findPlace()>Find location</button><p id=result class=small></p>"
-    "<details><summary>Advanced location settings</summary><p class=small>Use decimal coordinates if the location search cannot find your home.</p>"
-    "<label>Latitude</label><input id=latitude name=latitude type=number min=-89 max=89 step=any placeholder='51.5074' oninput=manualChanged()>"
-    "<label>Longitude</label><input id=longitude name=longitude type=number min=-180 max=180 step=any placeholder='-0.1278' oninput=manualChanged()>"
-    "<button type=button onclick=useCoordinates()>Use these coordinates</button></details>"
-    "<input id=timezone name=timezone type=hidden><input id=location_name name=location_name type=hidden><input id=found name=found type=hidden></fieldset>"
-    "<fieldset><legend>Playback</legend><label>Speaker volume (0-100)</label><input name=volume type=number min=0 max=100 value='%d'></fieldset><button id=save disabled>Save location</button></form>"
-    "<script>function usePlace(p){let label=[p.name,p.admin1,p.country].filter(Boolean).join(', ');document.getElementById('latitude').value=p.latitude;document.getElementById('longitude').value=p.longitude;document.getElementById('timezone').value=p.timezone||'';document.getElementById('location_name').value=p.location_name||label;document.getElementById('found').value='1';document.getElementById('save').disabled=false;document.getElementById('result').textContent=p.message||label}"
-    "async function findPlace(){let q=document.getElementById('place').value.trim(),r=document.getElementById('result'),postcode=q.toUpperCase().replace(/\\s+/g,'');r.textContent='Searching...';document.getElementById('save').disabled=true;document.getElementById('found').value='';if(!q){r.textContent='Enter a town, city, or UK postcode.';return}try{if(/^[A-Z]{1,2}\\d[A-Z\\d]?\\d[A-Z]{2}$/.test(postcode)){let x=await fetch('https://api.postcodes.io/postcodes/'+encodeURIComponent(postcode));if(x.ok){let j=await x.json(),p=j.result;if(p){usePlace({latitude:p.latitude,longitude:p.longitude,timezone:'Europe/London',name:p.postcode,admin1:p.admin_district||p.region,country:p.country});return}}}let x=await fetch('https://geocoding-api.open-meteo.com/v1/search?count=5&language=en&format=json&name='+encodeURIComponent(q));if(!x.ok)throw Error('Location search is temporarily unavailable.');let j=await x.json(),p=j.results&&j.results[0];if(!p)throw Error('Location not found. Check the postcode or try your nearest town.');usePlace(p)}catch(e){r.textContent=e.message}}"
-    "function manualChanged(){document.getElementById('found').value='';document.getElementById('timezone').value='';document.getElementById('location_name').value='';document.getElementById('save').disabled=true;document.getElementById('result').textContent='Select Use these coordinates to confirm them.'}"
-    "async function useCoordinates(){let a=document.getElementById('latitude'),o=document.getElementById('longitude'),lat=Number(a.value),lon=Number(o.value),r=document.getElementById('result');if(a.value===''||o.value===''||!Number.isFinite(lat)||!Number.isFinite(lon)||lat< -89||lat>89||lon< -180||lon>180){r.textContent='Enter a latitude from -89 to 89 and longitude from -180 to 180.';return}r.textContent='Checking coordinates...';let zone='';try{let x=await fetch('https://api.open-meteo.com/v1/forecast?latitude='+lat+'&longitude='+lon+'&timezone=auto&forecast_days=1');if(x.ok){let j=await x.json();zone=j.timezone||''}}catch(e){}let coordinates=lat.toFixed(4)+', '+lon.toFixed(4);usePlace({latitude:lat,longitude:lon,timezone:zone,name:coordinates,location_name:coordinates,message:coordinates+' - '+(zone||'timezone estimated')})}"
-    "document.getElementById('place').addEventListener('keydown',function(e){if(e.key==='Enter'){e.preventDefault();findPlace()}})</script></main></body></html>";
-
-static const char DASHBOARD_PAGE[] =
-    "<h1>Adhancron Prayer Clock</h1><p id=place-name><b>Loading saved location...</b></p><p id=summary class=small>Loading today&apos;s timetable...</p><p id=battery-status class=small></p><div id=times></div>"
-    "<button type=button onclick=\"testPlayback('adhan')\">Play Adhan Now</button><button type=button onclick=\"testPlayback('takbeer')\">Play Eid Takbeer Now</button><p id=test-result class=small></p>"
-    "<form method=post action='/api/settings'><input type=hidden name=step value=playback>"
-    "<fieldset><legend>Playback</legend><label class='check choice'><input type=radio name=output value=attached %s onchange=outputChanged()>Attached speaker</label>"
-    "<label class='check choice'><input type=radio name=output value=cast %s onchange=outputChanged()>Google Cast speaker</label>"
-    "<label class='check choice'><input type=radio name=output value=dlna %s onchange=outputChanged()>Sonos / DLNA speaker</label>"
-    "<div id=cast-controls><label>Cast speaker</label><select id=cast-device name=cast_device_id onchange=castSelectionChanged()><option value=''>Scanning for speakers...</option></select>"
-    "<input id=cast-name name=cast_device_name type=hidden><button type=button onclick=scanCastDevices()>Scan again</button><p id=cast-result class=small></p></div>"
-    "<div id=dlna-controls><label>Sonos or DLNA speaker</label><select id=dlna-device name=dlna_device_url onchange=dlnaSelectionChanged()><option value=''>Scan to find network speakers</option></select>"
-    "<input id=dlna-name name=dlna_device_name type=hidden><button type=button onclick=scanDlnaDevices()>Scan again</button><p id=dlna-result class=small>Works with compatible Sonos, hi-fi, and UPnP/DLNA speakers.</p></div>"
-    "<label>Playback volume</label><input name=volume type=number min=0 max=100 value='%d'></fieldset>"
-    "<fieldset><legend>Automatic adhan</legend>"
-    "<label class=check><input type=checkbox name=fajr %s>Fajr</label><label class=check><input type=checkbox name=dhuhr %s>Dhuhr</label><label class=check><input type=checkbox name=asr %s>Asr</label><label class=check><input type=checkbox name=maghrib %s>Maghrib</label><label class=check><input type=checkbox name=isha %s>Isha</label>"
-    "</fieldset><fieldset><legend>Ramadan</legend><p class=small>Choose the first and final fasting day for your community. Both dates are inclusive and should make a 29- or 30-day period.</p>"
-    "<label>First fasting day</label><input id=ramadan-start name=ramadan_start type=date value='%s'>"
-    "<label>Final fasting day</label><input id=ramadan-end name=ramadan_end type=date value='%s'>"
-    "<p id=ramadan-status class=small>Loading Ramadan status...</p><button type=button onclick=clearRamadan()>Turn Ramadan mode off</button>"
-    "</fieldset><fieldset><legend>Eid days and takbeer</legend><p class=small>Set the locally observed dates for Eid al-Fitr and Eid al-Adha. On either date, the clock shows an Eid greeting and plays the separate takbeer recording repeatedly during this window.</p>"
-    "<label>Eid al-Fitr date</label><input id=eid-fitr name=eid_fitr type=date value='%s'>"
-    "<label>Eid al-Adha date</label><input id=eid-adha name=eid_adha type=date value='%s'>"
-    "<label>Takbeer starts</label><input name=eid_takbeer_start type=time value='%s' required>"
-    "<label>Takbeer finishes</label><input name=eid_takbeer_end type=time value='%s' required>"
-    "<label>Repeat every (minutes)</label><input name=eid_takbeer_interval type=number min=5 max=120 step=5 value='%d' required>"
-    "<p id=eid-status class=small>Loading Eid status...</p><button type=button onclick=clearEid()>Clear Eid dates</button>"
-    "</fieldset><fieldset><legend>Software updates</legend><p id=firmware-status class=small>Loading firmware status...</p>"
-    "<label class=check><input type=checkbox name=automatic_updates %s>Install verified updates automatically over Wi-Fi</label>"
-    "<button id=update-button type=button onclick=checkUpdate()>Check and install now</button><p id=update-result class=small></p></fieldset>"
-    "<button>Save settings</button></form>"
-    "<fieldset><legend>Audio recordings</legend><p id=adhan-audio-status class=small></p><label>Adhan MP3</label><input id=adhan-audio type=file accept='audio/mpeg,.mp3'><button type=button onclick=\"uploadAudio('adhan-audio','/api/audio','adhan-upload')\">Upload adhan MP3</button><p id=adhan-upload class=small></p>"
-    "<p id=takbeer-audio-status class=small></p><label>Eid takbeer MP3</label><input id=takbeer-audio type=file accept='audio/mpeg,.mp3'><button type=button onclick=\"uploadAudio('takbeer-audio','/api/audio/takbeer','takbeer-upload')\">Upload takbeer MP3</button><p id=takbeer-upload class=small></p></fieldset>"
-    "<p class=small><a href='/location'>Change location</a> &middot; <a href='/wifi'>Change Wi-Fi</a></p>"
-    "<script>let savedCastId='',savedCastName='',savedDlnaUrl='',savedDlnaName='';async function refresh(){let s=await fetch('/api/status',{cache:'no-store'}).then(r=>r.json());savedCastId=s.cast_device_id||'';savedCastName=s.cast_device_name||'';savedDlnaUrl=s.dlna_device_url||'';savedDlnaName=s.dlna_device_name||'';document.getElementById('place-name').textContent=s.location?'Prayer times for '+s.location:'Location not configured';summary.textContent=s.message;let b=document.getElementById('battery-status');b.textContent=s.battery_available?'Battery '+s.battery_percentage+'%% - '+(s.battery_millivolts/1000).toFixed(2)+' V - '+(s.battery_charging?'charging detected':s.battery_full?'fully charged':'battery connected'):'';times.innerHTML=s.prayers.map(p=>'<p><b>'+p.name+'</b> '+p.time+'</p>').join('');document.getElementById('ramadan-status').textContent=s.ramadan_message||'Ramadan status unavailable';document.getElementById('eid-status').textContent=s.eid_message||'Eid status unavailable';document.getElementById('adhan-audio-status').textContent=s.adhan_audio_available?'Adhan recording ready.':'No adhan recording saved.';document.getElementById('takbeer-audio-status').textContent=s.takbeer_audio_available?'Eid takbeer recording ready.':'Upload an Eid takbeer recording before the configured date.';document.getElementById('firmware-status').textContent='Version '+(s.firmware_version||'unknown')+' - '+(s.update_status||'Update status unavailable');document.getElementById('update-button').disabled=!!s.update_running}"
-    "function outputChanged(){let output=document.querySelector('input[name=output]:checked').value,cast=output==='cast',dlna=output==='dlna';document.getElementById('cast-controls').classList.toggle('hidden',!cast);document.getElementById('cast-device').disabled=!cast;document.getElementById('cast-name').disabled=!cast;document.getElementById('dlna-controls').classList.toggle('hidden',!dlna);document.getElementById('dlna-device').disabled=!dlna;document.getElementById('dlna-name').disabled=!dlna}"
-    "function castSelectionChanged(){let s=document.getElementById('cast-device'),o=s.options[s.selectedIndex];document.getElementById('cast-name').value=o&&o.dataset.name||''}"
-    "async function scanCastDevices(){let s=document.getElementById('cast-device'),r=document.getElementById('cast-result');s.innerHTML='<option value=\"\">Scanning...</option>';r.textContent='Looking for speakers on this network...';try{let x=await fetch('/api/cast-devices',{cache:'no-store'});if(!x.ok)throw Error(await x.text());let j=await x.json();s.innerHTML='<option value=\"\">Choose a speaker</option>';j.devices.forEach(d=>{let o=document.createElement('option');o.value=d.id;o.dataset.name=d.name;o.textContent=d.name+(d.group?' (speaker group)':'')+(d.model?' - '+d.model:'');if(d.id===savedCastId)o.selected=true;s.appendChild(o)});if(savedCastId&&!j.devices.some(d=>d.id===savedCastId)){let o=document.createElement('option');o.value=savedCastId;o.dataset.name=savedCastName;o.textContent=savedCastName+' (currently unavailable)';o.selected=true;s.appendChild(o)}castSelectionChanged();r.textContent=j.devices.length?j.devices.length+' Cast speaker'+(j.devices.length===1?'':'s')+' found.':'No Cast speakers found.'}catch(e){r.textContent=e.message}}"
-    "function dlnaSelectionChanged(){let s=document.getElementById('dlna-device'),o=s.options[s.selectedIndex];document.getElementById('dlna-name').value=o&&o.dataset.name||''}"
-    "async function scanDlnaDevices(){let s=document.getElementById('dlna-device'),r=document.getElementById('dlna-result');s.innerHTML='<option value=\"\">Scanning...</option>';r.textContent='Looking for Sonos and DLNA speakers...';try{let x=await fetch('/api/dlna-devices',{cache:'no-store'});if(!x.ok)throw Error(await x.text());let j=await x.json();s.innerHTML='<option value=\"\">Choose a speaker</option>';j.devices.forEach(d=>{let o=document.createElement('option');o.value=d.location;o.dataset.name=d.name;o.textContent=d.name+(d.model?' - '+d.model:'');if(d.location===savedDlnaUrl)o.selected=true;s.appendChild(o)});if(savedDlnaUrl&&!j.devices.some(d=>d.location===savedDlnaUrl)){let o=document.createElement('option');o.value=savedDlnaUrl;o.dataset.name=savedDlnaName;o.textContent=(savedDlnaName||'Saved speaker')+' (currently unavailable)';o.selected=true;s.appendChild(o)}dlnaSelectionChanged();r.textContent=j.devices.length?j.devices.length+' compatible speaker'+(j.devices.length===1?'':'s')+' found.':'No compatible speakers found.'}catch(e){r.textContent=e.message}}"
-    "async function testPlayback(track){let r=document.getElementById('test-result');r.textContent='Starting playback...';try{let x=await fetch(track==='takbeer'?'/api/play/takbeer':'/api/play',{method:'POST'});r.textContent=await x.text()}catch(e){r.textContent=e.message}}"
-    "async function checkUpdate(){let b=document.getElementById('update-button'),r=document.getElementById('update-result');b.disabled=true;r.textContent='Starting update check...';try{let x=await fetch('/api/update',{method:'POST'});r.textContent=await x.text()}catch(e){r.textContent=e.message}setTimeout(refresh,1000)}"
-    "function clearRamadan(){document.getElementById('ramadan-start').value='';document.getElementById('ramadan-end').value='';document.getElementById('ramadan-status').textContent='Save settings to turn Ramadan mode off.'}"
-    "function clearEid(){document.getElementById('eid-fitr').value='';document.getElementById('eid-adha').value='';document.getElementById('eid-status').textContent='Save settings to clear both Eid dates.'}"
-    "async function uploadAudio(inputId,endpoint,resultId){let f=document.getElementById(inputId).files[0],r=document.getElementById(resultId);if(!f)return;r.textContent='Uploading...';let x=await fetch(endpoint,{method:'POST',body:f});r.textContent=await x.text();await refresh()}async function init(){await refresh();outputChanged();let output=document.querySelector('input[name=output]:checked').value;if(output==='cast')await scanCastDevices();if(output==='dlna')await scanDlnaDevices()}init();setInterval(refresh,30000)</script></main></body></html>";
+extern const uint8_t web_index_html_start[] asm("_binary_index_html_start");
+extern const uint8_t web_wifi_html_start[] asm("_binary_wifi_html_start");
+extern const uint8_t web_location_html_start[] asm("_binary_location_html_start");
+extern const uint8_t web_app_css_start[] asm("_binary_app_css_start");
+extern const uint8_t web_app_js_start[] asm("_binary_app_js_start");
 
 static void restart_task(void *unused) {
     vTaskDelay(pdMS_TO_TICKS(1200));
@@ -114,47 +45,32 @@ typedef enum { PAGE_AUTOMATIC, PAGE_LOCATION, PAGE_WIFI } page_kind_t;
 static void format_minutes(int minutes, char output[6]);
 
 static esp_err_t render_page(httpd_req_t *request, page_kind_t kind) {
-    const size_t page_capacity = 24000;
-    char *page = malloc(page_capacity);
-    if (page == NULL) return httpd_resp_send_err(request, HTTPD_500_INTERNAL_SERVER_ERROR, "Not enough memory to render the page");
-    int length = snprintf(page, page_capacity, "%s", STYLE);
+    const uint8_t *page = web_index_html_start;
     if (kind == PAGE_WIFI || (kind == PAGE_AUTOMATIC && !settings_has_wifi(current_settings))) {
-        length += snprintf(page + length, page_capacity - length, "%s", WIFI_PAGE);
+        page = web_wifi_html_start;
     } else if (kind == PAGE_LOCATION || (kind == PAGE_AUTOMATIC && !current_settings->location_configured)) {
-        length += snprintf(page + length, page_capacity - length, LOCATION_PAGE, current_settings->volume);
-    } else {
-        char eid_start[6];
-        char eid_end[6];
-        format_minutes(current_settings->eid_takbeer_start_minute, eid_start);
-        format_minutes(current_settings->eid_takbeer_end_minute, eid_end);
-        length += snprintf(page + length, page_capacity - length, DASHBOARD_PAGE,
-            current_settings->output == ADHAN_OUTPUT_ATTACHED ? "checked" : "",
-            current_settings->output == ADHAN_OUTPUT_CAST ? "checked" : "",
-            current_settings->output == ADHAN_OUTPUT_DLNA ? "checked" : "",
-            current_settings->volume,
-            current_settings->enabled[0]?"checked":"",current_settings->enabled[1]?"checked":"",current_settings->enabled[2]?"checked":"",current_settings->enabled[3]?"checked":"",current_settings->enabled[4]?"checked":"",
-            current_settings->ramadan_start_date,
-            current_settings->ramadan_end_date,
-            current_settings->eid_fitr_date,
-            current_settings->eid_adha_date,
-            eid_start,
-            eid_end,
-            current_settings->eid_takbeer_interval_minutes,
-            current_settings->automatic_updates ? "checked" : "");
-    }
-    if (length < 0 || (size_t)length >= page_capacity) {
-        free(page);
-        return httpd_resp_send_err(request, HTTPD_500_INTERNAL_SERVER_ERROR, "Page is too large");
+        page = web_location_html_start;
     }
     httpd_resp_set_type(request, "text/html");
-    const esp_err_t result = httpd_resp_send(request, page, length);
-    free(page);
-    return result;
+    httpd_resp_set_hdr(request, "Cache-Control", "no-cache");
+    return httpd_resp_sendstr(request, (const char *)page);
 }
 
 static esp_err_t page_handler(httpd_req_t *request) { return render_page(request, PAGE_AUTOMATIC); }
 static esp_err_t location_page_handler(httpd_req_t *request) { return render_page(request, PAGE_LOCATION); }
 static esp_err_t wifi_page_handler(httpd_req_t *request) { return render_page(request, PAGE_WIFI); }
+
+static esp_err_t stylesheet_handler(httpd_req_t *request) {
+    httpd_resp_set_type(request, "text/css");
+    httpd_resp_set_hdr(request, "Cache-Control", "no-cache");
+    return httpd_resp_sendstr(request, (const char *)web_app_css_start);
+}
+
+static esp_err_t script_handler(httpd_req_t *request) {
+    httpd_resp_set_type(request, "application/javascript");
+    httpd_resp_set_hdr(request, "Cache-Control", "no-cache");
+    return httpd_resp_sendstr(request, (const char *)web_app_js_start);
+}
 
 static void timezone_for_location(adhan_settings_t *settings) {
     const double lat = settings->latitude;
@@ -307,6 +223,9 @@ static esp_err_t settings_handler(httpd_req_t *request) {
         get_value(body, "volume", value, sizeof(value)); current_settings->volume = atoi(value);
         get_value(body, "automatic_updates", value, sizeof(value));
         current_settings->automatic_updates = value[0] != '\0';
+        get_value(body, "display_style", value, sizeof(value));
+        current_settings->display_style = strcmp(value, "focus") == 0
+            ? ADHAN_DISPLAY_FOCUS : ADHAN_DISPLAY_DETAILED;
         strlcpy(current_settings->ramadan_start_date, ramadan_start,
             sizeof(current_settings->ramadan_start_date));
         strlcpy(current_settings->ramadan_end_date, ramadan_end,
@@ -373,7 +292,7 @@ static bool append_json_string(char *json, size_t capacity, size_t *length, cons
 static void format_minutes(int minutes, char output[6]) { unsigned value=(unsigned)(((minutes%1440)+1440)%1440); snprintf(output, 6, "%02u:%02u", value/60, value%60); }
 
 static esp_err_t status_handler(httpd_req_t *request) {
-    char json[3800];
+    char json[4800];
     size_t length = strlcpy(json, "{\"location\":", sizeof(json));
     if (!append_json_string(json, sizeof(json), &length,
             (const uint8_t *)current_settings->location_name)) {
@@ -382,9 +301,35 @@ static esp_err_t status_handler(httpd_req_t *request) {
     const char *playback_output =
         current_settings->output == ADHAN_OUTPUT_CAST ? "cast" :
         current_settings->output == ADHAN_OUTPUT_DLNA ? "dlna" : "attached";
+    char eid_start[6];
+    char eid_end[6];
+    format_minutes(current_settings->eid_takbeer_start_minute, eid_start);
+    format_minutes(current_settings->eid_takbeer_end_minute, eid_end);
     int written = snprintf(json + length, sizeof(json) - length,
-        ",\"playback_output\":\"%s\",\"cast_device_id\":",
-        playback_output);
+        ",\"playback_output\":\"%s\",\"display_style\":\"%s\",\"volume\":%d,"
+        "\"automatic_updates\":%s,"
+        "\"enabled_fajr\":%s,\"enabled_dhuhr\":%s,"
+        "\"enabled_asr\":%s,\"enabled_maghrib\":%s,\"enabled_isha\":%s,"
+        "\"ramadan_start\":\"%s\",\"ramadan_end\":\"%s\","
+        "\"eid_fitr\":\"%s\",\"eid_adha\":\"%s\","
+        "\"eid_takbeer_start\":\"%s\",\"eid_takbeer_end\":\"%s\","
+        "\"eid_takbeer_interval\":%d,\"cast_device_id\":",
+        playback_output,
+        current_settings->display_style == ADHAN_DISPLAY_FOCUS
+            ? "focus" : "detailed",
+        current_settings->volume,
+        current_settings->automatic_updates ? "true" : "false",
+        current_settings->enabled[0] ? "true" : "false",
+        current_settings->enabled[1] ? "true" : "false",
+        current_settings->enabled[2] ? "true" : "false",
+        current_settings->enabled[3] ? "true" : "false",
+        current_settings->enabled[4] ? "true" : "false",
+        current_settings->ramadan_start_date,
+        current_settings->ramadan_end_date,
+        current_settings->eid_fitr_date,
+        current_settings->eid_adha_date,
+        eid_start, eid_end,
+        current_settings->eid_takbeer_interval_minutes);
     if (written < 0 || (size_t)written >= sizeof(json) - length) {
         return httpd_resp_send_err(request, HTTPD_500_INTERNAL_SERVER_ERROR, "Could not render status");
     }
@@ -471,6 +416,17 @@ static esp_err_t status_handler(httpd_req_t *request) {
     }
     length += written;
     const time_t now = time(NULL); struct tm local_now = {0}; localtime_r(&now, &local_now);
+    char device_date[32] = {0};
+    strftime(device_date, sizeof(device_date), "%A %e %B", &local_now);
+    written = snprintf(json + length, sizeof(json) - length,
+        ",\"device_date\":\"%s\",\"device_time\":\"%02d:%02d\","
+        "\"device_minute\":%d",
+        device_date, local_now.tm_hour, local_now.tm_min,
+        local_now.tm_hour * 60 + local_now.tm_min);
+    if (written < 0 || (size_t)written >= sizeof(json) - length) {
+        return httpd_resp_send_err(request, HTTPD_500_INTERNAL_SERVER_ERROR, "Could not render status");
+    }
+    length += written;
     ramadan_status_t ramadan = {0};
     ramadan_status_for_date(
         current_settings->ramadan_start_date,
@@ -511,10 +467,6 @@ static esp_err_t status_handler(httpd_req_t *request) {
         current_settings->eid_adha_date,
         &local_now,
         &eid);
-    char eid_start[6];
-    char eid_end[6];
-    format_minutes(current_settings->eid_takbeer_start_minute, eid_start);
-    format_minutes(current_settings->eid_takbeer_end_minute, eid_end);
     char eid_message[192];
     if (eid.active) {
         snprintf(eid_message, sizeof(eid_message),
@@ -899,7 +851,7 @@ static esp_err_t audio_file_handler(httpd_req_t *request) {
 
 void web_server_start(adhan_settings_t *settings, bool *storage_is_mounted, bool *adhan_available, bool *takbeer_available, web_play_callback_t play_callback) {
     current_settings = settings; storage_mounted = storage_is_mounted; adhan_audio_available = adhan_available; takbeer_audio_available = takbeer_available; play_audio = play_callback;
-    httpd_handle_t server = NULL; httpd_config_t config = HTTPD_DEFAULT_CONFIG(); config.max_uri_handlers = 16; config.stack_size = 12288;
+    httpd_handle_t server = NULL; httpd_config_t config = HTTPD_DEFAULT_CONFIG(); config.max_uri_handlers = 18; config.stack_size = 12288;
     if (httpd_start(&server, &config) != ESP_OK) { ESP_LOGE(TAG, "Could not start web server"); return; }
     const httpd_uri_t root = {.uri = "/", .method = HTTP_GET, .handler = page_handler};
     const httpd_uri_t save = {.uri = "/api/settings", .method = HTTP_POST, .handler = settings_handler};
@@ -916,6 +868,8 @@ void web_server_start(adhan_settings_t *settings, bool *storage_is_mounted, bool
     const httpd_uri_t cast_devices = {.uri = "/api/cast-devices", .method = HTTP_GET, .handler = cast_devices_handler};
     const httpd_uri_t dlna_devices = {.uri = "/api/dlna-devices", .method = HTTP_GET, .handler = dlna_devices_handler};
     const httpd_uri_t firmware_update = {.uri = "/api/update", .method = HTTP_POST, .handler = firmware_update_handler};
-    httpd_register_uri_handler(server, &root); httpd_register_uri_handler(server, &save); httpd_register_uri_handler(server, &play); httpd_register_uri_handler(server, &play_takbeer); httpd_register_uri_handler(server, &upload); httpd_register_uri_handler(server, &upload_takbeer); httpd_register_uri_handler(server, &status); httpd_register_uri_handler(server, &location); httpd_register_uri_handler(server, &wifi); httpd_register_uri_handler(server, &audio_file); httpd_register_uri_handler(server, &takbeer_file); httpd_register_uri_handler(server, &networks); httpd_register_uri_handler(server, &cast_devices); httpd_register_uri_handler(server, &dlna_devices); httpd_register_uri_handler(server, &firmware_update);
+    const httpd_uri_t stylesheet = {.uri = "/ui.css", .method = HTTP_GET, .handler = stylesheet_handler};
+    const httpd_uri_t script = {.uri = "/ui.js", .method = HTTP_GET, .handler = script_handler};
+    httpd_register_uri_handler(server, &root); httpd_register_uri_handler(server, &save); httpd_register_uri_handler(server, &play); httpd_register_uri_handler(server, &play_takbeer); httpd_register_uri_handler(server, &upload); httpd_register_uri_handler(server, &upload_takbeer); httpd_register_uri_handler(server, &status); httpd_register_uri_handler(server, &location); httpd_register_uri_handler(server, &wifi); httpd_register_uri_handler(server, &audio_file); httpd_register_uri_handler(server, &takbeer_file); httpd_register_uri_handler(server, &networks); httpd_register_uri_handler(server, &cast_devices); httpd_register_uri_handler(server, &dlna_devices); httpd_register_uri_handler(server, &firmware_update); httpd_register_uri_handler(server, &stylesheet); httpd_register_uri_handler(server, &script);
     ESP_LOGI(TAG, "Web setup interface is ready");
 }

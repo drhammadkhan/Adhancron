@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="theme-color" content="#123c34">
+  <title>Set Adhan Clock Location</title>
+  <link rel="stylesheet" href="/ui.css">
+</head>
+<body data-page="location" class="setup-body">
+  <main class="setup-shell">
+    <div class="setup-brand"><span class="brand-mark"></span><strong>Adhan Clock</strong></div>
+    <div class="setup-progress" aria-label="Setup progress"><span class="complete"></span><span class="active"></span><span></span></div>
+    <p class="eyebrow">Step 2 of 3</p>
+    <h1>Set your location</h1>
+    <p class="setup-intro">Your location sets the correct prayer times and automatically accounts for the local timezone and daylight saving.</p>
+
+    <form id="location-form" class="setup-panel" method="post" action="/api/settings">
+      <input type="hidden" name="step" value="location">
+      <label for="place">Town, city or UK postcode</label>
+      <div class="inline-control"><input id="place" autocomplete="postal-code" placeholder="For example, Kingston or KT5 9NJ"><button id="find-place" class="icon-button search-button" type="button" aria-label="Find location" title="Find location"><span class="search-icon"></span></button></div>
+      <p id="location-result" class="field-note">Search for the place where the clock will be used.</p>
+      <div id="location-confirmation" class="location-confirmation hidden"><span class="confirm-icon"></span><div><strong id="confirmed-place">Location found</strong><small id="confirmed-coordinates"></small></div></div>
+
+      <details class="advanced-panel"><summary>Use coordinates instead</summary><div><p class="field-note">Use decimal coordinates if place search cannot find your location.</p><div class="field-grid"><label>Latitude<input id="latitude" name="latitude" type="number" min="-89" max="89" step="any" placeholder="51.5074"></label><label>Longitude<input id="longitude" name="longitude" type="number" min="-180" max="180" step="any" placeholder="-0.1278"></label></div><button id="use-coordinates" class="button button-secondary full" type="button">Confirm coordinates</button></div></details>
+
+      <input id="timezone" name="timezone" type="hidden">
+      <input id="location-name" name="location_name" type="hidden">
+      <input id="found" name="found" type="hidden">
+
+      <label for="setup-volume">Initial speaker volume <output id="setup-volume-value">80%</output></label>
+      <input id="setup-volume" name="volume" type="range" min="0" max="100" value="80">
+      <button id="save-location" class="button button-primary full" type="submit" disabled>Save location</button>
+    </form>
+  </main>
+  <script src="/ui.js" defer></script>
+</body>
+</html>

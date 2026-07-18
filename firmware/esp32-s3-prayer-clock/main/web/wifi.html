@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="theme-color" content="#123c34">
+  <title>Connect Adhan Clock</title>
+  <link rel="stylesheet" href="/ui.css">
+</head>
+<body data-page="wifi" class="setup-body">
+  <main class="setup-shell">
+    <div class="setup-brand"><span class="brand-mark"></span><strong>Adhan Clock</strong></div>
+    <div class="setup-progress" aria-label="Setup progress"><span class="active"></span><span></span><span></span></div>
+    <p class="eyebrow">Step 1 of 3</p>
+    <h1>Connect to Wi-Fi</h1>
+    <p class="setup-intro">Choose the home network this clock should use. Your password stays on the device.</p>
+
+    <form id="wifi-form" class="setup-panel" method="post" action="/api/settings">
+      <input type="hidden" name="step" value="wifi">
+      <label for="ssid">Home network</label>
+      <div class="inline-control"><select id="ssid" name="ssid" required><option value="">Scanning for networks...</option></select><button id="scan-wifi" class="icon-button" type="button" aria-label="Scan again" title="Scan again"><span class="scan-icon"></span></button></div>
+      <p id="wifi-result" class="field-note">Looking for nearby Wi-Fi networks...</p>
+      <label for="wifi-password">Wi-Fi password</label>
+      <div class="password-control"><input id="wifi-password" type="password" name="password" autocomplete="current-password"><button id="toggle-password" class="icon-button" type="button" aria-label="Show password" title="Show password"><span class="eye-icon"></span></button></div>
+      <p class="field-note">Leave this empty only for an open network.</p>
+      <details class="advanced-panel"><summary>Network not listed?</summary><div><label for="manual-ssid">Hidden network name</label><input id="manual-ssid" autocomplete="username"></div></details>
+      <button class="button button-primary full" type="submit">Connect and continue</button>
+    </form>
+  </main>
+  <script src="/ui.js" defer></script>
+</body>
+</html>

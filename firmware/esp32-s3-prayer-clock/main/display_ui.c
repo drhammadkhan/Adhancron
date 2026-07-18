@@ -26,9 +26,15 @@ static const uint32_t COLOR_MUTED = 0x8EAAA3;
 static const uint32_t COLOR_GOLD = 0xE6B967;
 static const uint32_t COLOR_SKY = 0x79C3D2;
 static const uint32_t COLOR_ERROR = 0xE58B78;
+static const uint32_t COLOR_FOCUS_BACKGROUND = 0x0B171B;
+static const uint32_t COLOR_FOCUS_PANEL = 0x163B38;
+static const uint32_t COLOR_FOCUS_INK = 0xF6F1E5;
+static const uint32_t COLOR_FOCUS_MUTED = 0x82A5A4;
+static const uint32_t COLOR_FOCUS_LINE = 0x294946;
 
 static lv_display_t *lvgl_display;
 static lv_obj_t *dashboard;
+static lv_obj_t *focus_dashboard;
 static lv_obj_t *message_panel;
 static lv_obj_t *message_title;
 static lv_obj_t *message_detail;
@@ -46,6 +52,20 @@ static lv_obj_t *countdown_label;
 static lv_obj_t *prayer_rows[6];
 static lv_obj_t *prayer_name_labels[6];
 static lv_obj_t *prayer_time_labels[6];
+static lv_obj_t *focus_location_label;
+static lv_obj_t *focus_address_label;
+static lv_obj_t *focus_battery_label;
+static lv_obj_t *focus_clock_digit_labels[6];
+static lv_obj_t *focus_date_label;
+static lv_obj_t *focus_wifi_icon;
+static lv_obj_t *focus_audio_icon;
+static lv_obj_t *focus_eyebrow_label;
+static lv_obj_t *focus_name_label;
+static lv_obj_t *focus_time_label;
+static lv_obj_t *focus_countdown_label;
+static lv_obj_t *focus_prayer_cells[5];
+static lv_obj_t *focus_prayer_name_labels[5];
+static lv_obj_t *focus_prayer_time_labels[5];
 
 static lv_color_t color(uint32_t value) {
     return lv_color_hex(value);
@@ -234,6 +254,144 @@ static void create_dashboard(lv_obj_t *screen) {
     lv_obj_set_style_text_align(battery_label, LV_TEXT_ALIGN_RIGHT, 0);
 }
 
+static void create_focus_dashboard(lv_obj_t *screen) {
+    static const char *names[] = {"FAJR", "DHUHR", "ASR", "MAGHRIB", "ISHA"};
+
+    focus_dashboard = lv_obj_create(screen);
+    make_plain(focus_dashboard);
+    lv_obj_set_size(focus_dashboard, BOARD_LCD_WIDTH, BOARD_LCD_HEIGHT);
+    lv_obj_set_style_bg_color(
+        focus_dashboard, color(COLOR_FOCUS_BACKGROUND), 0);
+    lv_obj_set_style_bg_opa(focus_dashboard, LV_OPA_COVER, 0);
+
+    lv_obj_t *accent = lv_obj_create(focus_dashboard);
+    make_plain(accent);
+    lv_obj_set_pos(accent, 86, 7);
+    lv_obj_set_size(accent, 68, 2);
+    lv_obj_set_style_bg_color(accent, color(COLOR_GOLD), 0);
+    lv_obj_set_style_bg_opa(accent, LV_OPA_COVER, 0);
+
+    lv_obj_t *product = make_label(
+        focus_dashboard, "ADHAN CLOCK", &lv_font_montserrat_12,
+        COLOR_GOLD);
+    lv_obj_set_pos(product, 48, 13);
+    lv_obj_set_size(product, 144, 16);
+    lv_obj_set_style_text_align(product, LV_TEXT_ALIGN_CENTER, 0);
+
+    focus_location_label = make_label(
+        focus_dashboard, "LOCATION", &lv_font_montserrat_12,
+        COLOR_FOCUS_MUTED);
+    lv_obj_set_pos(focus_location_label, 43, 30);
+    lv_obj_set_size(focus_location_label, 154, 17);
+    lv_obj_set_style_text_align(focus_location_label, LV_TEXT_ALIGN_CENTER, 0);
+    lv_label_set_long_mode(focus_location_label, LV_LABEL_LONG_MODE_DOTS);
+
+    focus_wifi_icon = make_label(
+        focus_dashboard, LV_SYMBOL_WIFI, &lv_font_montserrat_14,
+        COLOR_FOCUS_MUTED);
+    lv_obj_set_pos(focus_wifi_icon, 10, 20);
+    focus_audio_icon = make_label(
+        focus_dashboard, LV_SYMBOL_VOLUME_MAX, &lv_font_montserrat_14,
+        COLOR_FOCUS_MUTED);
+    lv_obj_set_pos(focus_audio_icon, 214, 20);
+
+    lv_obj_t *clock_row = lv_obj_create(focus_dashboard);
+    make_plain(clock_row);
+    lv_obj_set_pos(clock_row, 10, 54);
+    lv_obj_set_size(clock_row, 220, 44);
+    int clock_x = 26;
+    for (int digit = 0; digit < 6; digit++) {
+        if (digit == 2 || digit == 4) {
+            lv_obj_t *separator = make_label(
+                clock_row, ":", &lv_font_montserrat_36, COLOR_FOCUS_INK);
+            lv_obj_set_pos(separator, clock_x, 0);
+            lv_obj_set_size(separator, 12, 44);
+            lv_obj_set_style_text_align(separator, LV_TEXT_ALIGN_CENTER, 0);
+            clock_x += 12;
+        }
+        focus_clock_digit_labels[digit] = make_label(
+            clock_row, "-", &lv_font_montserrat_36, COLOR_FOCUS_INK);
+        lv_obj_set_pos(focus_clock_digit_labels[digit], clock_x, 0);
+        lv_obj_set_size(focus_clock_digit_labels[digit], 24, 44);
+        lv_obj_set_style_text_align(
+            focus_clock_digit_labels[digit], LV_TEXT_ALIGN_CENTER, 0);
+        clock_x += 24;
+    }
+
+    focus_date_label = make_label(
+        focus_dashboard, "WAITING FOR TIME", &lv_font_montserrat_12,
+        COLOR_FOCUS_MUTED);
+    lv_obj_set_pos(focus_date_label, 12, 101);
+    lv_obj_set_size(focus_date_label, 216, 16);
+    lv_obj_set_style_text_align(focus_date_label, LV_TEXT_ALIGN_CENTER, 0);
+
+    lv_obj_t *panel = lv_obj_create(focus_dashboard);
+    make_plain(panel);
+    lv_obj_set_pos(panel, 12, 123);
+    lv_obj_set_size(panel, 216, 101);
+    lv_obj_set_style_radius(panel, 7, 0);
+    lv_obj_set_style_bg_color(panel, color(COLOR_FOCUS_PANEL), 0);
+    lv_obj_set_style_bg_opa(panel, LV_OPA_COVER, 0);
+
+    focus_eyebrow_label = make_label(
+        panel, "NEXT PRAYER", &lv_font_montserrat_12, COLOR_GOLD);
+    lv_obj_set_pos(focus_eyebrow_label, 13, 10);
+    focus_name_label = make_label(
+        panel, "FAJR", &lv_font_montserrat_20, COLOR_IVORY);
+    lv_obj_set_pos(focus_name_label, 13, 34);
+    focus_time_label = make_label(
+        panel, "--:--", &lv_font_montserrat_36, COLOR_IVORY);
+    lv_obj_align(focus_time_label, LV_ALIGN_TOP_RIGHT, -13, 29);
+    focus_countdown_label = make_label(
+        panel, "IN --:--", &lv_font_montserrat_14, COLOR_SKY);
+    lv_obj_set_pos(focus_countdown_label, 13, 75);
+
+    for (int index = 0; index < 5; index++) {
+        focus_prayer_cells[index] = lv_obj_create(focus_dashboard);
+        make_plain(focus_prayer_cells[index]);
+        const int column = index % 2;
+        const int row = index / 2;
+        const int width = index == 4 ? 220 : 108;
+        lv_obj_set_pos(
+            focus_prayer_cells[index], 10 + column * 112, 231 + row * 22);
+        lv_obj_set_size(focus_prayer_cells[index], width, 22);
+        lv_obj_set_style_border_side(
+            focus_prayer_cells[index], LV_BORDER_SIDE_BOTTOM, 0);
+        lv_obj_set_style_border_width(
+            focus_prayer_cells[index], index == 4 ? 0 : 1, 0);
+        lv_obj_set_style_border_color(
+            focus_prayer_cells[index], color(COLOR_FOCUS_LINE), 0);
+        focus_prayer_name_labels[index] = make_label(
+            focus_prayer_cells[index], names[index], &lv_font_montserrat_12,
+            COLOR_FOCUS_MUTED);
+        lv_obj_set_width(focus_prayer_name_labels[index], 62);
+        lv_obj_set_style_text_align(
+            focus_prayer_name_labels[index], LV_TEXT_ALIGN_LEFT, 0);
+        lv_obj_set_pos(focus_prayer_name_labels[index], 5, 3);
+        focus_prayer_time_labels[index] = make_label(
+            focus_prayer_cells[index], "--:--", &lv_font_montserrat_12,
+            COLOR_FOCUS_INK);
+        lv_obj_set_width(focus_prayer_time_labels[index], 46);
+        lv_obj_set_style_text_align(
+            focus_prayer_time_labels[index], LV_TEXT_ALIGN_RIGHT, 0);
+        lv_obj_align(focus_prayer_time_labels[index], LV_ALIGN_TOP_RIGHT, -5, 3);
+    }
+
+    focus_address_label = make_label(
+        focus_dashboard, "IP: OFFLINE", &lv_font_montserrat_12,
+        COLOR_FOCUS_MUTED);
+    lv_obj_set_pos(focus_address_label, 8, 303);
+    lv_obj_set_size(focus_address_label, 164, 15);
+    lv_obj_set_style_text_align(focus_address_label, LV_TEXT_ALIGN_LEFT, 0);
+    lv_label_set_long_mode(focus_address_label, LV_LABEL_LONG_MODE_DOTS);
+
+    focus_battery_label = make_label(
+        focus_dashboard, "", &lv_font_montserrat_12, COLOR_FOCUS_MUTED);
+    lv_obj_set_pos(focus_battery_label, 172, 303);
+    lv_obj_set_size(focus_battery_label, 60, 15);
+    lv_obj_set_style_text_align(focus_battery_label, LV_TEXT_ALIGN_RIGHT, 0);
+}
+
 esp_err_t display_ui_init(
     esp_lcd_panel_io_handle_t panel_io,
     esp_lcd_panel_handle_t panel) {
@@ -275,8 +433,10 @@ esp_err_t display_ui_init(
     lv_obj_set_style_bg_color(screen, color(COLOR_BACKGROUND), 0);
     lv_obj_set_style_bg_opa(screen, LV_OPA_COVER, 0);
     create_dashboard(screen);
+    create_focus_dashboard(screen);
     create_message_panel(screen);
     lv_obj_add_flag(dashboard, LV_OBJ_FLAG_HIDDEN);
+    lv_obj_add_flag(focus_dashboard, LV_OBJ_FLAG_HIDDEN);
     lvgl_port_unlock();
 
     ESP_LOGI(TAG, "LVGL prayer-clock interface ready");
@@ -289,6 +449,7 @@ static void show_message(const char *title, const char *detail, uint32_t title_c
     lv_label_set_text(message_detail, detail);
     lv_obj_clear_flag(message_panel, LV_OBJ_FLAG_HIDDEN);
     lv_obj_add_flag(dashboard, LV_OBJ_FLAG_HIDDEN);
+    lv_obj_add_flag(focus_dashboard, LV_OBJ_FLAG_HIDDEN);
 }
 
 static void format_clock_minutes(int minutes, char output[6]) {
@@ -404,7 +565,15 @@ void display_ui_update(
     }
 
     lv_obj_add_flag(message_panel, LV_OBJ_FLAG_HIDDEN);
-    lv_obj_clear_flag(dashboard, LV_OBJ_FLAG_HIDDEN);
+    const bool focus_style =
+        current_settings->display_style == ADHAN_DISPLAY_FOCUS;
+    if (focus_style) {
+        lv_obj_add_flag(dashboard, LV_OBJ_FLAG_HIDDEN);
+        lv_obj_clear_flag(focus_dashboard, LV_OBJ_FLAG_HIDDEN);
+    } else {
+        lv_obj_clear_flag(dashboard, LV_OBJ_FLAG_HIDDEN);
+        lv_obj_add_flag(focus_dashboard, LV_OBJ_FLAG_HIDDEN);
+    }
 
     char saved_location[64];
     const char *location = current_settings->location_name;
@@ -416,11 +585,13 @@ void display_ui_update(
     char compact_location[32];
     compact_location_name(location, compact_location);
     lv_label_set_text(location_label, compact_location);
+    lv_label_set_text(focus_location_label, compact_location);
 
     char address_text[24];
     snprintf(address_text, sizeof(address_text), "IP: %s",
         device_address != NULL && device_address[0] != '\0' ? device_address : "OFFLINE");
     lv_label_set_text(address_label, address_text);
+    lv_label_set_text(focus_address_label, address_text);
 
     if (battery != NULL && battery->available) {
         const char *symbol = LV_SYMBOL_BATTERY_EMPTY;
@@ -434,12 +605,18 @@ void display_ui_update(
         snprintf(battery_text, sizeof(battery_text), "%s %d%%",
             symbol, battery->percentage);
         lv_label_set_text(battery_label, battery_text);
+        lv_label_set_text(focus_battery_label, battery_text);
         lv_obj_set_style_text_color(battery_label, color(
             battery->charging ? COLOR_GOLD :
             (battery->percentage <= 15 ? COLOR_ERROR : COLOR_SKY)), 0);
+        lv_obj_set_style_text_color(focus_battery_label, color(
+            battery->charging ? COLOR_GOLD :
+            (battery->percentage <= 15 ? COLOR_ERROR : COLOR_FOCUS_MUTED)), 0);
         lv_obj_clear_flag(battery_label, LV_OBJ_FLAG_HIDDEN);
+        lv_obj_clear_flag(focus_battery_label, LV_OBJ_FLAG_HIDDEN);
     } else {
         lv_obj_add_flag(battery_label, LV_OBJ_FLAG_HIDDEN);
+        lv_obj_add_flag(focus_battery_label, LV_OBJ_FLAG_HIDDEN);
     }
 
     char clock_text[7];
@@ -448,6 +625,13 @@ void display_ui_update(
     for (int digit = 0; digit < 6; digit++) {
         char value[2] = {clock_text[digit], '\0'};
         lv_label_set_text(clock_digit_labels[digit], value);
+    }
+    char focus_clock[7];
+    snprintf(focus_clock, sizeof(focus_clock), "%02d%02d%02d",
+        local_now.tm_hour, local_now.tm_min, local_now.tm_sec);
+    for (int digit = 0; digit < 6; digit++) {
+        char value[2] = {focus_clock[digit], '\0'};
+        lv_label_set_text(focus_clock_digit_labels[digit], value);
     }
 
     ramadan_status_t ramadan = {0};
@@ -476,16 +660,30 @@ void display_ui_update(
         strftime(date_text, sizeof(date_text), "%A  %d %B", &local_now);
     }
     lv_label_set_text(date_label, date_text);
+    lv_label_set_text(focus_date_label, date_text);
     lv_obj_set_style_text_color(
         date_label, color(eid.active ? COLOR_GOLD : COLOR_MUTED), 0);
+    lv_obj_set_style_text_color(
+        focus_date_label,
+        color(eid.active ? COLOR_GOLD : COLOR_FOCUS_MUTED), 0);
     lv_obj_align(date_label, LV_ALIGN_TOP_MID, 0, 88);
 
     const uint32_t wifi_color = connected
         ? COLOR_SKY
         : (setup_access_point_active ? COLOR_GOLD : COLOR_MUTED);
     lv_obj_set_style_text_color(wifi_icon, color(wifi_color), 0);
+    lv_obj_set_style_text_color(
+        focus_wifi_icon,
+        color(connected ? COLOR_FOCUS_INK :
+            (setup_access_point_active ? COLOR_GOLD : COLOR_FOCUS_MUTED)), 0);
     lv_obj_set_style_text_color(audio_icon, color(audio_available ? COLOR_GOLD : COLOR_ERROR), 0);
+    lv_obj_set_style_text_color(
+        focus_audio_icon,
+        color(audio_available ? COLOR_GOLD : COLOR_ERROR), 0);
     lv_label_set_text(audio_icon, storage_mounted ? LV_SYMBOL_VOLUME_MAX : LV_SYMBOL_WARNING);
+    lv_label_set_text(
+        focus_audio_icon,
+        storage_mounted ? LV_SYMBOL_VOLUME_MAX : LV_SYMBOL_WARNING);
 
     static const int row_indexes[] = {0, 1, 2, 3, 4, 5};
     static const int prayer_indexes[] = {0, 2, 3, 4, 5};
@@ -500,6 +698,16 @@ void display_ui_update(
         lv_obj_set_style_text_color(
             prayer_name_labels[row], color(row == 1 ? COLOR_SKY : COLOR_MUTED), 0);
     }
+    for (int index = 0; index < 5; index++) {
+        char value[6];
+        format_clock_minutes(
+            prayer_time_minutes(&times, prayer_indexes[index]), value);
+        lv_label_set_text(focus_prayer_time_labels[index], value);
+        lv_obj_set_style_text_color(
+            focus_prayer_name_labels[index], color(COLOR_FOCUS_MUTED), 0);
+        lv_obj_set_style_text_color(
+            focus_prayer_time_labels[index], color(COLOR_FOCUS_INK), 0);
+    }
 
     const int current_minute = local_now.tm_hour * 60 + local_now.tm_min;
     int next = 0;
@@ -513,6 +721,10 @@ void display_ui_update(
     lv_obj_set_style_bg_color(prayer_rows[next_row], color(COLOR_PANEL_ACTIVE), 0);
     lv_obj_set_style_bg_opa(prayer_rows[next_row], LV_OPA_COVER, 0);
     lv_obj_set_style_text_color(prayer_name_labels[next_row], color(COLOR_GOLD), 0);
+    lv_obj_set_style_text_color(
+        focus_prayer_name_labels[next], color(COLOR_GOLD), 0);
+    lv_obj_set_style_text_color(
+        focus_prayer_time_labels[next], color(COLOR_FOCUS_INK), 0);
 
     const int next_minutes = prayer_time_minutes(&times, prayer_indexes[next]);
     char next_time[6];
@@ -553,6 +765,11 @@ void display_ui_update(
             eid.kind == EID_AL_FITR ? "AL-FITR" : "AL-ADHA");
         lv_label_set_text(next_time_label, takbeer_time);
         lv_label_set_text(countdown_label, seconds_text);
+        lv_label_set_text(focus_eyebrow_label, "EID TAKBEER");
+        lv_label_set_text(focus_name_label,
+            eid.kind == EID_AL_FITR ? "AL-FITR" : "AL-ADHA");
+        lv_label_set_text(focus_time_label, takbeer_time);
+        lv_label_set_text(focus_countdown_label, seconds_text);
     } else if (ramadan_event_countdown) {
         const char *event = next == 0 ? "SEHRI ENDS IN" : "IFTAR IN";
         char seconds_text[16];
@@ -562,6 +779,10 @@ void display_ui_update(
         lv_label_set_text(next_name_label, seconds_text);
         lv_label_set_text(next_time_label, next_time);
         lv_label_set_text(countdown_label, prayer_names[next]);
+        lv_label_set_text(focus_eyebrow_label, event);
+        lv_label_set_text(focus_name_label, seconds_text);
+        lv_label_set_text(focus_time_label, next_time);
+        lv_label_set_text(focus_countdown_label, prayer_names[next]);
     } else {
         const unsigned countdown_value = (unsigned)(countdown % 1441);
         char countdown_text[16];
@@ -571,6 +792,10 @@ void display_ui_update(
         lv_label_set_text(next_name_label, prayer_names[next]);
         lv_label_set_text(next_time_label, next_time);
         lv_label_set_text(countdown_label, countdown_text);
+        lv_label_set_text(focus_eyebrow_label, "NEXT PRAYER");
+        lv_label_set_text(focus_name_label, prayer_names[next]);
+        lv_label_set_text(focus_time_label, next_time);
+        lv_label_set_text(focus_countdown_label, countdown_text);
     }
     lv_obj_align(next_time_label, LV_ALIGN_TOP_RIGHT, -12, 27);
     lv_obj_align(countdown_label, LV_ALIGN_BOTTOM_RIGHT, -12, -7);
