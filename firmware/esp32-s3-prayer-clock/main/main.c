@@ -827,10 +827,11 @@ static void probe_wifi(void) {
         ESP_ERROR_CHECK(esp_wifi_start());
     }
     ESP_ERROR_CHECK(mdns_init());
-    ESP_ERROR_CHECK(mdns_hostname_set("adhancron"));
+    ESP_ERROR_CHECK(mdns_hostname_set(settings.device_hostname));
     ESP_ERROR_CHECK(mdns_instance_name_set("Adhancron Prayer Clock"));
     ESP_ERROR_CHECK(mdns_service_add(NULL, "_http", "_tcp", 80, NULL, 0));
-    ESP_LOGI(TAG, "Dashboard address: http://adhancron.local");
+    ESP_LOGI(TAG, "Dashboard address: http://%s.local",
+        settings.device_hostname);
     web_server_start(
         &settings, &storage_mounted, &adhan_audio_available,
         &takbeer_audio_available, play_audio);

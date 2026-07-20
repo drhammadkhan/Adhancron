@@ -14,7 +14,8 @@ not require Docker, Home Assistant, or another computer after setup.
 
 - First-boot Wi-Fi setup network and browser onboarding.
 - Recovery setup network when saved Wi-Fi cannot be reached.
-- `http://adhancron.local` discovery on the home network.
+- A user-selectable `.local` address on the home network, defaulting to
+  `http://adhancron.local`.
 - Online town/city/postcode search followed by automatic coordinate and timezone storage.
 - NTP clock synchronisation and daylight-saving-aware local time.
 - Local Adhancron prayer calculation: Fajr 90 minutes before sunrise, Dhuhr five minutes after solar noon, standard Asr, Maghrib one minute after sunset, and Moonsighting Committee seasonal Isha.
@@ -57,7 +58,7 @@ recovery behaviour rather than normal navigation.
 
 1. On first boot, the clock creates the **Adhancron Setup** Wi-Fi network.
 2. The user joins it from a phone or computer, opens `192.168.4.1`, chooses a scanned Wi-Fi network, and saves its password.
-3. After joining the home network, the clock exposes the same full dashboard at `http://adhancron.local` and shows its numerical IP address at the bottom of the display.
+3. After joining the home network, the clock exposes the same full dashboard at `http://adhancron.local` and shows its numerical IP address at the bottom of the display. The `.local` name can be changed under **Device > Local address**; access by numerical IP continues to work.
 4. The user searches for a location or enters coordinates. The clock saves the coordinates, timezone, and display name, then calculates prayer times locally each day.
 5. At each enabled prayer, the scheduler starts the saved output: the attached speaker, selected Google Cast receiver, or selected Sonos/DLNA receiver.
 6. On either user-configured Eid date, the scheduler also plays the separate
@@ -168,7 +169,9 @@ shows the setup instructions or prayer clock on the display.
 1. Join **Adhancron Setup** with password `adhancron`.
 2. Open `http://192.168.4.1`, choose a scanned home Wi-Fi network, and enter
    its password. Hidden and open networks are also supported.
-3. After restart, open `http://adhancron.local`.
+3. After restart, open the saved local address. Its default is
+   `http://adhancron.local`; the numerical IP shown on the display always
+   remains available.
 4. Search for the home town, city, or postcode and save it.
 5. Use the dashboard to choose the attached speaker, a discovered Google Cast
    speaker, or a Sonos/UPnP-DLNA speaker; choose the **Prayer list** or **Focus**

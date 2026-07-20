@@ -38,10 +38,12 @@ typedef struct {
     int eid_takbeer_end_minute;
     int eid_takbeer_interval_minutes;
     adhan_display_style_t display_style;
+    char device_hostname[33];
 } adhan_settings_t;
 
 void settings_defaults(adhan_settings_t *settings);
 bool settings_load(adhan_settings_t *settings);
 bool settings_save(const adhan_settings_t *settings);
 bool settings_has_wifi(const adhan_settings_t *settings);
+bool settings_normalize_hostname(char *hostname, size_t capacity);
 bool settings_reset(void);

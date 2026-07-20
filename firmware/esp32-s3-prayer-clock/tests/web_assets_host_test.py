@@ -58,6 +58,7 @@ class WebAssetsTest(unittest.TestCase):
             "ramadan_end", "eid_fitr", "eid_adha", "eid_takbeer_start",
             "eid_takbeer_end", "eid_takbeer_interval", "automatic_updates",
             "display_style",
+            "device_hostname",
         }
         self.assertTrue(expected.issubset(names))
 

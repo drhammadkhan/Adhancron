@@ -172,6 +172,10 @@
           <div class="panel-content">
             <nav class="device-links"><a href="/location"><strong>Location</strong><small id="location-link-note">Change the calculation location</small></a><a href="/wifi"><strong>Wi-Fi network</strong><small>Connect the clock to another network</small></a></nav>
             <div class="divider"></div>
+            <label for="device-hostname">Local address</label>
+            <input id="device-hostname" name="device_hostname" type="text" value="adhancron" maxlength="32" pattern="[A-Za-z0-9](?:[A-Za-z0-9-]{0,30}[A-Za-z0-9])?" autocapitalize="none" autocomplete="off" spellcheck="false" required>
+            <p class="field-note">Open this clock at <strong id="local-address-preview">adhancron.local</strong>. Use letters, numbers or hyphens. The new address works after saving and restarting.</p>
+            <div class="divider"></div>
             <div class="update-row"><div><strong>Software updates</strong><p id="firmware-status" class="field-note">Loading firmware status...</p></div><button id="update-button" class="button button-secondary compact" type="button">Check now</button></div>
             <label class="toggle-row standalone"><span><strong>Automatic updates</strong><small>Install verified firmware over Wi-Fi</small></span><input type="checkbox" name="automatic_updates"><span class="toggle-status" aria-hidden="true"></span><span class="switch"></span></label>
             <p id="update-result" class="notice hidden" role="status"></p>

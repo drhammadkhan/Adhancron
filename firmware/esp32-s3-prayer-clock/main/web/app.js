@@ -107,6 +107,8 @@ function populateSettings(status) {
   setChecked('maghrib', status.enabled_maghrib);
   setChecked('isha', status.enabled_isha);
   setChecked('automatic_updates', status.automatic_updates);
+  byId('device-hostname').value = status.device_hostname || 'adhancron';
+  updateLocalAddressPreview();
   byId('ramadan-start').value = status.ramadan_start || '';
   byId('ramadan-end').value = status.ramadan_end || '';
   byId('eid-fitr').value = status.eid_fitr || '';
@@ -281,6 +283,11 @@ function showSaveDock() {
   byId('save-message').textContent = 'You have unsaved changes';
 }
 
+function updateLocalAddressPreview() {
+  const hostname = byId('device-hostname')?.value.trim().toLowerCase() || 'adhancron';
+  byId('local-address-preview').textContent = `${hostname}.local`;
+}
+
 async function saveDashboard(event) {
   event.preventDefault();
   const form = event.currentTarget;
@@ -431,6 +438,7 @@ function initDashboard() {
   byId('clear-ramadan').addEventListener('click', clearRamadan);
   byId('clear-eid').addEventListener('click', clearEid);
   byId('update-button').addEventListener('click', checkUpdate);
+  byId('device-hostname').addEventListener('input', updateLocalAddressPreview);
   const form = byId('settings-form');
   form.addEventListener('input', showSaveDock);
   form.addEventListener('change', showSaveDock);

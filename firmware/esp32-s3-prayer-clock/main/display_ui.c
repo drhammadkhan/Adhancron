@@ -539,7 +539,10 @@ void display_ui_update(
         return;
     }
     if (!current_settings->location_configured) {
-        show_message("Set your location", "Open adhancron.local in a browser", COLOR_GOLD);
+        char address[64];
+        snprintf(address, sizeof(address), "Open %s.local in a browser",
+            current_settings->device_hostname);
+        show_message("Set your location", address, COLOR_GOLD);
         lvgl_port_unlock();
         return;
     }

@@ -1,12 +1,15 @@
 #include "settings.h"
 
+#include <ctype.h>
 #include <stdio.h>
 #include <string.h>
+#include <strings.h>
 
 #include "nvs.h"
 
 #define SETTINGS_NAMESPACE "adhan"
-#define SETTINGS_VERSION 10
+#define SETTINGS_VERSION 11
+#define LEGACY_SETTINGS_VERSION_10 10
 #define LEGACY_SETTINGS_VERSION_9 9
 #define LEGACY_SETTINGS_VERSION_8 8
 #define LEGACY_SETTINGS_VERSION_7 7
@@ -136,6 +139,32 @@ typedef struct {
 } legacy_settings_v9_t;
 
 typedef struct {
+    char wifi_ssid[33];
+    char wifi_password[65];
+    char timezone[64];
+    char location_name[64];
+    double latitude;
+    double longitude;
+    bool location_configured;
+    int volume;
+    bool enabled[5];
+    adhan_output_t output;
+    char cast_device_id[48];
+    char cast_device_name[64];
+    char dlna_device_url[256];
+    char dlna_device_name[64];
+    bool automatic_updates;
+    char ramadan_start_date[11];
+    char ramadan_end_date[11];
+    char eid_fitr_date[11];
+    char eid_adha_date[11];
+    int eid_takbeer_start_minute;
+    int eid_takbeer_end_minute;
+    int eid_takbeer_interval_minutes;
+    adhan_display_style_t display_style;
+} legacy_settings_v10_t;
+
+typedef struct {
     uint32_t version;
     legacy_settings_v3_t value;
 } stored_settings_v3_t;
@@ -172,6 +201,11 @@ typedef struct {
 
 typedef struct {
     uint32_t version;
+    legacy_settings_v10_t value;
+} stored_settings_v10_t;
+
+typedef struct {
+    uint32_t version;
     adhan_settings_t value;
 } stored_settings_t;
 
@@ -182,6 +216,7 @@ void settings_defaults(adhan_settings_t *settings) {
     settings->output = ADHAN_OUTPUT_ATTACHED;
     settings->automatic_updates = true;
     settings->display_style = ADHAN_DISPLAY_DETAILED;
+    strcpy(settings->device_hostname, "adhancron");
     settings->eid_takbeer_start_minute = 7 * 60;
     settings->eid_takbeer_end_minute = 9 * 60;
     settings->eid_takbeer_interval_minutes = 15;
@@ -207,6 +242,18 @@ bool settings_load(adhan_settings_t *settings) {
         nvs_close(handle);
         if (result != ESP_OK || stored.version != SETTINGS_VERSION) return false;
         *settings = stored.value;
+        return true;
+    }
+    if (length == sizeof(stored_settings_v10_t)) {
+        stored_settings_v10_t stored = {0};
+        const esp_err_t result = nvs_get_blob(
+            handle, "settings", &stored, &length);
+        nvs_close(handle);
+        if (result != ESP_OK ||
+                stored.version != LEGACY_SETTINGS_VERSION_10) return false;
+        memcpy(settings, &stored.value, sizeof(stored.value));
+        strcpy(settings->device_hostname, "adhancron");
+        settings_save(settings);
         return true;
     }
     if (length == sizeof(stored_settings_v9_t)) {
@@ -391,6 +438,33 @@ bool settings_save(const adhan_settings_t *settings) {
 
 bool settings_has_wifi(const adhan_settings_t *settings) {
     return settings->wifi_ssid[0] != '\0';
+}
+
+bool settings_normalize_hostname(char *hostname, size_t capacity) {
+    if (hostname == NULL || capacity == 0) return false;
+
+    size_t start = 0;
+    size_t length = strnlen(hostname, capacity);
+    if (length == capacity) return false;
+    while (start < length && isspace((unsigned char)hostname[start])) start++;
+    while (length > start && isspace((unsigned char)hostname[length - 1])) length--;
+    if (start > 0) memmove(hostname, hostname + start, length - start);
+    length -= start;
+    hostname[length] = '\0';
+
+    if (length > 6 && strcasecmp(hostname + length - 6, ".local") == 0) {
+        length -= 6;
+        hostname[length] = '\0';
+    }
+    if (length == 0 || length > 32 || hostname[0] == '-' ||
+            hostname[length - 1] == '-') return false;
+
+    for (size_t index = 0; index < length; index++) {
+        const unsigned char character = (unsigned char)hostname[index];
+        if (!isalnum(character) && character != '-') return false;
+        hostname[index] = (char)tolower(character);
+    }
+    return true;
 }
 
 bool settings_reset(void) {

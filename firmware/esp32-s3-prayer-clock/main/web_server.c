@@ -178,6 +178,14 @@ static esp_err_t settings_handler(httpd_req_t *request) {
         current_settings->location_configured = true;
         get_value(body, "volume", value, sizeof(value)); current_settings->volume = atoi(value);
     } else if (strcmp(value, "playback") == 0) {
+        char device_hostname[64] = {0};
+        get_value(body, "device_hostname", device_hostname,
+            sizeof(device_hostname));
+        if (!settings_normalize_hostname(
+                device_hostname, sizeof(device_hostname))) {
+            return httpd_resp_send_err(request, HTTPD_400_BAD_REQUEST,
+                "Use 1 to 32 letters, numbers or hyphens for the local address");
+        }
         char ramadan_start[16] = {0};
         char ramadan_end[16] = {0};
         char eid_fitr[16] = {0};
@@ -226,6 +234,8 @@ static esp_err_t settings_handler(httpd_req_t *request) {
         get_value(body, "display_style", value, sizeof(value));
         current_settings->display_style = strcmp(value, "focus") == 0
             ? ADHAN_DISPLAY_FOCUS : ADHAN_DISPLAY_DETAILED;
+        strlcpy(current_settings->device_hostname, device_hostname,
+            sizeof(current_settings->device_hostname));
         strlcpy(current_settings->ramadan_start_date, ramadan_start,
             sizeof(current_settings->ramadan_start_date));
         strlcpy(current_settings->ramadan_end_date, ramadan_end,
@@ -298,6 +308,16 @@ static esp_err_t status_handler(httpd_req_t *request) {
             (const uint8_t *)current_settings->location_name)) {
         return httpd_resp_send_err(request, HTTPD_500_INTERNAL_SERVER_ERROR, "Could not render status");
     }
+    int written = snprintf(json + length, sizeof(json) - length,
+        ",\"device_hostname\":");
+    if (written < 0 || (size_t)written >= sizeof(json) - length) {
+        return httpd_resp_send_err(request, HTTPD_500_INTERNAL_SERVER_ERROR, "Could not render status");
+    }
+    length += written;
+    if (!append_json_string(json, sizeof(json), &length,
+            (const uint8_t *)current_settings->device_hostname)) {
+        return httpd_resp_send_err(request, HTTPD_500_INTERNAL_SERVER_ERROR, "Could not render status");
+    }
     const char *playback_output =
         current_settings->output == ADHAN_OUTPUT_CAST ? "cast" :
         current_settings->output == ADHAN_OUTPUT_DLNA ? "dlna" : "attached";
@@ -305,7 +325,7 @@ static esp_err_t status_handler(httpd_req_t *request) {
     char eid_end[6];
     format_minutes(current_settings->eid_takbeer_start_minute, eid_start);
     format_minutes(current_settings->eid_takbeer_end_minute, eid_end);
-    int written = snprintf(json + length, sizeof(json) - length,
+    written = snprintf(json + length, sizeof(json) - length,
         ",\"playback_output\":\"%s\",\"display_style\":\"%s\",\"volume\":%d,"
         "\"automatic_updates\":%s,"
         "\"enabled_fajr\":%s,\"enabled_dhuhr\":%s,"
