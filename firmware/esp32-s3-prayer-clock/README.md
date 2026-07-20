@@ -58,7 +58,7 @@ recovery behaviour rather than normal navigation.
 
 1. On first boot, the clock creates the **Adhancron Setup** Wi-Fi network.
 2. The user joins it from a phone or computer, opens `192.168.4.1`, chooses a scanned Wi-Fi network, and saves its password.
-3. After joining the home network, the clock exposes the same full dashboard at `http://adhancron.local` and shows its numerical IP address at the bottom of the display. The `.local` name can be changed under **Device > Local address**; access by numerical IP continues to work.
+3. After joining the home network, the clock exposes the same full dashboard at `http://adhancron.local` and shows both its `.local` name and numerical IP address at the bottom of the display. The `.local` name can be changed under **Device > Local address**; access by numerical IP continues to work.
 4. The user searches for a location or enters coordinates. The clock saves the coordinates, timezone, and display name, then calculates prayer times locally each day.
 5. At each enabled prayer, the scheduler starts the saved output: the attached speaker, selected Google Cast receiver, or selected Sonos/DLNA receiver.
 6. On either user-configured Eid date, the scheduler also plays the separate
