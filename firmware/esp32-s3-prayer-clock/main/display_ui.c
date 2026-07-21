@@ -40,7 +40,6 @@ static lv_obj_t *message_title;
 static lv_obj_t *message_detail;
 static lv_obj_t *location_label;
 static lv_obj_t *address_label;
-static lv_obj_t *ip_address_label;
 static lv_obj_t *battery_label;
 static lv_obj_t *clock_digit_labels[6];
 static lv_obj_t *date_label;
@@ -55,7 +54,6 @@ static lv_obj_t *prayer_name_labels[6];
 static lv_obj_t *prayer_time_labels[6];
 static lv_obj_t *focus_location_label;
 static lv_obj_t *focus_address_label;
-static lv_obj_t *focus_ip_address_label;
 static lv_obj_t *focus_battery_label;
 static lv_obj_t *focus_clock_digit_labels[6];
 static lv_obj_t *focus_date_label;
@@ -245,20 +243,14 @@ static void create_dashboard(lv_obj_t *screen) {
     create_prayer_table(dashboard);
 
     address_label = make_label(dashboard, "adhancron.local", &lv_font_montserrat_12, COLOR_MUTED);
-    lv_obj_set_pos(address_label, 4, 305);
-    lv_obj_set_size(address_label, 108, 14);
-    lv_obj_set_style_text_align(address_label, LV_TEXT_ALIGN_LEFT, 0);
+    lv_obj_set_pos(address_label, 8, 305);
+    lv_obj_set_size(address_label, 164, 14);
+    lv_obj_set_style_text_align(address_label, LV_TEXT_ALIGN_CENTER, 0);
     lv_label_set_long_mode(address_label, LV_LABEL_LONG_MODE_DOTS);
 
-    ip_address_label = make_label(dashboard, "OFFLINE", &lv_font_montserrat_12, COLOR_MUTED);
-    lv_obj_set_pos(ip_address_label, 112, 305);
-    lv_obj_set_size(ip_address_label, 82, 14);
-    lv_obj_set_style_text_align(ip_address_label, LV_TEXT_ALIGN_RIGHT, 0);
-    lv_label_set_long_mode(ip_address_label, LV_LABEL_LONG_MODE_DOTS);
-
     battery_label = make_label(dashboard, "", &lv_font_montserrat_12, COLOR_MUTED);
-    lv_obj_set_pos(battery_label, 196, 305);
-    lv_obj_set_size(battery_label, 40, 14);
+    lv_obj_set_pos(battery_label, 172, 305);
+    lv_obj_set_size(battery_label, 60, 14);
     lv_obj_set_style_text_align(battery_label, LV_TEXT_ALIGN_RIGHT, 0);
 }
 
@@ -388,25 +380,15 @@ static void create_focus_dashboard(lv_obj_t *screen) {
     focus_address_label = make_label(
         focus_dashboard, "adhancron.local", &lv_font_montserrat_12,
         COLOR_FOCUS_MUTED);
-    lv_obj_set_pos(focus_address_label, 4, 303);
-    lv_obj_set_size(focus_address_label, 108, 15);
-    lv_obj_set_style_text_align(focus_address_label, LV_TEXT_ALIGN_LEFT, 0);
+    lv_obj_set_pos(focus_address_label, 8, 303);
+    lv_obj_set_size(focus_address_label, 164, 15);
+    lv_obj_set_style_text_align(focus_address_label, LV_TEXT_ALIGN_CENTER, 0);
     lv_label_set_long_mode(focus_address_label, LV_LABEL_LONG_MODE_DOTS);
-
-    focus_ip_address_label = make_label(
-        focus_dashboard, "OFFLINE", &lv_font_montserrat_12,
-        COLOR_FOCUS_MUTED);
-    lv_obj_set_pos(focus_ip_address_label, 112, 303);
-    lv_obj_set_size(focus_ip_address_label, 82, 15);
-    lv_obj_set_style_text_align(
-        focus_ip_address_label, LV_TEXT_ALIGN_RIGHT, 0);
-    lv_label_set_long_mode(
-        focus_ip_address_label, LV_LABEL_LONG_MODE_DOTS);
 
     focus_battery_label = make_label(
         focus_dashboard, "", &lv_font_montserrat_12, COLOR_FOCUS_MUTED);
-    lv_obj_set_pos(focus_battery_label, 196, 303);
-    lv_obj_set_size(focus_battery_label, 40, 15);
+    lv_obj_set_pos(focus_battery_label, 172, 303);
+    lv_obj_set_size(focus_battery_label, 60, 15);
     lv_obj_set_style_text_align(focus_battery_label, LV_TEXT_ALIGN_RIGHT, 0);
 }
 
@@ -608,16 +590,18 @@ void display_ui_update(
     lv_label_set_text(location_label, compact_location);
     lv_label_set_text(focus_location_label, compact_location);
 
-    char local_address_text[40];
-    snprintf(local_address_text, sizeof(local_address_text), "%s.local",
-        current_settings->device_hostname);
-    lv_label_set_text(address_label, local_address_text);
-    lv_label_set_text(focus_address_label, local_address_text);
     const char *ip_address =
         device_address != NULL && device_address[0] != '\0'
             ? device_address : "OFFLINE";
-    lv_label_set_text(ip_address_label, ip_address);
-    lv_label_set_text(focus_ip_address_label, ip_address);
+    char address_text[48];
+    if ((local_now.tm_sec / 5) % 2 == 0) {
+        snprintf(address_text, sizeof(address_text), "%s.local",
+            current_settings->device_hostname);
+    } else {
+        snprintf(address_text, sizeof(address_text), "IP: %s", ip_address);
+    }
+    lv_label_set_text(address_label, address_text);
+    lv_label_set_text(focus_address_label, address_text);
 
     if (battery != NULL && battery->available) {
         const char *symbol = LV_SYMBOL_BATTERY_EMPTY;
