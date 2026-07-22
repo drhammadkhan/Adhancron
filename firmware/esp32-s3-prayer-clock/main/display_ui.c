@@ -243,8 +243,8 @@ static void create_dashboard(lv_obj_t *screen) {
     create_prayer_table(dashboard);
 
     address_label = make_label(dashboard, "adhancron.local", &lv_font_montserrat_12, COLOR_MUTED);
-    lv_obj_set_pos(address_label, 8, 305);
-    lv_obj_set_size(address_label, 164, 14);
+    lv_obj_set_pos(address_label, 30, 305);
+    lv_obj_set_size(address_label, 180, 14);
     lv_obj_set_style_text_align(address_label, LV_TEXT_ALIGN_CENTER, 0);
     lv_label_set_long_mode(address_label, LV_LABEL_LONG_MODE_DOTS);
 
@@ -380,8 +380,8 @@ static void create_focus_dashboard(lv_obj_t *screen) {
     focus_address_label = make_label(
         focus_dashboard, "adhancron.local", &lv_font_montserrat_12,
         COLOR_FOCUS_MUTED);
-    lv_obj_set_pos(focus_address_label, 8, 303);
-    lv_obj_set_size(focus_address_label, 164, 15);
+    lv_obj_set_pos(focus_address_label, 30, 303);
+    lv_obj_set_size(focus_address_label, 180, 15);
     lv_obj_set_style_text_align(focus_address_label, LV_TEXT_ALIGN_CENTER, 0);
     lv_label_set_long_mode(focus_address_label, LV_LABEL_LONG_MODE_DOTS);
 
