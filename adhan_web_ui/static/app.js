@@ -39,6 +39,8 @@ const scanDlnaBtn = document.getElementById("scanDlnaBtn");
 const dlnaStatus = document.getElementById("dlnaStatus");
 const latitudeInput = document.getElementById("latitudeInput");
 const longitudeInput = document.getElementById("longitudeInput");
+const locationNameInput = document.getElementById("locationNameInput");
+const displayStyleInput = document.getElementById("displayStyleInput");
 const locationSearchInput = document.getElementById("locationSearchInput");
 const searchLocationBtn = document.getElementById("searchLocationBtn");
 const locationResults = document.getElementById("locationResults");
@@ -91,6 +93,10 @@ function ensureSpeakerOption(select, value, name) {
 
 function renderSettings(settings, overrideMessage = null) {
   if (!haUrlInput || !haEntityInput || !haTokenInput) return;
+  const attachedOption = playbackMethodInput?.querySelector('option[value="attached"]');
+  if (attachedOption && !settings.attached_playback_available && settings.playback_method !== "attached") {
+    attachedOption.remove();
+  }
   haUrlInput.value = settings.ha_url || "";
   haEntityInput.value = settings.ha_entity_id || "";
   if (publicBaseUrlInput) publicBaseUrlInput.value = settings.public_base_url || "";
@@ -101,6 +107,8 @@ function renderSettings(settings, overrideMessage = null) {
   syncPlaybackMethod(settings.playback_method || "home_assistant");
   if (latitudeInput) latitudeInput.value = settings.latitude || "";
   if (longitudeInput) longitudeInput.value = settings.longitude || "";
+  if (locationNameInput) locationNameInput.value = settings.location_name || "";
+  if (displayStyleInput) displayStyleInput.value = settings.display_style || "overview";
   if (eidFitrDateInput) eidFitrDateInput.value = settings.eid_fitr_date || "";
   if (eidAdhaDateInput) eidAdhaDateInput.value = settings.eid_adha_date || "";
   if (eidTakbeerStartInput) eidTakbeerStartInput.value = settings.eid_takbeer_start || "07:00";
@@ -122,6 +130,10 @@ function renderSettings(settings, overrideMessage = null) {
   }
   if (locationHint) locationHint.textContent = `Timings are calculated locally from the saved coordinates and update each day. Time zone: ${settings.timezone || "unknown"}. Location searches use OpenStreetMap; you can also enter coordinates directly.`;
   haTokenInput.value = "";
+  if (settings.playback_method === "attached") {
+    setSettingsStatus(overrideMessage || "Attached speaker ready", "success");
+    return;
+  }
   if (settings.playback_method === "google_cast") {
     const configured = Boolean(settings.google_cast_host);
     setSettingsStatus(
@@ -340,7 +352,9 @@ async function saveSettings() {
   if (latitude || longitude) {
     payload.latitude = latitude;
     payload.longitude = longitude;
+    payload.location_name = locationNameInput ? locationNameInput.value.trim() : "";
   }
+  if (displayStyleInput) payload.display_style = displayStyleInput.value;
   if (haTokenInput.value.trim()) {
     payload.ha_token = haTokenInput.value;
   }
@@ -678,6 +692,7 @@ if (playbackMethodInput) {
 function chooseLocation(result) {
   if (latitudeInput) latitudeInput.value = Number(result.latitude).toFixed(5);
   if (longitudeInput) longitudeInput.value = Number(result.longitude).toFixed(5);
+  if (locationNameInput) locationNameInput.value = result.name || "";
   if (locationResults) {
     locationResults.innerHTML = "";
     locationResults.classList.add("hidden");

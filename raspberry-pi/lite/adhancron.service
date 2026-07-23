@@ -1,0 +1,20 @@
+[Unit]
+Description=Adhan Clock application
+Wants=network-online.target
+After=network-online.target cron.service
+
+[Service]
+Type=simple
+User=root
+Environment=ADHAN_APP_DIR=/opt/adhancron/current
+Environment=ADHAN_DATA_DIR=/opt/adhancron/data
+Environment=ADHAN_PYTHON=/opt/adhancron/venv/bin/python
+Environment=ADHAN_CONFIG_FILE=/etc/adhancron/adhancron.env
+ExecStart=/opt/adhancron/bin/native-start
+Restart=on-failure
+RestartSec=5
+NoNewPrivileges=true
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target

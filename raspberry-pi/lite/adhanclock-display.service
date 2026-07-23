@@ -1,0 +1,24 @@
+[Unit]
+Description=Adhan Clock HDMI display
+After=adhancron.service systemd-user-sessions.service
+Wants=adhancron.service
+Conflicts=getty@tty1.service
+
+[Service]
+User=adhanclock
+PAMName=login
+TTYPath=/dev/tty1
+StandardInput=tty
+StandardOutput=journal
+StandardError=journal
+UtmpIdentifier=tty1
+RuntimeDirectory=adhanclock
+RuntimeDirectoryMode=0700
+Environment=XDG_RUNTIME_DIR=/run/adhanclock
+Environment=WLR_LIBINPUT_NO_DEVICES=1
+ExecStart=/opt/adhancron/bin/kiosk
+Restart=always
+RestartSec=3
+
+[Install]
+WantedBy=multi-user.target

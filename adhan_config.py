@@ -28,6 +28,7 @@ PRAYER_ORDER = ["Fajr", "Dhuhr", "Asr", "Maghrib", "Isha"]
 DEFAULT_VOLUME = os.getenv("ADHAN_VOLUME", "0.8")
 DEFAULT_AUDIO_FILE = os.getenv("ADHAN_AUDIO_FILE", "adhan_final.mp3")
 DEFAULT_TAKBEER_FILE = os.getenv("ADHAN_TAKBEER_FILE", "eid_takbeer.mp3")
+PYTHON_EXECUTABLE = os.getenv("ADHAN_PYTHON", "/usr/local/bin/python")
 
 PUBLIC_BASE_URL = os.getenv("PUBLIC_BASE_URL", "").rstrip("/")
 ADHAN_AUDIO_BASE_URL = os.getenv("ADHAN_AUDIO_BASE_URL", "").rstrip("/")
@@ -73,7 +74,7 @@ def trigger_command(audio_url: str | None = None, volume: str | None = None) -> 
     resolved_volume = volume or DEFAULT_VOLUME
     return (
         f"cd {shlex.quote(str(APP_DIR))} && . {shlex.quote(str(ENV_FILE))} "
-        f"&& /usr/local/bin/python {shlex.quote(str(APP_DIR / 'trigger_ha.py'))} "
+        f"&& {shlex.quote(PYTHON_EXECUTABLE)} {shlex.quote(str(APP_DIR / 'trigger_ha.py'))} "
         f"{shlex.quote(resolved_audio_url)} {shlex.quote(str(resolved_volume))} "
         f">> {shlex.quote(str(DATA_DIR / 'adhan.log'))} 2>&1"
     )

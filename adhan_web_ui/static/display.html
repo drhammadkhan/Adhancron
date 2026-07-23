@@ -1,0 +1,63 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#071d1a" />
+    <title>Adhan Clock</title>
+    <link rel="icon" type="image/png" href="/static/icon.png" />
+    <link rel="stylesheet" href="/static/display.css" />
+  </head>
+  <body>
+    <main id="clock" class="clock-shell" data-face="overview">
+      <header class="topbar">
+        <div class="identity">
+          <span class="crescent" aria-hidden="true"></span>
+          <span><strong>Adhan Clock</strong><small id="location">Loading location</small></span>
+        </div>
+        <div class="network-state"><span class="status-dot"></span><span id="network-label">Connected</span></div>
+      </header>
+
+      <div class="display-grid">
+        <section class="time-column" aria-label="Current time and next prayer">
+          <div class="current-time" id="current-time">--:--:<span>--</span></div>
+          <div class="current-date" id="current-date">Setting the clock</div>
+
+          <article class="next-prayer" id="next-panel">
+            <div>
+              <p id="next-eyebrow">Next prayer</p>
+              <h1 id="next-name">--</h1>
+            </div>
+            <div class="next-numbers">
+              <strong id="next-time">--:--</strong>
+              <span id="countdown">Calculating</span>
+            </div>
+          </article>
+        </section>
+
+        <section class="schedule-panel" aria-labelledby="schedule-title">
+          <div class="schedule-heading"><span>Today</span><strong id="schedule-title">Prayer times</strong></div>
+          <div id="prayer-list" class="prayer-list">
+            <div class="prayer-row"><span>Fajr</span><strong>--:--</strong></div>
+            <div class="prayer-row"><span>Dhuhr</span><strong>--:--</strong></div>
+            <div class="prayer-row"><span>Asr</span><strong>--:--</strong></div>
+            <div class="prayer-row"><span>Maghrib</span><strong>--:--</strong></div>
+            <div class="prayer-row"><span>Isha</span><strong>--:--</strong></div>
+          </div>
+        </section>
+      </div>
+
+      <footer>
+        <span id="dashboard-address">Open settings on this network</span>
+        <span id="version">Adhancron</span>
+      </footer>
+
+      <section id="setup-state" class="setup-state hidden" aria-live="polite">
+        <span class="setup-mark" aria-hidden="true"></span>
+        <h1>Finish setting up your clock</h1>
+        <p>Open <strong id="setup-address">this device</strong> on a phone or computer, then save your location and prayer schedule.</p>
+      </section>
+    </main>
+    <script src="/static/display.js" defer></script>
+  </body>
+</html>

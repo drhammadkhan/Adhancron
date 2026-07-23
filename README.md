@@ -1,8 +1,8 @@
 # Adhancron
 
-Adhancron is a complete prayer clock and adhan scheduler available in three editions: a Docker home-server service, a native desktop application, and a standalone ESP32-S3 appliance. Every edition calculates daily prayer times locally from the user's location and can schedule adhan playback without relying on an external prayer-time service.
+Adhancron is a complete prayer clock and adhan scheduler available in four editions: a Docker home-server service, a native desktop application, a standalone ESP32-S3 appliance, and a Raspberry Pi HDMI prayer clock. Every edition calculates daily prayer times locally from the user's location and can schedule adhan playback without relying on an external prayer-time service.
 
-Docker and desktop can play through Home Assistant, Google Cast, AirPlay, or Sonos/UPnP-DLNA. The standalone ESP32-S3 edition adds an always-on 240x320 prayer display, its own browser-based setup, internal adhan storage, an attached speaker, and direct Google Cast or Sonos/DLNA playback served entirely by the device.
+Docker and desktop can play through Home Assistant, Google Cast, AirPlay, or Sonos/UPnP-DLNA. The Raspberry Pi edition additionally supports its attached HDMI or analogue audio output. The standalone ESP32-S3 edition adds an always-on 240x320 prayer display, its own browser-based setup, internal adhan storage, an attached speaker, and direct Google Cast or Sonos/DLNA playback served entirely by the device.
 
 ## Editions
 
@@ -22,6 +22,17 @@ pyinstaller desktop/Adhancron.spec
 ```
 
 On macOS this creates `dist/Adhancron.app`; on Windows it creates a `dist/Adhancron` application folder. The desktop app must stay open for scheduled adhans. See [desktop/README.md](desktop/README.md) for development, firewall, code-signing, and packaging details.
+
+### Raspberry Pi HDMI Prayer Clock
+
+The Raspberry Pi edition turns a Pi 3B or newer and an existing HDMI screen into a larger always-on prayer clock. It starts automatically into a locally hosted landscape display, retains the complete phone-friendly settings dashboard at `http://adhanclock.local`, and supports attached HDMI or analogue audio alongside all network playback methods.
+
+For a Pi 3B, the recommended **Lite Appliance** uses Raspberry Pi OS Lite,
+native Python, and the small Cog DRM browser. It needs no desktop environment,
+Docker, or Chromium, and its twice-daily atomic updater rolls back after a
+failed health check. The Docker + Desktop profile remains available as a
+compatibility option. See [raspberry-pi/README.md](raspberry-pi/README.md) for
+both installation paths.
 
 ### ESP32-S3 Prayer Clock
 
@@ -58,6 +69,7 @@ That USB installation enables safe over-the-air updates. Afterwards the clock ch
 ## Docker and Desktop Functionality
 
 - Runs a web dashboard on port `8090`.
+- Provides a dedicated full-screen 800x480 prayer-clock view at `/display`, with Overview and Focus clock faces.
 - Creates and maintains cron jobs for Fajr, Dhuhr, Asr, Maghrib, and Isha.
 - Calculates prayer times locally from the saved home latitude and longitude.
 - Lets you manually edit prayer times from the web UI.
@@ -72,6 +84,7 @@ That USB installation enables safe over-the-air updates. Afterwards the clock ch
 - Can bypass Home Assistant and send the MP3 directly to a Google Cast speaker by IP address or hostname.
 - Can discover AirPlay receivers, complete PIN pairing when required, and keep credentials in the persistent data folder.
 - Can discover Sonos and other UPnP/DLNA MediaRenderer speakers and control them directly.
+- Can play through an audio device attached directly to a Linux host, including a Raspberry Pi HDMI or analogue output.
 - Saves separate locally observed dates for Eid al-Fitr and Eid al-Adha.
 - Shows an all-day Eid greeting and a ten-minute countdown to the next takbeer slot.
 - Repeats the bundled 65-second Eid takbeer during a configurable window while leaving all five normal prayer adhans active.
@@ -93,7 +106,7 @@ Adhancron has four moving parts:
    The dashboard saves the home latitude and longitude, then calculates a local timetable and stores it in `/data/prayer_times.json`. It uses Fajr 90 minutes before sunrise, Zuhr five minutes after solar noon, standard Asr, Maghrib one minute after sunset, and the Moonsighting Committee seasonal Isha adjustment. The solar-position library can differ from Alislam by up to two minutes. At `00:05` every day, cron runs `update_adhan.py`, checks that the calendar covers the current and following year, and updates the prayer cron entries. Manual overrides are preserved.
 
 4. **Playback trigger**
-   `trigger_ha.py` uses the saved playback method. **Home Assistant** uses its REST API and confirmed announcement playback. **Google Cast** connects to port `8009`. **AirPlay** uses the selected paired RAOP/AirPlay receiver. **Sonos / DLNA** sends standard UPnP `SetAVTransportURI` and `Play` commands. Every network route points the speaker at Adhancron's local MP3 URL.
+   `trigger_ha.py` uses the saved playback method. **Attached audio** starts the bundled MP3 on the selected ALSA output. **Home Assistant** uses its REST API and confirmed announcement playback. **Google Cast** connects to port `8009`. **AirPlay** uses the selected paired RAOP/AirPlay receiver. **Sonos / DLNA** sends standard UPnP `SetAVTransportURI` and `Play` commands. Every network route points the speaker at Adhancron's local MP3 URL.
 
 ## Playback Flow
 
@@ -102,7 +115,7 @@ At prayer time:
 1. Cron runs a command like:
 
    ```text
-   cd /app && . /data/adhan.env && /usr/local/bin/python /app/trigger_ha.py http://YOUR_HOST:8090/audio/adhan_final.mp3 0.8
+   cd APP_DIR && . DATA_DIR/adhan.env && PYTHON trigger_ha.py http://YOUR_HOST/audio/adhan_final.mp3 0.8
    ```
 
 2. `trigger_ha.py` loads saved settings from `/data/adhan_settings.json`.
@@ -144,6 +157,14 @@ The dashboard includes:
 ## Playback Settings
 
 Choose one method in the web UI:
+
+### Attached Audio (Raspberry Pi/Linux)
+
+Choose **Attached / HDMI speaker** to play the bundled recording through the
+Linux host's selected ALSA device. The native Lite appliance uses host ALSA
+directly; the Docker profile maps `/dev/snd` into the container. Both default
+to the system's `default` output. See [the Pi instructions](raspberry-pi/README.md)
+when HDMI and analogue outputs are both present.
 
 ### Home Assistant
 
@@ -568,6 +589,7 @@ http://YOUR_DOCKER_HOST_IP:8090/audio/adhan_final.mp3 • volume 0.8
 | `docker-compose.yml` | Generic Docker Compose file |
 | `casaos/docker-compose.yml` | CasaOS compose template |
 | `casaos/adhan.jpg` | CasaOS app icon |
+| `raspberry-pi/` | Native Lite appliance plus Docker/Desktop Pi compatibility profile |
 | `VERSION` | Runtime version marker |
 
 ## Security Notes
@@ -582,7 +604,7 @@ http://YOUR_DOCKER_HOST_IP:8090/audio/adhan_final.mp3 • volume 0.8
 Run tests:
 
 ```bash
-python3 -m unittest discover -s adhan_web_ui/tests
+python3 -m pytest -q
 ```
 
 Validate CasaOS compose:

@@ -1,0 +1,11 @@
+[Unit]
+Description=Check for native Adhan Clock updates twice daily
+
+[Timer]
+OnBootSec=20min
+OnCalendar=*-*-* 04,16:20:00
+RandomizedDelaySec=20min
+Persistent=true
+
+[Install]
+WantedBy=timers.target

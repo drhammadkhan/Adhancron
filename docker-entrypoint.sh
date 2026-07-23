@@ -4,6 +4,7 @@ set -euo pipefail
 APP_DIR="${ADHAN_APP_DIR:-/app}"
 DATA_DIR="${ADHAN_DATA_DIR:-/data}"
 ENV_FILE="$DATA_DIR/adhan.env"
+PYTHON_EXECUTABLE="${ADHAN_PYTHON:-/usr/local/bin/python}"
 
 mkdir -p "$DATA_DIR"
 touch "$DATA_DIR/adhan.log" "$DATA_DIR/adhan_update.log" "$DATA_DIR/eid_takbeer.log"
@@ -13,10 +14,12 @@ write_env_file() {
   {
     printf 'export ADHAN_APP_DIR=%q\n' "$APP_DIR"
     printf 'export ADHAN_DATA_DIR=%q\n' "$DATA_DIR"
+    printf 'export ADHAN_PYTHON=%q\n' "$PYTHON_EXECUTABLE"
     printf 'export HA_TOKEN=%q\n' "${HA_TOKEN:-}"
     printf 'export HA_URL=%q\n' "${HA_URL:-http://homeassistant.local:8123}"
     printf 'export HA_ENTITY_ID=%q\n' "${HA_ENTITY_ID:-media_player.bedroom_speaker}"
     printf 'export ADHAN_PLAYBACK_METHOD=%q\n' "${ADHAN_PLAYBACK_METHOD:-home_assistant}"
+    printf 'export ADHAN_ALSA_DEVICE=%q\n' "${ADHAN_ALSA_DEVICE:-default}"
     printf 'export GOOGLE_CAST_HOST=%q\n' "${GOOGLE_CAST_HOST:-}"
     printf 'export GOOGLE_CAST_PORT=%q\n' "${GOOGLE_CAST_PORT:-8009}"
     printf 'export AIRPLAY_IDENTIFIER=%q\n' "${AIRPLAY_IDENTIFIER:-}"
@@ -46,8 +49,8 @@ write_env_file() {
 }
 
 install_manager_cron() {
-  local update_line="5 0 * * * cd $APP_DIR && . $ENV_FILE && /usr/local/bin/python /app/update_adhan.py >> $DATA_DIR/adhan_update.log 2>&1"
-  local eid_line="* * * * * cd $APP_DIR && . $ENV_FILE && /usr/local/bin/python /app/eid_schedule.py >> $DATA_DIR/eid_takbeer.log 2>&1"
+  local update_line="5 0 * * * cd $APP_DIR && . $ENV_FILE && $PYTHON_EXECUTABLE $APP_DIR/update_adhan.py >> $DATA_DIR/adhan_update.log 2>&1"
+  local eid_line="* * * * * cd $APP_DIR && . $ENV_FILE && $PYTHON_EXECUTABLE $APP_DIR/eid_schedule.py >> $DATA_DIR/eid_takbeer.log 2>&1"
   local current
   current="$(crontab -l 2>/dev/null || true)"
 
@@ -76,12 +79,12 @@ echo "Step 1: Installing updater cron and applying today's schedule..."
 install_manager_cron
 cd "$APP_DIR"
 . "$ENV_FILE"
-/usr/local/bin/python /app/update_adhan.py
+"$PYTHON_EXECUTABLE" "$APP_DIR/update_adhan.py"
 
 echo "Step 2: Starting cron daemon..."
 cron
 
 echo "Step 3: Starting Web UI on port 8090..."
-exec /usr/local/bin/python -m uvicorn adhan_web_ui.app:app \
+exec "$PYTHON_EXECUTABLE" -m uvicorn adhan_web_ui.app:app \
   --host 0.0.0.0 \
   --port 8090

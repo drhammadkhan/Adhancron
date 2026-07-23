@@ -135,6 +135,22 @@ class TriggerHATests(unittest.TestCase):
             trigger_ha.trigger("http://host/audio/adhan_final.mp3", 0.8)
         direct_cast.assert_called_once_with("http://host/audio/adhan_final.mp3", 0.8)
 
+    def test_attached_playback_bypasses_home_assistant(self):
+        with mock.patch.object(trigger_ha, "_playback_method", return_value="attached"), \
+             mock.patch.object(trigger_ha, "_trigger_attached") as attached:
+            trigger_ha.trigger("http://host/audio/adhan_final.mp3", 0.8)
+        attached.assert_called_once_with("http://host/audio/adhan_final.mp3", 0.8)
+
+    def test_attached_playback_uses_saved_audio_and_alsa_device(self):
+        process = mock.Mock()
+        with mock.patch.object(trigger_ha, "_attached_audio_path", return_value=Path("/data/adhan_final.mp3")), \
+             mock.patch.object(trigger_ha, "_setting", return_value="hdmi:CARD=vc4hdmi"), \
+             mock.patch.object(trigger_ha.subprocess, "Popen", return_value=process) as popen:
+            trigger_ha._trigger_attached("http://host/audio/adhan_final.mp3", 0.75)
+        command = popen.call_args.args[0]
+        self.assertEqual(command[:4], ["mpg123", "-q", "-a", "hdmi:CARD=vc4hdmi"])
+        self.assertEqual(command[-1], "/data/adhan_final.mp3")
+
     def test_direct_google_cast_connects_and_starts_buffered_audio(self):
         calls = []
 

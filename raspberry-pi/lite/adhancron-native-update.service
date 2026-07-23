@@ -1,0 +1,8 @@
+[Unit]
+Description=Install an Adhan Clock native application update
+Wants=network-online.target
+After=network-online.target adhancron.service
+
+[Service]
+Type=oneshot
+ExecStart=/opt/adhancron/bin/update-native

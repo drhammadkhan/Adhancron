@@ -14,6 +14,9 @@ class SettingsManager:
         "public_base_url",
         "latitude",
         "longitude",
+        "location_name",
+        "display_style",
+        "local_audio_device",
         "playback_method",
         "google_cast_host",
         "google_cast_port",
@@ -34,6 +37,7 @@ class SettingsManager:
         "airplay_device_name",
         "dlna_location",
         "dlna_device_name",
+        "location_name",
     }
 
     def __init__(self, path: str | Path) -> None:

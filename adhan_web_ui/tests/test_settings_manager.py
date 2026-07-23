@@ -8,6 +8,17 @@ from adhan_web_ui.settings_manager import SettingsManager
 
 
 class SettingsManagerTests(unittest.TestCase):
+    def test_large_display_settings_are_persisted(self):
+        with tempfile.TemporaryDirectory() as directory:
+            manager = SettingsManager(Path(directory) / "settings.json")
+            saved = manager.update_settings({
+                "location_name": "Kingston upon Thames",
+                "display_style": "focus",
+                "local_audio_device": "default",
+            })
+        self.assertEqual(saved["location_name"], "Kingston upon Thames")
+        self.assertEqual(saved["display_style"], "focus")
+
     def test_eid_dates_can_be_added_and_cleared_without_losing_other_settings(self):
         with tempfile.TemporaryDirectory() as directory:
             manager = SettingsManager(Path(directory) / "settings.json")

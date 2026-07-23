@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import mimetypes
 import os
+import json
+import shutil
 from datetime import datetime, timedelta
 from pathlib import Path
 
@@ -58,6 +60,9 @@ class SettingsUpdate(BaseModel):
     public_base_url: str | None = None
     latitude: str | None = None
     longitude: str | None = None
+    location_name: str | None = None
+    display_style: str | None = None
+    local_audio_device: str | None = None
     playback_method: str | None = None
     google_cast_host: str | None = None
     google_cast_port: str | None = None
@@ -118,6 +123,11 @@ def _request_base_url(request: Request) -> str:
     return str(request.base_url).rstrip("/")
 
 
+def _attached_playback_available() -> bool:
+    enabled = os.getenv("ADHAN_ATTACHED_AUDIO_ENABLED", "false").strip().lower()
+    return enabled in {"1", "true", "yes", "on"} and shutil.which("mpg123") is not None
+
+
 def _settings_response(request: Request | None = None) -> dict:
     import os
 
@@ -146,6 +156,10 @@ def _settings_response(request: Request | None = None) -> dict:
         ),
         "latitude": current.get("latitude") or os.getenv("ADHAN_LATITUDE", ""),
         "longitude": current.get("longitude") or os.getenv("ADHAN_LONGITUDE", ""),
+        "location_name": current.get("location_name", ""),
+        "display_style": current.get("display_style", "overview"),
+        "local_audio_device": current.get("local_audio_device") or os.getenv("ADHAN_ALSA_DEVICE", "default"),
+        "attached_playback_available": _attached_playback_available(),
         "timezone": os.getenv("TZ", "UTC"),
         "audio_url": default_audio_url(_request_base_url(request) if request is not None else ""),
         "takbeer_audio_url": default_takbeer_url(_request_base_url(request) if request is not None else ""),
@@ -204,11 +218,16 @@ def search_location(payload: LocationSearchRequest) -> dict:
 def update_settings(payload: SettingsUpdate, request: Request) -> dict:
     current = settings.get_settings()
     playback_method = payload.playback_method or current.get("playback_method") or os.getenv("ADHAN_PLAYBACK_METHOD", "home_assistant")
-    if playback_method not in {"home_assistant", "google_cast", "airplay", "dlna"}:
+    if playback_method not in {"attached", "home_assistant", "google_cast", "airplay", "dlna"}:
         raise HTTPException(
             status_code=400,
-            detail="Playback method must be Home Assistant, Google Cast, AirPlay, or DLNA",
+            detail="Playback method must be Attached, Home Assistant, Google Cast, AirPlay, or DLNA",
         )
+    if playback_method == "attached" and not _attached_playback_available():
+        raise HTTPException(status_code=400, detail="Attached audio is not enabled on this installation")
+    display_style = payload.display_style or current.get("display_style", "overview")
+    if display_style not in {"overview", "focus"}:
+        raise HTTPException(status_code=400, detail="Display style must be Overview or Focus")
     if playback_method == "google_cast":
         cast_host = payload.google_cast_host if payload.google_cast_host is not None else current.get("google_cast_host", "")
         cast_port = payload.google_cast_port if payload.google_cast_port is not None else current.get("google_cast_port", "8009")
@@ -380,6 +399,11 @@ def fajr_status() -> dict:
 @app.get("/adhan")
 def index() -> FileResponse:
     return FileResponse(BASE_DIR / "static" / "index.html")
+
+
+@app.get("/display")
+def display() -> FileResponse:
+    return FileResponse(BASE_DIR / "static" / "display.html")
 
 
 def _parse_range_header(range_header: str, file_size: int) -> tuple[int, int]:
@@ -616,7 +640,10 @@ def dashboard_status() -> dict:
     longitude = current.get("longitude") or os.getenv("ADHAN_LONGITUDE", "")
     location_ready = bool(latitude and longitude)
 
-    if method == "google_cast":
+    if method == "attached":
+        playback_ready = True
+        playback_label = "Attached speaker"
+    elif method == "google_cast":
         playback_ready = bool(current.get("google_cast_host") or os.getenv("GOOGLE_CAST_HOST"))
         playback_label = "Google Cast speaker"
     elif method == "airplay":
@@ -672,6 +699,55 @@ def dashboard_status() -> dict:
             "schedule_ready": enabled_count > 0,
             "enabled_prayers": enabled_count,
         },
+    }
+
+
+@app.get("/api/display-status")
+def display_status() -> dict:
+    try:
+        jobs = manager.list_jobs()
+    except CronError as exc:
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
+
+    current = settings.get_settings()
+    now = datetime.now().astimezone()
+    order = {name: index for index, name in enumerate(("Fajr", "Dhuhr", "Asr", "Maghrib", "Isha"))}
+    prayers = [
+        {
+            "name": job.label,
+            "time": job.time,
+            "enabled": job.enabled,
+        }
+        for job in jobs
+        if job.label in order
+    ]
+    prayers.sort(key=lambda prayer: order[prayer["name"]])
+
+    latitude = current.get("latitude") or os.getenv("ADHAN_LATITUDE", "")
+    longitude = current.get("longitude") or os.getenv("ADHAN_LONGITUDE", "")
+    location = current.get("location_name", "").strip()
+    if not location and latitude and longitude:
+        try:
+            location = f"{float(latitude):.4f}, {float(longitude):.4f}"
+        except ValueError:
+            location = "Location needs attention"
+
+    eid = status_for_date(current, now.date())
+    upcoming_takbeer = next_slot(current, now.replace(tzinfo=None))
+    return {
+        "now": now.isoformat(),
+        "location": location,
+        "dashboard_address": os.getenv("ADHAN_DISPLAY_ADDRESS", "").strip(),
+        "display_style": current.get("display_style", "overview"),
+        "prayers": prayers,
+        "next_adhan": _next_enabled_job(jobs),
+        "eid": {
+            "active": eid.active,
+            "kind": eid.kind,
+            "next_takbeer": upcoming_takbeer.isoformat() if upcoming_takbeer else None,
+        },
+        "setup_ready": bool(latitude and longitude and prayers),
+        "version": _app_version(),
     }
 
 

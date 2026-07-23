@@ -2,7 +2,7 @@ FROM python:3.11-slim
 
 LABEL org.opencontainers.image.title="Adhancron" \
       org.opencontainers.image.source="https://github.com/drhammadkhan/Adhancron" \
-      org.opencontainers.image.version="2026.07.16.1"
+      org.opencontainers.image.version="2026.07.23.1"
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
@@ -13,6 +13,8 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     HA_URL=http://homeassistant.local:8123 \
     HA_ENTITY_ID=media_player.bedroom_speaker \
     ADHAN_PLAYBACK_METHOD=home_assistant \
+    ADHAN_ATTACHED_AUDIO_ENABLED=false \
+    ADHAN_ALSA_DEVICE=default \
     GOOGLE_CAST_PORT=8009 \
     ADHAN_AIRPLAY_TIMEOUT=5 \
     ADHAN_DLNA_TIMEOUT=5 \
@@ -33,6 +35,7 @@ RUN apt-get update \
         cron \
         curl \
         g++ \
+        mpg123 \
         tzdata \
     && pip install --no-cache-dir -r requirements.txt \
     && apt-get purge -y --auto-remove g++ \

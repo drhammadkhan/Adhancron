@@ -1,0 +1,35 @@
+name: adhanclock
+
+services:
+  adhan-manager:
+    image: ghcr.io/drhammadkhan/adhancron:latest
+    container_name: adhan-manager
+    restart: unless-stopped
+    network_mode: host
+    devices:
+      - /dev/snd:/dev/snd
+    volumes:
+      - /opt/adhancron/data:/data
+    environment:
+      ADHAN_PLAYBACK_METHOD: "${ADHAN_PLAYBACK_METHOD:-attached}"
+      ADHAN_ATTACHED_AUDIO_ENABLED: "true"
+      ADHAN_ALSA_DEVICE: "${ADHAN_ALSA_DEVICE:-default}"
+      ADHAN_DISPLAY_ADDRESS: "${ADHAN_DISPLAY_ADDRESS:-adhanclock.local}"
+      PUBLIC_BASE_URL: "${PUBLIC_BASE_URL:-http://adhanclock.local}"
+      ADHAN_VOLUME: "${ADHAN_VOLUME:-0.8}"
+      ADHAN_LATITUDE: "${ADHAN_LATITUDE:-}"
+      ADHAN_LONGITUDE: "${ADHAN_LONGITUDE:-}"
+      GOOGLE_CAST_HOST: "${GOOGLE_CAST_HOST:-}"
+      GOOGLE_CAST_PORT: "${GOOGLE_CAST_PORT:-8009}"
+      AIRPLAY_IDENTIFIER: "${AIRPLAY_IDENTIFIER:-}"
+      DLNA_LOCATION: "${DLNA_LOCATION:-}"
+      HA_TOKEN: "${HA_TOKEN:-}"
+      HA_URL: "${HA_URL:-http://homeassistant.local:8123}"
+      HA_ENTITY_ID: "${HA_ENTITY_ID:-media_player.bedroom_speaker}"
+      TZ: "${TZ:-Europe/London}"
+    healthcheck:
+      test: ["CMD", "curl", "--fail", "--silent", "http://127.0.0.1:8090/api/version"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 30s

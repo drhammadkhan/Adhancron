@@ -2,10 +2,13 @@ from __future__ import annotations
 
 import json
 import os
+from pathlib import Path
+import subprocess
 import sys
 import time
 import uuid
 from datetime import datetime
+from urllib.parse import unquote, urlparse
 
 import requests
 
@@ -43,6 +46,7 @@ PLAYBACK_METHOD_HOME_ASSISTANT = "home_assistant"
 PLAYBACK_METHOD_GOOGLE_CAST = "google_cast"
 PLAYBACK_METHOD_AIRPLAY = "airplay"
 PLAYBACK_METHOD_DLNA = "dlna"
+PLAYBACK_METHOD_ATTACHED = "attached"
 
 
 def _load_settings() -> dict:
@@ -144,6 +148,38 @@ def _airplay_identifier() -> str:
 
 def _dlna_location() -> str:
     return _setting("dlna_location", "DLNA_LOCATION")
+
+
+def _attached_audio_path(media_url: str) -> Path:
+    filename = Path(unquote(urlparse(media_url).path)).name
+    if not filename or filename in {".", ".."}:
+        raise RuntimeError("The attached-speaker audio file is invalid")
+    app_dir = Path(os.getenv("ADHAN_APP_DIR", Path(__file__).resolve().parent))
+    data_dir = Path(os.getenv("ADHAN_DATA_DIR", app_dir / "data"))
+    for candidate in (data_dir / filename, app_dir / filename):
+        if candidate.is_file():
+            return candidate
+    raise RuntimeError(f"Audio file not found for attached playback: {filename}")
+
+
+def _trigger_attached(media_url: str, volume: float) -> None:
+    audio_path = _attached_audio_path(media_url)
+    alsa_device = _setting("local_audio_device", "ADHAN_ALSA_DEVICE", "default")
+    scale = round(max(0.0, min(1.0, volume)) * 32768)
+    try:
+        subprocess.Popen(
+            ["mpg123", "-q", "-a", alsa_device, "-f", str(scale), str(audio_path)],
+            stdin=subprocess.DEVNULL,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            start_new_session=True,
+        )
+    except FileNotFoundError as exc:
+        raise RuntimeError("Attached playback requires mpg123") from exc
+    _log(
+        "Trigger complete: attached speaker playback started "
+        f"device={alsa_device}, file={audio_path.name}"
+    )
 
 
 def _post_service(service: str, payload: dict) -> requests.Response:
@@ -248,6 +284,13 @@ def _trigger_google_cast(media_url: str, volume: float) -> None:
 
 def trigger(media_url: str, volume: float = 0.8) -> None:
     playback_method = _playback_method()
+    if playback_method == PLAYBACK_METHOD_ATTACHED:
+        _log(
+            "Trigger start: "
+            f"method=attached, media_url={media_url}, volume={volume}"
+        )
+        _trigger_attached(media_url, volume)
+        return
     if playback_method == PLAYBACK_METHOD_GOOGLE_CAST:
         _log(
             "Trigger start: "
