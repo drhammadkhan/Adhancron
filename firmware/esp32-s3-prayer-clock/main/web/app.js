@@ -5,6 +5,13 @@ let savedCastName = '';
 let savedDlnaUrl = '';
 let savedDlnaName = '';
 let dashboardReady = false;
+const prayerOverrides = [
+  { key: 'fajr', prayerIndex: 0 },
+  { key: 'dhuhr', prayerIndex: 2 },
+  { key: 'asr', prayerIndex: 3 },
+  { key: 'maghrib', prayerIndex: 4 },
+  { key: 'isha', prayerIndex: 5 }
+];
 
 function setNotice(element, message, error = false) {
   if (!element) return;
@@ -67,6 +74,13 @@ function renderPrayerDay(status) {
     name.textContent = prayer.name;
     time.textContent = prayer.time;
     item.append(name, time);
+    if (prayer.custom) {
+      item.classList.add('custom');
+      const source = document.createElement('small');
+      source.className = 'prayer-source';
+      source.textContent = 'Custom';
+      item.appendChild(source);
+    }
     container.appendChild(item);
   });
 
@@ -84,6 +98,35 @@ function playbackDescription(status) {
 function setChecked(name, checked) {
   const input = document.querySelector(`[name="${name}"]`);
   if (input) input.checked = Boolean(checked);
+}
+
+function syncPrayerOverride(key) {
+  const checkbox = byId(`${key}-override`);
+  const time = byId(`${key}-time`);
+  if (!checkbox || !time) return;
+  time.disabled = !checkbox.checked;
+  time.required = checkbox.checked;
+  if (checkbox.checked && !time.value) {
+    time.value = time.dataset.calculated || '';
+  }
+}
+
+function populatePrayerOverrides(status, setValues) {
+  prayerOverrides.forEach(({ key, prayerIndex }) => {
+    const prayer = status.prayers?.[prayerIndex];
+    const calculated = prayer?.calculated_time || '--:--';
+    const time = byId(`${key}-time`);
+    const checkbox = byId(`${key}-override`);
+    byId(`${key}-calculated`).textContent = `Calculated ${calculated}`;
+    time.dataset.calculated = prayer?.calculated_time || '';
+    if (setValues) {
+      checkbox.checked = Boolean(status[`override_${key}`]);
+      time.value = checkbox.checked
+        ? status[`override_${key}_time`] || prayer?.time || ''
+        : prayer?.calculated_time || '';
+      syncPrayerOverride(key);
+    }
+  });
 }
 
 function populateSettings(status) {
@@ -116,6 +159,7 @@ function populateSettings(status) {
   byId('eid-start').value = status.eid_takbeer_start || '06:00';
   byId('eid-end').value = status.eid_takbeer_end || '12:00';
   byId('eid-interval').value = status.eid_takbeer_interval || 30;
+  populatePrayerOverrides(status, true);
   outputChanged();
 }
 
@@ -144,7 +188,11 @@ async function refreshDashboard(initial = false) {
       battery.classList.add('hidden');
     }
     renderPrayerDay(status);
-    if (initial) populateSettings(status);
+    if (initial) {
+      populateSettings(status);
+    } else {
+      populatePrayerOverrides(status, false);
+    }
     dashboardReady = true;
   } catch (error) {
     byId('connection-label').textContent = 'Reconnecting';
@@ -439,6 +487,10 @@ function initDashboard() {
   byId('clear-eid').addEventListener('click', clearEid);
   byId('update-button').addEventListener('click', checkUpdate);
   byId('device-hostname').addEventListener('input', updateLocalAddressPreview);
+  prayerOverrides.forEach(({ key }) => {
+    byId(`${key}-override`).addEventListener(
+      'change', () => syncPrayerOverride(key));
+  });
   const form = byId('settings-form');
   form.addEventListener('input', showSaveDock);
   form.addEventListener('change', showSaveDock);

@@ -228,6 +228,31 @@ static esp_err_t settings_handler(httpd_req_t *request) {
         }
         const char *keys[] = {"fajr","dhuhr","asr","maghrib","isha"};
         for (int index=0;index<5;index++) { get_value(body,keys[index],value,sizeof(value)); current_settings->enabled[index]=value[0]!='\0'; }
+        const char *override_keys[] = {
+            "fajr_override", "dhuhr_override", "asr_override",
+            "maghrib_override", "isha_override",
+        };
+        const char *override_time_keys[] = {
+            "fajr_time", "dhuhr_time", "asr_time",
+            "maghrib_time", "isha_time",
+        };
+        for (int index = 0; index < 5; index++) {
+            get_value(body, override_keys[index], value, sizeof(value));
+            const bool enabled = value[0] != '\0';
+            char time_value[8] = {0};
+            int minutes = 0;
+            get_value(body, override_time_keys[index],
+                time_value, sizeof(time_value));
+            if (enabled && !parse_time_value(time_value, &minutes)) {
+                return httpd_resp_send_err(
+                    request, HTTPD_400_BAD_REQUEST,
+                    "Every enabled custom prayer time must contain a valid time");
+            }
+            current_settings->prayer_override_enabled[index] = enabled;
+            if (enabled) {
+                current_settings->prayer_override_minutes[index] = minutes;
+            }
+        }
         get_value(body, "volume", value, sizeof(value)); current_settings->volume = atoi(value);
         get_value(body, "automatic_updates", value, sizeof(value));
         current_settings->automatic_updates = value[0] != '\0';
@@ -302,7 +327,7 @@ static bool append_json_string(char *json, size_t capacity, size_t *length, cons
 static void format_minutes(int minutes, char output[6]) { unsigned value=(unsigned)(((minutes%1440)+1440)%1440); snprintf(output, 6, "%02u:%02u", value/60, value%60); }
 
 static esp_err_t status_handler(httpd_req_t *request) {
-    char json[4800];
+    char json[5600];
     size_t length = strlcpy(json, "{\"location\":", sizeof(json));
     if (!append_json_string(json, sizeof(json), &length,
             (const uint8_t *)current_settings->location_name)) {
@@ -387,6 +412,32 @@ static esp_err_t status_handler(httpd_req_t *request) {
             (const uint8_t *)current_settings->dlna_device_name)) {
         return httpd_resp_send_err(request, HTTPD_500_INTERNAL_SERVER_ERROR, "Could not render status");
     }
+    char override_times[5][6];
+    for (int index = 0; index < 5; index++) {
+        format_minutes(
+            current_settings->prayer_override_minutes[index],
+            override_times[index]);
+    }
+    written = snprintf(json + length, sizeof(json) - length,
+        ",\"override_fajr\":%s,\"override_fajr_time\":\"%s\","
+        "\"override_dhuhr\":%s,\"override_dhuhr_time\":\"%s\","
+        "\"override_asr\":%s,\"override_asr_time\":\"%s\","
+        "\"override_maghrib\":%s,\"override_maghrib_time\":\"%s\","
+        "\"override_isha\":%s,\"override_isha_time\":\"%s\"",
+        current_settings->prayer_override_enabled[0] ? "true" : "false",
+        override_times[0],
+        current_settings->prayer_override_enabled[1] ? "true" : "false",
+        override_times[1],
+        current_settings->prayer_override_enabled[2] ? "true" : "false",
+        override_times[2],
+        current_settings->prayer_override_enabled[3] ? "true" : "false",
+        override_times[3],
+        current_settings->prayer_override_enabled[4] ? "true" : "false",
+        override_times[4]);
+    if (written < 0 || (size_t)written >= sizeof(json) - length) {
+        return httpd_resp_send_err(request, HTTPD_500_INTERNAL_SERVER_ERROR, "Could not render status");
+    }
+    length += written;
     firmware_update_status_t firmware = {0};
     firmware_update_get_status(&firmware);
     written = snprintf(json + length, sizeof(json) - length,
@@ -535,7 +586,20 @@ static esp_err_t status_handler(httpd_req_t *request) {
         written = snprintf(json + length, sizeof(json) - length,
             ",\"message\":\"Waiting for location and clock sync\",\"prayers\":[]}");
     } else {
-        char values[6][6]; for (int i = 0; i < 6; i++) format_minutes(prayer_time_minutes(&times, i), values[i]);
+        char calculated_values[6][6];
+        for (int index = 0; index < 6; index++) {
+            format_minutes(
+                prayer_time_minutes(&times, index),
+                calculated_values[index]);
+        }
+        prayer_times_apply_overrides(
+            &times,
+            current_settings->prayer_override_enabled,
+            current_settings->prayer_override_minutes);
+        char values[6][6];
+        for (int index = 0; index < 6; index++) {
+            format_minutes(prayer_time_minutes(&times, index), values[index]);
+        }
         const char *storage = storage_mounted && *storage_mounted
             ? (adhan_audio_available && *adhan_audio_available
                 ? (takbeer_audio_available && *takbeer_audio_available
@@ -543,7 +607,30 @@ static esp_err_t status_handler(httpd_req_t *request) {
                     : "Adhan ready; upload an Eid takbeer MP3")
                 : "Upload an adhan MP3")
             : "Internal audio storage unavailable";
-        written = snprintf(json + length, sizeof(json) - length, ",\"message\":\"%04d-%02d-%02d %02d:%02d - %s\",\"prayers\":[{\"name\":\"Fajr\",\"time\":\"%s\"},{\"name\":\"Sunrise\",\"time\":\"%s\"},{\"name\":\"Dhuhr\",\"time\":\"%s\"},{\"name\":\"Asr\",\"time\":\"%s\"},{\"name\":\"Maghrib\",\"time\":\"%s\"},{\"name\":\"Isha\",\"time\":\"%s\"}]}", local_now.tm_year+1900,local_now.tm_mon+1,local_now.tm_mday,local_now.tm_hour,local_now.tm_min,storage,values[0],values[1],values[2],values[3],values[4],values[5]);
+        written = snprintf(
+            json + length, sizeof(json) - length,
+            ",\"message\":\"%04d-%02d-%02d %02d:%02d - %s\","
+            "\"prayers\":["
+            "{\"name\":\"Fajr\",\"time\":\"%s\",\"calculated_time\":\"%s\",\"custom\":%s},"
+            "{\"name\":\"Sunrise\",\"time\":\"%s\",\"calculated_time\":\"%s\",\"custom\":false},"
+            "{\"name\":\"Dhuhr\",\"time\":\"%s\",\"calculated_time\":\"%s\",\"custom\":%s},"
+            "{\"name\":\"Asr\",\"time\":\"%s\",\"calculated_time\":\"%s\",\"custom\":%s},"
+            "{\"name\":\"Maghrib\",\"time\":\"%s\",\"calculated_time\":\"%s\",\"custom\":%s},"
+            "{\"name\":\"Isha\",\"time\":\"%s\",\"calculated_time\":\"%s\",\"custom\":%s}]}",
+            local_now.tm_year + 1900, local_now.tm_mon + 1,
+            local_now.tm_mday, local_now.tm_hour, local_now.tm_min,
+            storage,
+            values[0], calculated_values[0],
+            current_settings->prayer_override_enabled[0] ? "true" : "false",
+            values[1], calculated_values[1],
+            values[2], calculated_values[2],
+            current_settings->prayer_override_enabled[1] ? "true" : "false",
+            values[3], calculated_values[3],
+            current_settings->prayer_override_enabled[2] ? "true" : "false",
+            values[4], calculated_values[4],
+            current_settings->prayer_override_enabled[3] ? "true" : "false",
+            values[5], calculated_values[5],
+            current_settings->prayer_override_enabled[4] ? "true" : "false");
     }
     if (written < 0 || (size_t)written >= sizeof(json) - length) {
         return httpd_resp_send_err(request, HTTPD_500_INTERNAL_SERVER_ERROR, "Could not render status");

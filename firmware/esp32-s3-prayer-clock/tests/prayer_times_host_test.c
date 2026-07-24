@@ -24,6 +24,26 @@ int main(void) {
         if (!prayer_times_calculate(&date,&config,&result)) { fprintf(stderr,"%s failed to calculate\n",fixture->name); failures++; continue; }
         for (int prayer=0;prayer<6;prayer++) { int actual=prayer_time_minutes(&result,prayer),delta=abs(actual-fixture->expected[prayer]); if(delta>2){fprintf(stderr,"%s %s expected %d got %d\n",fixture->name,prayer_time_name(prayer),fixture->expected[prayer],actual);failures++;} }
     }
+    prayer_times_t overridden = {
+        .fajr_minutes = 300,
+        .sunrise_minutes = 390,
+        .dhuhr_minutes = 720,
+        .asr_minutes = 900,
+        .maghrib_minutes = 1080,
+        .isha_minutes = 1200,
+    };
+    const bool enabled[5] = {true, false, true, true, false};
+    const int minutes[5] = {315, 735, 915, 1095, 1215};
+    prayer_times_apply_overrides(&overridden, enabled, minutes);
+    const int expected_overrides[6] = {315, 390, 720, 915, 1095, 1200};
+    for (int prayer = 0; prayer < 6; prayer++) {
+        int actual = prayer_time_minutes(&overridden, prayer);
+        if (actual != expected_overrides[prayer]) {
+            fprintf(stderr, "Override %s expected %d got %d\n",
+                    prayer_time_name(prayer), expected_overrides[prayer], actual);
+            failures++;
+        }
+    }
     if (failures) return 1;
-    puts("Prayer-time fixtures passed within two minutes."); return 0;
+    puts("Prayer-time fixtures and custom overrides passed."); return 0;
 }

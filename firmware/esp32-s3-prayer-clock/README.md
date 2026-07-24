@@ -19,6 +19,9 @@ not require Docker, Home Assistant, or another computer after setup.
 - Online town/city/postcode search followed by automatic coordinate and timezone storage.
 - NTP clock synchronisation and daylight-saving-aware local time.
 - Local Adhancron prayer calculation: Fajr 90 minutes before sunrise, Dhuhr five minutes after solar noon, standard Asr, Maghrib one minute after sunset, and Moonsighting Committee seasonal Isha.
+- Optional custom times for Fajr, Dhuhr, Asr, Maghrib, and Isha. Each override
+  can be enabled independently, is saved across reboots, and can be returned to
+  the calculated time without deleting the saved location.
 - Two selectable LVGL clock faces: **Prayer list**, with an `HH:MM:SS`
   clock and complete daily timetable; and **Focus**, a high-contrast minimal layout that
   gives the current time and next prayer greater prominence while retaining a
@@ -59,7 +62,7 @@ recovery behaviour rather than normal navigation.
 1. On first boot, the clock creates the **Adhancron Setup** Wi-Fi network.
 2. The user joins it from a phone or computer, opens `192.168.4.1`, chooses a scanned Wi-Fi network, and saves its password.
 3. After joining the home network, the clock exposes the same full dashboard at `http://adhancron.local`. The footer alternates between its `.local` name and numerical IP address while keeping the battery percentage visible. The `.local` name can be changed under **Device > Local address**; access by numerical IP continues to work.
-4. The user searches for a location or enters coordinates. The clock saves the coordinates, timezone, and display name, then calculates prayer times locally each day.
+4. The user searches for a location or enters coordinates. The clock saves the coordinates, timezone, and display name, then calculates prayer times locally each day. Any enabled custom salaat times replace the corresponding calculated values everywhere: on the display, in the dashboard, in Ramadan countdowns, and in the automatic playback schedule. Sunrise always remains calculated.
 5. At each enabled prayer, the scheduler starts the saved output: the attached speaker, selected Google Cast receiver, or selected Sonos/DLNA receiver.
 6. On either user-configured Eid date, the scheduler also plays the separate
    takbeer recording at every slot in the selected time window. Each slot fires
@@ -175,12 +178,19 @@ shows the setup instructions or prayer clock on the display.
 4. Search for the home town, city, or postcode and save it.
 5. Use the dashboard to choose the attached speaker, a discovered Google Cast
    speaker, or a Sonos/UPnP-DLNA speaker; choose the **Prayer list** or **Focus**
-   clock face; test playback, select automatic prayers, set volume, choose
+   clock face; test playback, select automatic prayers, optionally open
+   **Prayer Time Overrides** to replace individual calculated times, set volume, choose
    the first and final fasting days for Ramadan, configure both Eid dates and
    the takbeer window, or replace either MP3.
 
-The dashboard also shows connection state, saved location, today's calculated
-times, audio-storage state, and the currently selected playback output. All
+Custom times are optional. The dashboard shows the calculated value beside each
+prayer, marks active replacements as **Custom**, and leaves all unselected
+prayers under automatic location-based calculation. Disabling an override
+immediately restores that prayer's calculated time after saving.
+
+The dashboard also shows connection state, saved location, today's effective
+times and whether each is calculated or custom, audio-storage state, and the
+currently selected playback output. All
 normal configuration is available on both the home network and the recovery
 setup network.
 

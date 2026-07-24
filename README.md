@@ -44,6 +44,8 @@ It provides:
 - First-run and recovery Wi-Fi networks with phone-friendly browser setup.
 - Location search by town, city, postcode, or coordinates, including automatic timezone and daylight-saving handling.
 - Local prayer-time calculation and once-per-prayer scheduling.
+- Optional persistent custom times for any of the five salaat, with calculated
+  defaults retained for every prayer that is not overridden.
 - An 8 MB internal audio partition for the adhan MP3, with browser upload and optional one-time microSD import.
 - Scheduled or manual playback through the attached speaker, a discovered Google Cast receiver, or a Sonos/UPnP-DLNA speaker.
 - Byte-range HTTP audio serving directly from the ESP32, plus automatic fallback to the attached speaker when a network receiver is unavailable.

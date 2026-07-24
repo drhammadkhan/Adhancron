@@ -136,6 +136,40 @@
         </details>
 
         <details class="settings-panel">
+          <summary><span class="summary-icon time-icon" aria-hidden="true"></span><span><strong>Prayer Time Overrides</strong><small>Replace individual calculated times</small></span><span class="chevron"></span></summary>
+          <div class="panel-content">
+            <p class="field-note">Times are calculated automatically from your saved location. Enable Custom only for a prayer whose local timetable uses a different time.</p>
+            <div class="override-list">
+              <div class="override-row">
+                <span><strong>Fajr</strong><small id="fajr-calculated">Calculated --:--</small></span>
+                <label class="override-switch"><input id="fajr-override" name="fajr_override" type="checkbox"><span>Custom</span></label>
+                <input id="fajr-time" name="fajr_time" type="time" aria-label="Custom Fajr time" disabled>
+              </div>
+              <div class="override-row">
+                <span><strong>Dhuhr</strong><small id="dhuhr-calculated">Calculated --:--</small></span>
+                <label class="override-switch"><input id="dhuhr-override" name="dhuhr_override" type="checkbox"><span>Custom</span></label>
+                <input id="dhuhr-time" name="dhuhr_time" type="time" aria-label="Custom Dhuhr time" disabled>
+              </div>
+              <div class="override-row">
+                <span><strong>Asr</strong><small id="asr-calculated">Calculated --:--</small></span>
+                <label class="override-switch"><input id="asr-override" name="asr_override" type="checkbox"><span>Custom</span></label>
+                <input id="asr-time" name="asr_time" type="time" aria-label="Custom Asr time" disabled>
+              </div>
+              <div class="override-row">
+                <span><strong>Maghrib</strong><small id="maghrib-calculated">Calculated --:--</small></span>
+                <label class="override-switch"><input id="maghrib-override" name="maghrib_override" type="checkbox"><span>Custom</span></label>
+                <input id="maghrib-time" name="maghrib_time" type="time" aria-label="Custom Maghrib time" disabled>
+              </div>
+              <div class="override-row">
+                <span><strong>Isha</strong><small id="isha-calculated">Calculated --:--</small></span>
+                <label class="override-switch"><input id="isha-override" name="isha_override" type="checkbox"><span>Custom</span></label>
+                <input id="isha-time" name="isha_time" type="time" aria-label="Custom Isha time" disabled>
+              </div>
+            </div>
+          </div>
+        </details>
+
+        <details class="settings-panel">
           <summary><span class="summary-icon moon-icon" aria-hidden="true"></span><span><strong>Ramadan</strong><small>Fasting dates and countdown display</small></span><span class="chevron"></span></summary>
           <div class="panel-content">
             <p class="field-note">Set the first and final fasting day observed by your community. Both dates are inclusive.</p>

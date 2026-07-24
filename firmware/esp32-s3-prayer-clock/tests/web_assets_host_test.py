@@ -59,8 +59,26 @@ class WebAssetsTest(unittest.TestCase):
             "eid_takbeer_end", "eid_takbeer_interval", "automatic_updates",
             "display_style",
             "device_hostname",
+            "fajr_override", "fajr_time",
+            "dhuhr_override", "dhuhr_time",
+            "asr_override", "asr_time",
+            "maghrib_override", "maghrib_time",
+            "isha_override", "isha_time",
         }
         self.assertTrue(expected.issubset(names))
+
+    def test_prayer_overrides_have_complete_controls(self):
+        page = parse_page("index.html")
+        ids = set(page.ids)
+        for prayer in ("fajr", "dhuhr", "asr", "maghrib", "isha"):
+            self.assertIn(f"{prayer}-calculated", ids)
+            self.assertIn(f"{prayer}-override", ids)
+            self.assertIn(f"{prayer}-time", ids)
+
+        script = (WEB / "app.js").read_text()
+        self.assertIn("populatePrayerOverrides", script)
+        self.assertIn("syncPrayerOverride", script)
+        self.assertIn("prayer.custom", script)
 
     def test_mobile_save_dock_is_viewport_centred(self):
         css = (WEB / "app.css").read_text()

@@ -39,6 +39,8 @@ typedef struct {
     int eid_takbeer_interval_minutes;
     adhan_display_style_t display_style;
     char device_hostname[33];
+    bool prayer_override_enabled[5];
+    int prayer_override_minutes[5];
 } adhan_settings_t;
 
 void settings_defaults(adhan_settings_t *settings);

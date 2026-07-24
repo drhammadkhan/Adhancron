@@ -8,7 +8,8 @@
 #include "nvs.h"
 
 #define SETTINGS_NAMESPACE "adhan"
-#define SETTINGS_VERSION 11
+#define SETTINGS_VERSION 12
+#define LEGACY_SETTINGS_VERSION_11 11
 #define LEGACY_SETTINGS_VERSION_10 10
 #define LEGACY_SETTINGS_VERSION_9 9
 #define LEGACY_SETTINGS_VERSION_8 8
@@ -165,6 +166,33 @@ typedef struct {
 } legacy_settings_v10_t;
 
 typedef struct {
+    char wifi_ssid[33];
+    char wifi_password[65];
+    char timezone[64];
+    char location_name[64];
+    double latitude;
+    double longitude;
+    bool location_configured;
+    int volume;
+    bool enabled[5];
+    adhan_output_t output;
+    char cast_device_id[48];
+    char cast_device_name[64];
+    char dlna_device_url[256];
+    char dlna_device_name[64];
+    bool automatic_updates;
+    char ramadan_start_date[11];
+    char ramadan_end_date[11];
+    char eid_fitr_date[11];
+    char eid_adha_date[11];
+    int eid_takbeer_start_minute;
+    int eid_takbeer_end_minute;
+    int eid_takbeer_interval_minutes;
+    adhan_display_style_t display_style;
+    char device_hostname[33];
+} legacy_settings_v11_t;
+
+typedef struct {
     uint32_t version;
     legacy_settings_v3_t value;
 } stored_settings_v3_t;
@@ -206,6 +234,11 @@ typedef struct {
 
 typedef struct {
     uint32_t version;
+    legacy_settings_v11_t value;
+} stored_settings_v11_t;
+
+typedef struct {
+    uint32_t version;
     adhan_settings_t value;
 } stored_settings_t;
 
@@ -242,6 +275,17 @@ bool settings_load(adhan_settings_t *settings) {
         nvs_close(handle);
         if (result != ESP_OK || stored.version != SETTINGS_VERSION) return false;
         *settings = stored.value;
+        return true;
+    }
+    if (length == sizeof(stored_settings_v11_t)) {
+        stored_settings_v11_t stored = {0};
+        const esp_err_t result = nvs_get_blob(
+            handle, "settings", &stored, &length);
+        nvs_close(handle);
+        if (result != ESP_OK ||
+                stored.version != LEGACY_SETTINGS_VERSION_11) return false;
+        memcpy(settings, &stored.value, sizeof(stored.value));
+        settings_save(settings);
         return true;
     }
     if (length == sizeof(stored_settings_v10_t)) {

@@ -507,6 +507,10 @@ static bool firmware_update_window_safe(void) {
     if (!prayer_times_calculate(&local_now, &calculation, &times)) {
         return true;
     }
+    prayer_times_apply_overrides(
+        &times,
+        settings.prayer_override_enabled,
+        settings.prayer_override_minutes);
     const int prayer_indexes[] = {0, 2, 3, 4, 5};
     const int current_minute = local_now.tm_hour * 60 + local_now.tm_min;
     for (int index = 0; index < 5; index++) {
@@ -770,6 +774,10 @@ static void prayer_scheduler_task(void *unused) {
                 .longitude = settings.longitude,
             };
             if (adhan_audio_available && settings.location_configured && prayer_times_calculate(&local_now, &calculation, &times)) {
+                prayer_times_apply_overrides(
+                    &times,
+                    settings.prayer_override_enabled,
+                    settings.prayer_override_minutes);
                 for (int index = 0; index < 5; index++) {
                     const int prayer_minute = prayer_time_minutes(&times, prayer_indexes[index]);
                     const int minutes_late = minute - prayer_minute;

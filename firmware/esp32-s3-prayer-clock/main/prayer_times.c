@@ -134,3 +134,18 @@ int prayer_time_minutes(const prayer_times_t *times, int index) {
     const int *values = (const int *)times;
     return index >= 0 && index < 6 ? values[index] : -1;
 }
+
+void prayer_times_apply_overrides(
+        prayer_times_t *times,
+        const bool enabled[5],
+        const int minutes[5]) {
+    if (times == NULL || enabled == NULL || minutes == NULL) return;
+    static const int prayer_indexes[] = {0, 2, 3, 4, 5};
+    int *values = (int *)times;
+    for (int index = 0; index < 5; index++) {
+        if (enabled[index] &&
+                minutes[index] >= 0 && minutes[index] < 24 * 60) {
+            values[prayer_indexes[index]] = minutes[index];
+        }
+    }
+}

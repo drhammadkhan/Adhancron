@@ -24,3 +24,12 @@ bool prayer_times_calculate(const struct tm *local_date,
 
 const char *prayer_time_name(int index);
 int prayer_time_minutes(const prayer_times_t *times, int index);
+
+/*
+ * Replace the five salat times while retaining the calculated sunrise.
+ * Override indexes are Fajr, Dhuhr, Asr, Maghrib, and Isha.
+ */
+void prayer_times_apply_overrides(
+    prayer_times_t *times,
+    const bool enabled[5],
+    const int minutes[5]);

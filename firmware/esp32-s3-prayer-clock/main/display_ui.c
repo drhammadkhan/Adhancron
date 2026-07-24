@@ -566,6 +566,10 @@ void display_ui_update(
         lvgl_port_unlock();
         return;
     }
+    prayer_times_apply_overrides(
+        &times,
+        current_settings->prayer_override_enabled,
+        current_settings->prayer_override_minutes);
 
     lv_obj_add_flag(message_panel, LV_OBJ_FLAG_HIDDEN);
     const bool focus_style =
