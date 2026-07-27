@@ -4,6 +4,7 @@ import unittest
 
 ROOT = Path(__file__).resolve().parents[2]
 LITE = ROOT / "raspberry-pi" / "lite"
+RASPBERRY_PI = ROOT / "raspberry-pi"
 
 
 class PiLiteAssetsTests(unittest.TestCase):
@@ -48,6 +49,16 @@ class PiLiteAssetsTests(unittest.TestCase):
             "adhancron.env.example",
         }
         self.assertTrue(expected.issubset({path.name for path in LITE.iterdir()}))
+
+    def test_docker_pi_profile_uses_system_display_service(self):
+        installer = (RASPBERRY_PI / "install.sh").read_text(encoding="utf-8")
+        launcher = (RASPBERRY_PI / "adhancron-display.sh").read_text(encoding="utf-8")
+        service = (RASPBERRY_PI / "adhanclock-display.service").read_text(encoding="utf-8")
+        self.assertIn("cage cog seatd", installer)
+        self.assertIn("adhanclock-display.service", installer)
+        self.assertIn("cog --platform=drm", launcher)
+        self.assertIn("cage -s -- cog --platform=wl", launcher)
+        self.assertIn("Conflicts=getty@tty1.service", service)
 
 
 if __name__ == "__main__":

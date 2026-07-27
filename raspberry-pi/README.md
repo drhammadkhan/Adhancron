@@ -18,17 +18,18 @@ boots faster and leaves substantially more memory available.
 sudo ./raspberry-pi/lite/install.sh
 ```
 
-### Docker + Desktop (compatibility edition)
+### Docker + HDMI Service (compatibility edition)
 
-The installer documented below uses Raspberry Pi OS Desktop, Docker, and
-Chromium. Choose it when you specifically want container isolation or need the
-desktop for other Pi applications.
+The installer documented below uses Docker for the application and a lightweight
+system display service for HDMI output. Choose it when you specifically want
+container isolation. It works on Raspberry Pi OS Lite or Desktop, but the Lite
+native edition remains smoother on a Pi 3B.
 
 ## What You Need
 
 - Raspberry Pi 3B, 3B+, 4, or 5.
 - A microSD card of at least 16 GB.
-- Raspberry Pi OS Desktop **64-bit**. The desktop image is required for the full-screen Chromium display.
+- Raspberry Pi OS Lite or Desktop **64-bit**.
 - An HDMI display. The interface adapts to other landscape resolutions, but is designed and tested at 800x480.
 - A reliable Raspberry Pi power supply.
 - Internet access during installation.
@@ -37,7 +38,7 @@ Audio can play through the Pi's attached HDMI or analogue audio device, or throu
 
 ## Install
 
-1. Use Raspberry Pi Imager to install **Raspberry Pi OS with desktop (64-bit)**. In the Imager settings, configure Wi-Fi, a username, and password.
+1. Use Raspberry Pi Imager to install **Raspberry Pi OS Lite or Desktop (64-bit)**. In the Imager settings, configure Wi-Fi, a username, and password.
 2. Boot the Pi, open Terminal, and clone this repository:
 
    ```bash
@@ -59,7 +60,7 @@ Audio can play through the Pi's attached HDMI or analogue audio device, or throu
    sudo reboot
    ```
 
-The Pi opens the prayer clock automatically after desktop login. On a phone or computer connected to the same network, open:
+The Pi opens the prayer clock automatically on the HDMI display. On a phone or computer connected to the same network, open:
 
 ```text
 http://adhanclock.local
@@ -142,10 +143,10 @@ sudo systemctl disable --now adhancron-update.timer
 
 ## Useful Controls
 
-Exit the full-screen browser with `Alt+F4`. Start it again by logging out and back in, rebooting, or running:
+Restart the HDMI display:
 
 ```bash
-~/.local/bin/adhancron-kiosk
+sudo systemctl restart adhanclock-display
 ```
 
 View application logs:
@@ -172,8 +173,9 @@ The dashboard remains available even if Chromium is closed. If `adhanclock.local
 | `/opt/adhancron/data` | Persistent user settings, timetables, logs, and custom takbeer audio |
 | `/opt/adhancron/adhancron.env` | Pi-specific defaults such as attached audio device |
 | `/opt/adhancron/docker-compose.yml` | ARM64 application service |
-| `~/.local/bin/adhancron-kiosk` | Full-screen display launcher |
+| `/opt/adhancron/display` | HDMI display launcher |
 | `/etc/nginx/sites-enabled/adhanclock` | Port 80 dashboard proxy |
+| `adhanclock-display.service` | Full-screen HDMI display service |
 | `adhancron-update.timer` | Twice-daily image update check |
 
 The installer does not modify Adhancron settings during an update and never stores Home Assistant secrets in this repository.

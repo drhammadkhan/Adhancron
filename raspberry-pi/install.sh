@@ -25,23 +25,23 @@ DESKTOP_HOME="$(getent passwd "$DESKTOP_USER" | cut -d: -f6)"
 
 echo "Installing Adhan Clock for $DESKTOP_USER..."
 apt-get update
-apt-get install -y docker.io nginx avahi-daemon curl ca-certificates x11-xserver-utils
-
-if apt-cache show chromium >/dev/null 2>&1; then
-  apt-get install -y chromium
-else
-  apt-get install -y chromium-browser
-fi
-if apt-cache show unclutter-xfixes >/dev/null 2>&1; then
-  apt-get install -y unclutter-xfixes
-else
-  apt-get install -y unclutter
-fi
+apt-get install -y docker.io nginx avahi-daemon curl ca-certificates \
+  cage cog seatd
 if apt-cache show docker-compose-plugin >/dev/null 2>&1; then
   apt-get install -y docker-compose-plugin
 else
   apt-get install -y docker-compose
 fi
+
+if ! id adhanclock >/dev/null 2>&1; then
+  useradd --system --create-home --home-dir /var/lib/adhanclock \
+    --shell /usr/sbin/nologin adhanclock
+fi
+for group in audio video render input seat; do
+  if getent group "$group" >/dev/null; then
+    usermod -aG "$group" adhanclock
+  fi
+done
 
 install -d -m 0755 /opt/adhancron /opt/adhancron/data
 install -m 0644 "$SOURCE_DIR/docker-compose.yml" /opt/adhancron/docker-compose.yml
@@ -66,28 +66,18 @@ nginx -t
 
 install -m 0644 "$SOURCE_DIR/adhancron-update.service" /etc/systemd/system/adhancron-update.service
 install -m 0644 "$SOURCE_DIR/adhancron-update.timer" /etc/systemd/system/adhancron-update.timer
-
-install -d -o "$DESKTOP_USER" -g "$DESKTOP_USER" "$DESKTOP_HOME/.local/bin" "$DESKTOP_HOME/.config/autostart"
-install -m 0755 -o "$DESKTOP_USER" -g "$DESKTOP_USER" "$SOURCE_DIR/adhancron-kiosk.sh" "$DESKTOP_HOME/.local/bin/adhancron-kiosk"
-cat > "$DESKTOP_HOME/.config/autostart/adhancron-kiosk.desktop" <<EOF
-[Desktop Entry]
-Type=Application
-Name=Adhan Clock
-Comment=Open the full-screen Adhan Clock display
-Exec=$DESKTOP_HOME/.local/bin/adhancron-kiosk
-Terminal=false
-X-GNOME-Autostart-enabled=true
-EOF
-chown "$DESKTOP_USER:$DESKTOP_USER" "$DESKTOP_HOME/.config/autostart/adhancron-kiosk.desktop"
-chmod 0644 "$DESKTOP_HOME/.config/autostart/adhancron-kiosk.desktop"
+install -m 0755 "$SOURCE_DIR/adhancron-display.sh" /opt/adhancron/display
+install -m 0644 "$SOURCE_DIR/adhanclock-display.service" /etc/systemd/system/adhanclock-display.service
 
 usermod -aG docker,audio,video,render "$DESKTOP_USER" 2>/dev/null || usermod -aG docker,audio,video "$DESKTOP_USER"
 systemctl daemon-reload
-systemctl enable --now docker avahi-daemon nginx adhancron-update.timer
+systemctl disable --now getty@tty1.service 2>/dev/null || true
+systemctl enable --now docker avahi-daemon nginx seatd adhancron-update.timer
 /opt/adhancron/update.sh
+systemctl enable --now adhanclock-display.service
 
 echo
 echo "Adhan Clock is installed."
 echo "Dashboard: http://adhanclock.local"
 echo "Clock view: http://adhanclock.local/display"
-echo "Reboot once to start the full-screen display: sudo reboot"
+echo "The HDMI display service starts automatically. Reboot if the screen does not switch within a minute: sudo reboot"
