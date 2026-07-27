@@ -66,6 +66,7 @@ class SettingsUpdate(BaseModel):
     playback_method: str | None = None
     google_cast_host: str | None = None
     google_cast_port: str | None = None
+    google_cast_device_name: str | None = None
     airplay_identifier: str | None = None
     airplay_device_name: str | None = None
     dlna_location: str | None = None
@@ -147,6 +148,7 @@ def _settings_response(request: Request | None = None) -> dict:
         "playback_method": current.get("playback_method") or os.getenv("ADHAN_PLAYBACK_METHOD", "home_assistant"),
         "google_cast_host": current.get("google_cast_host") or os.getenv("GOOGLE_CAST_HOST", ""),
         "google_cast_port": current.get("google_cast_port") or os.getenv("GOOGLE_CAST_PORT", "8009"),
+        "google_cast_device_name": current.get("google_cast_device_name", ""),
         "airplay_identifier": current.get("airplay_identifier") or os.getenv("AIRPLAY_IDENTIFIER", ""),
         "airplay_device_name": current.get("airplay_device_name", ""),
         "dlna_location": current.get("dlna_location") or os.getenv("DLNA_LOCATION", ""),
@@ -306,6 +308,16 @@ def airplay_speakers() -> dict:
 
     try:
         return {"devices": discover_airplay_devices()}
+    except Exception as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+
+
+@app.get("/api/speakers/cast")
+def google_cast_speakers() -> dict:
+    from network_speakers import discover_google_cast_devices
+
+    try:
+        return {"devices": discover_google_cast_devices()}
     except Exception as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
 

@@ -22,6 +22,10 @@ const haEntityInput = document.getElementById("haEntityInput");
 const publicBaseUrlInput = document.getElementById("publicBaseUrlInput");
 const playbackMethodInput = document.getElementById("playbackMethodInput");
 const googleCastHostInput = document.getElementById("googleCastHostInput");
+const googleCastPortInput = document.getElementById("googleCastPortInput");
+const googleCastDeviceInput = document.getElementById("googleCastDeviceInput");
+const scanCastBtn = document.getElementById("scanCastBtn");
+const googleCastStatus = document.getElementById("googleCastStatus");
 const homeAssistantFields = document.getElementById("homeAssistantFields");
 const homeAssistantTokenFields = document.getElementById("homeAssistantTokenFields");
 const googleCastFields = document.getElementById("googleCastFields");
@@ -102,6 +106,12 @@ function renderSettings(settings, overrideMessage = null) {
   if (publicBaseUrlInput) publicBaseUrlInput.value = settings.public_base_url || "";
   if (playbackMethodInput) playbackMethodInput.value = settings.playback_method || "home_assistant";
   if (googleCastHostInput) googleCastHostInput.value = settings.google_cast_host || "";
+  if (googleCastPortInput) googleCastPortInput.value = settings.google_cast_port || "8009";
+  ensureSpeakerOption(
+    googleCastDeviceInput,
+    settings.google_cast_host,
+    settings.google_cast_device_name || settings.google_cast_host,
+  );
   ensureSpeakerOption(airplayDeviceInput, settings.airplay_identifier, settings.airplay_device_name);
   ensureSpeakerOption(dlnaDeviceInput, settings.dlna_location, settings.dlna_device_name);
   syncPlaybackMethod(settings.playback_method || "home_assistant");
@@ -137,7 +147,11 @@ function renderSettings(settings, overrideMessage = null) {
   if (settings.playback_method === "google_cast") {
     const configured = Boolean(settings.google_cast_host);
     setSettingsStatus(
-      overrideMessage || (configured ? "Direct Google Cast ready" : "Set Google Cast speaker address"),
+      overrideMessage || (
+        configured
+          ? `Google Cast ready: ${settings.google_cast_device_name || settings.google_cast_host}`
+          : "Choose a Google Cast speaker"
+      ),
       configured ? "success" : "warning",
     );
     return;
@@ -338,6 +352,9 @@ async function saveSettings() {
   if (publicBaseUrlInput?.value.trim()) payload.public_base_url = publicBaseUrlInput.value.trim();
   if (payload.playback_method === "google_cast") {
     payload.google_cast_host = googleCastHostInput ? googleCastHostInput.value.trim() : "";
+    payload.google_cast_port = googleCastPortInput ? googleCastPortInput.value : "8009";
+    const option = googleCastDeviceInput?.options[googleCastDeviceInput.selectedIndex];
+    payload.google_cast_device_name = option?.dataset.name || "";
   } else if (payload.playback_method === "airplay") {
     const option = airplayDeviceInput?.options[airplayDeviceInput.selectedIndex];
     payload.airplay_identifier = airplayDeviceInput ? airplayDeviceInput.value : "";
@@ -385,8 +402,13 @@ async function saveSettings() {
 
 async function scanSpeakers(kind) {
   const airplay = kind === "airplay";
-  const select = airplay ? airplayDeviceInput : dlnaDeviceInput;
-  const status = airplay ? airplayStatus : dlnaStatus;
+  const cast = kind === "cast";
+  const select = cast
+    ? googleCastDeviceInput
+    : airplay ? airplayDeviceInput : dlnaDeviceInput;
+  const status = cast
+    ? googleCastStatus
+    : airplay ? airplayStatus : dlnaStatus;
   const savedValue = select?.value || "";
   if (!select || !status) return;
   select.innerHTML = `<option value="">Scanning...</option>`;
@@ -397,12 +419,15 @@ async function scanSpeakers(kind) {
     if (!response.ok) throw new Error(payload.detail || "Speaker scan failed");
     select.innerHTML = `<option value="">Choose a speaker</option>`;
     payload.devices.forEach((device) => {
-      const value = airplay ? device.identifier : device.location;
+      const value = cast
+        ? device.host
+        : airplay ? device.identifier : device.location;
       const option = new Option(
         `${device.name}${device.model ? ` - ${device.model}` : ""}`,
         value,
       );
       option.dataset.name = device.name;
+      if (cast) option.dataset.port = device.port || 8009;
       option.dataset.pairingRequired = device.pairing_required ? "true" : "false";
       if (value === savedValue) option.selected = true;
       select.add(option);
@@ -673,6 +698,7 @@ refreshBtn.addEventListener("click", () => {
 saveBtn.addEventListener("click", saveJobs);
 if (saveSettingsBtn) saveSettingsBtn.addEventListener("click", saveSettings);
 if (uploadTakbeerBtn) uploadTakbeerBtn.addEventListener("click", uploadTakbeer);
+if (scanCastBtn) scanCastBtn.addEventListener("click", () => scanSpeakers("cast"));
 if (scanAirplayBtn) scanAirplayBtn.addEventListener("click", () => scanSpeakers("airplay"));
 if (scanDlnaBtn) scanDlnaBtn.addEventListener("click", () => scanSpeakers("dlna"));
 if (pairAirplayBtn) pairAirplayBtn.addEventListener("click", startAirplayPairing);
@@ -681,12 +707,31 @@ if (playbackMethodInput) {
   playbackMethodInput.addEventListener("change", () => {
     syncPlaybackMethod(playbackMethodInput.value);
     if (playbackMethodInput.value === "google_cast") {
-      setSettingsStatus("Save the Google Cast speaker address before testing", "warning");
+      setSettingsStatus("Scan and choose a Google Cast speaker before testing", "warning");
     } else if (playbackMethodInput.value === "airplay") {
       setSettingsStatus("Scan, choose, and pair an AirPlay speaker before testing", "warning");
     } else if (playbackMethodInput.value === "dlna") {
       setSettingsStatus("Scan and choose a Sonos or DLNA speaker before testing", "warning");
     }
+  });
+}
+if (googleCastDeviceInput) {
+  googleCastDeviceInput.addEventListener("change", () => {
+    const option = googleCastDeviceInput.options[googleCastDeviceInput.selectedIndex];
+    if (googleCastHostInput) googleCastHostInput.value = googleCastDeviceInput.value;
+    if (googleCastPortInput) googleCastPortInput.value = option?.dataset.port || "8009";
+    if (googleCastStatus && googleCastDeviceInput.value) {
+      googleCastStatus.textContent = "Speaker selected. Save Settings to use it.";
+    }
+  });
+}
+if (googleCastHostInput) {
+  googleCastHostInput.addEventListener("input", () => {
+    if (googleCastDeviceInput &&
+        googleCastDeviceInput.value !== googleCastHostInput.value.trim()) {
+      googleCastDeviceInput.value = "";
+    }
+    if (googleCastPortInput) googleCastPortInput.value = "8009";
   });
 }
 function chooseLocation(result) {

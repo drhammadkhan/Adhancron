@@ -37,6 +37,7 @@ class SettingsManagerTests(unittest.TestCase):
             manager = SettingsManager(Path(directory) / "settings.json")
             saved = manager.update_settings({
                 "playback_method": "dlna",
+                "google_cast_device_name": "Family room speaker",
                 "dlna_location": "http://192.168.1.40:1400/xml/device_description.xml",
                 "dlna_device_name": "Living Room",
                 "airplay_identifier": "airplay-id",
@@ -46,6 +47,7 @@ class SettingsManagerTests(unittest.TestCase):
                 "dlna_device_name": "",
             })
         self.assertEqual(saved["playback_method"], "dlna")
+        self.assertEqual(saved["google_cast_device_name"], "Family room speaker")
         self.assertEqual(saved["dlna_device_name"], "Living Room")
         self.assertNotIn("dlna_location", cleared)
         self.assertNotIn("dlna_device_name", cleared)

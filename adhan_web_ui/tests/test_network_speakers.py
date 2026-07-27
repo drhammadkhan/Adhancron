@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import sys
+import types
 import unittest
 from unittest import mock
 
@@ -38,6 +40,40 @@ class FakeResponse:
 
 
 class NetworkSpeakerTests(unittest.TestCase):
+    def test_discovers_and_sorts_google_cast_speakers(self):
+        class FakeCast:
+            def __init__(self, name, host, model, uuid):
+                self.cast_info = types.SimpleNamespace(
+                    friendly_name=name,
+                    host=host,
+                    port=8009,
+                    model_name=model,
+                    uuid=uuid,
+                )
+                self.disconnect = mock.Mock()
+
+        bedroom = FakeCast("Bedroom", "192.168.1.42", "Nest Mini", "bedroom")
+        kitchen = FakeCast("Kitchen", "192.168.1.41", "Google Home", "kitchen")
+        browser = object()
+        stop_discovery = mock.Mock()
+        pychromecast = types.SimpleNamespace(
+            get_chromecasts=mock.Mock(
+                return_value=([kitchen, bedroom], browser)),
+            discovery=types.SimpleNamespace(stop_discovery=stop_discovery),
+        )
+
+        with mock.patch.dict(sys.modules, {"pychromecast": pychromecast}):
+            devices = network_speakers.discover_google_cast_devices(timeout=1)
+
+        self.assertEqual(
+            [device["name"] for device in devices],
+            ["Bedroom", "Kitchen"],
+        )
+        self.assertEqual(devices[0]["host"], "192.168.1.42")
+        stop_discovery.assert_called_once_with(browser)
+        bedroom.disconnect.assert_called_once_with(timeout=1)
+        kitchen.disconnect.assert_called_once_with(timeout=1)
+
     def test_describes_dlna_renderer_and_resolves_control_urls(self):
         with mock.patch.object(
             network_speakers.requests,

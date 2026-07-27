@@ -23,6 +23,13 @@ class DisplayAssetsTests(unittest.TestCase):
         self.assertIn('id="setup-state"', html)
         self.assertIn('[data-face="focus"]', css)
 
+    def test_dashboard_has_google_cast_discovery_controls(self):
+        html = (STATIC / "index.html").read_text(encoding="utf-8")
+        script = (STATIC / "app.js").read_text(encoding="utf-8")
+        self.assertIn('id="googleCastDeviceInput"', html)
+        self.assertIn('id="scanCastBtn"', html)
+        self.assertIn('scanSpeakers("cast")', script)
+
 
 if __name__ == "__main__":
     unittest.main()

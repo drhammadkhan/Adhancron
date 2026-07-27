@@ -20,6 +20,7 @@ class SettingsManager:
         "playback_method",
         "google_cast_host",
         "google_cast_port",
+        "google_cast_device_name",
         "airplay_identifier",
         "airplay_device_name",
         "dlna_location",
@@ -33,6 +34,7 @@ class SettingsManager:
     CLEARABLE_KEYS = {
         "eid_fitr_date",
         "eid_adha_date",
+        "google_cast_device_name",
         "airplay_identifier",
         "airplay_device_name",
         "dlna_location",

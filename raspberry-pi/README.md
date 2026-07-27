@@ -67,7 +67,27 @@ http://adhanclock.local
 
 Save a location and select where the adhan should play. The clock then calculates the current and following year's prayer times locally and schedules all five daily adhans.
 
+For Google Home, Nest, or Chromecast playback, open **Settings**, choose
+**Direct Google Cast**, select **Scan for speakers**, choose the receiver, and
+save. The Pi and speaker must be on the same local network. A manual IP or
+hostname remains available for networks where multicast discovery is blocked.
+
 The installer inherits Raspberry Pi OS's time zone, including daylight-saving changes. Set the Pi's region and time zone correctly in Raspberry Pi Imager or **Preferences > Raspberry Pi Configuration**; the prayer-location search itself needs only a town, postcode, or coordinates.
+
+### Existing container conflict
+
+Current installers automatically replace an older Adhancron container created
+under a different Docker Compose project. If an earlier checkout reports that
+the name `/adhan-manager` is already in use, run:
+
+```bash
+sudo docker rm -f adhan-manager
+sudo /opt/adhancron/update.sh
+```
+
+Removing the container does not remove its image or bind-mounted data. The
+Raspberry Pi edition stores its persistent settings and audio in
+`/opt/adhancron/data`.
 
 ## Attached Audio
 

@@ -24,6 +24,7 @@ DLNA_DISCOVERY_TARGETS = (
 )
 DLNA_TIMEOUT = float(os.getenv("ADHAN_DLNA_TIMEOUT", "5"))
 AIRPLAY_TIMEOUT = int(os.getenv("ADHAN_AIRPLAY_TIMEOUT", "5"))
+CAST_DISCOVERY_TIMEOUT = float(os.getenv("ADHAN_CAST_DISCOVERY_TIMEOUT", "5"))
 AIRPLAY_STORAGE_FILE = DATA_DIR / "airplay_credentials.json"
 
 
@@ -35,6 +36,48 @@ class DlnaDevice:
     location: str
     av_transport_url: str
     rendering_control_url: str
+
+
+def discover_google_cast_devices(
+        timeout: float = CAST_DISCOVERY_TIMEOUT) -> list[dict]:
+    try:
+        import pychromecast
+    except ImportError as exc:
+        raise RuntimeError("Google Cast support is not installed") from exc
+
+    casts = []
+    browser = None
+    try:
+        casts, browser = pychromecast.get_chromecasts(timeout=timeout)
+        devices = []
+        seen: set[tuple[str, int]] = set()
+        for cast in casts:
+            info = cast.cast_info
+            host = str(info.host)
+            port = int(info.port or 8009)
+            address = (host, port)
+            if not host or address in seen:
+                continue
+            seen.add(address)
+            devices.append({
+                "identifier": str(info.uuid or host),
+                "name": info.friendly_name or host,
+                "model": info.model_name or "",
+                "host": host,
+                "port": port,
+            })
+        return sorted(
+            devices,
+            key=lambda device: (device["name"].casefold(), device["host"]),
+        )
+    finally:
+        if browser is not None:
+            pychromecast.discovery.stop_discovery(browser)
+        for cast in casts:
+            try:
+                cast.disconnect(timeout=1)
+            except Exception:
+                pass
 
 
 def _xml_text(element: ET.Element, name: str) -> str:

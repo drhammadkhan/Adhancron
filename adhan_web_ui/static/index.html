@@ -169,13 +169,23 @@
               <input id="haEntityInput" type="text" class="input input-bordered w-full bg-white/80" placeholder="media_player.bedroom_speaker" />
             </label>
           </div>
-          <div id="googleCastFields" class="hidden">
+          <div id="googleCastFields" class="hidden rounded-lg border border-slate-200 bg-white/45 p-4">
             <label class="form-control">
-              <div class="label">
-                <span class="label-text text-sm font-medium">Google Cast Speaker IP or Hostname</span>
-              </div>
-              <input id="googleCastHostInput" type="text" class="input input-bordered w-full bg-white/80" placeholder="192.168.1.24" />
+              <span class="label-text text-sm font-medium">Google Cast speaker</span>
+              <select id="googleCastDeviceInput" class="select select-bordered mt-2 w-full bg-white/80">
+                <option value="">Scan to find Google Cast speakers</option>
+              </select>
             </label>
+            <button id="scanCastBtn" type="button" class="btn btn-outline btn-success mt-3">Scan for speakers</button>
+            <p id="googleCastStatus" class="mt-3 text-sm text-slate-500">Finds Google Home, Nest, Chromecast, and compatible Cast receivers on this network.</p>
+            <details class="mt-3">
+              <summary class="cursor-pointer text-sm font-medium text-slate-600">Enter an address manually</summary>
+              <label class="form-control mt-3">
+                <span class="label-text text-sm font-medium">Speaker IP or hostname</span>
+                <input id="googleCastHostInput" type="text" class="input input-bordered mt-2 w-full bg-white/80" placeholder="192.168.1.24" />
+              </label>
+            </details>
+            <input id="googleCastPortInput" type="hidden" value="8009" />
           </div>
           <div id="airplayFields" class="hidden rounded-lg border border-slate-200 bg-white/45 p-4">
             <label class="form-control">
@@ -400,6 +410,6 @@
         return false;
       }
     </script>
-    <script src="static/app.js?v=21"></script>
+    <script src="static/app.js?v=22"></script>
   </body>
 </html>
