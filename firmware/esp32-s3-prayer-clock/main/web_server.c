@@ -282,6 +282,12 @@ static esp_err_t settings_handler(httpd_req_t *request) {
                 sizeof(current_settings->cast_device_id));
             get_value(body, "cast_device_name", current_settings->cast_device_name,
                 sizeof(current_settings->cast_device_name));
+            get_value(body, "cast_device_host", current_settings->cast_device_host,
+                sizeof(current_settings->cast_device_host));
+            get_value(body, "cast_device_port", value, sizeof(value));
+            const long cast_port = strtol(value, NULL, 10);
+            current_settings->cast_device_port =
+                cast_port > 0 && cast_port <= 65535 ? (uint16_t)cast_port : 8009;
             if (current_settings->cast_device_id[0] == '\0') {
                 return httpd_resp_send_err(request, HTTPD_400_BAD_REQUEST,
                     "Choose a Google Cast speaker");
@@ -392,6 +398,21 @@ static esp_err_t status_handler(httpd_req_t *request) {
             (const uint8_t *)current_settings->cast_device_name)) {
         return httpd_resp_send_err(request, HTTPD_500_INTERNAL_SERVER_ERROR, "Could not render status");
     }
+    written = snprintf(json + length, sizeof(json) - length, ",\"cast_device_host\":");
+    if (written < 0 || (size_t)written >= sizeof(json) - length) {
+        return httpd_resp_send_err(request, HTTPD_500_INTERNAL_SERVER_ERROR, "Could not render status");
+    }
+    length += written;
+    if (!append_json_string(json, sizeof(json), &length,
+            (const uint8_t *)current_settings->cast_device_host)) {
+        return httpd_resp_send_err(request, HTTPD_500_INTERNAL_SERVER_ERROR, "Could not render status");
+    }
+    written = snprintf(json + length, sizeof(json) - length,
+        ",\"cast_device_port\":%u", current_settings->cast_device_port);
+    if (written < 0 || (size_t)written >= sizeof(json) - length) {
+        return httpd_resp_send_err(request, HTTPD_500_INTERNAL_SERVER_ERROR, "Could not render status");
+    }
+    length += written;
     written = snprintf(
         json + length, sizeof(json) - length, ",\"dlna_device_url\":");
     if (written < 0 || (size_t)written >= sizeof(json) - length) {

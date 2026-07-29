@@ -2,6 +2,8 @@ const byId = id => document.getElementById(id);
 const page = document.body.dataset.page;
 let savedCastId = '';
 let savedCastName = '';
+let savedCastHost = '';
+let savedCastPort = '8009';
 let savedDlnaUrl = '';
 let savedDlnaName = '';
 let dashboardReady = false;
@@ -132,6 +134,8 @@ function populatePrayerOverrides(status, setValues) {
 function populateSettings(status) {
   savedCastId = status.cast_device_id || '';
   savedCastName = status.cast_device_name || '';
+  savedCastHost = status.cast_device_host || '';
+  savedCastPort = String(status.cast_device_port || 8009);
   savedDlnaUrl = status.dlna_device_url || '';
   savedDlnaName = status.dlna_device_name || '';
 
@@ -210,6 +214,8 @@ function outputChanged() {
   byId('dlna-controls').classList.toggle('hidden', !dlna);
   byId('cast-device').disabled = !cast;
   byId('cast-name').disabled = !cast;
+  byId('cast-host').disabled = !cast;
+  byId('cast-port').disabled = !cast;
   byId('dlna-device').disabled = !dlna;
   byId('dlna-name').disabled = !dlna;
 }
@@ -217,6 +223,10 @@ function outputChanged() {
 function selectedName(select, target) {
   const option = select.options[select.selectedIndex];
   target.value = option?.dataset.name || '';
+  if (select.id === 'cast-device') {
+    byId('cast-host').value = option?.dataset.host || '';
+    byId('cast-port').value = option?.dataset.port || '8009';
+  }
 }
 
 async function scanCastDevices() {
@@ -232,12 +242,16 @@ async function scanCastDevices() {
     data.devices.forEach(device => {
       const option = new Option(`${device.name}${device.group ? ' (group)' : ''}${device.model ? ` - ${device.model}` : ''}`, device.id);
       option.dataset.name = device.name;
+      option.dataset.host = device.host || '';
+      option.dataset.port = String(device.port || 8009);
       option.selected = device.id === savedCastId;
       select.add(option);
     });
     if (savedCastId && !data.devices.some(device => device.id === savedCastId)) {
       const option = new Option(`${savedCastName || 'Saved speaker'} (currently unavailable)`, savedCastId);
       option.dataset.name = savedCastName;
+      option.dataset.host = savedCastHost;
+      option.dataset.port = savedCastPort;
       option.selected = true;
       select.add(option);
     }

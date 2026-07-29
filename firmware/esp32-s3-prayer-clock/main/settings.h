@@ -2,6 +2,7 @@
 
 #include <stdbool.h>
 #include <stddef.h>
+#include <stdint.h>
 
 typedef enum {
     ADHAN_OUTPUT_ATTACHED = 0,
@@ -27,6 +28,8 @@ typedef struct {
     adhan_output_t output;
     char cast_device_id[48];
     char cast_device_name[64];
+    char cast_device_host[16];
+    uint16_t cast_device_port;
     char dlna_device_url[256];
     char dlna_device_name[64];
     bool automatic_updates;

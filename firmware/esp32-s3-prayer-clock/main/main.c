@@ -451,7 +451,25 @@ static void play_audio(audio_track_t track) {
         } else if (!current_media_url(track, media_url, sizeof(media_url))) {
             strlcpy(error, "the device audio URL is unavailable", sizeof(error));
         } else if (!cast_sender_find(settings.cast_device_id, &device, 8000)) {
-            strlcpy(error, "the saved Cast speaker did not answer discovery", sizeof(error));
+            if (settings.cast_device_host[0] == '\0') {
+                strlcpy(error, "the saved Cast speaker did not answer discovery", sizeof(error));
+            } else {
+                memset(&device, 0, sizeof(device));
+                strlcpy(device.id, settings.cast_device_id, sizeof(device.id));
+                strlcpy(device.name, settings.cast_device_name[0] != '\0'
+                    ? settings.cast_device_name : settings.cast_device_host,
+                    sizeof(device.name));
+                strlcpy(device.host, settings.cast_device_host,
+                    sizeof(device.host));
+                device.port = settings.cast_device_port != 0
+                    ? settings.cast_device_port : 8009;
+                ESP_LOGW(TAG,
+                    "Cast discovery missed %s; trying last known address %s:%u",
+                    device.name, device.host, device.port);
+                cast_started = cast_sender_play(
+                    &device, media_url, audio_track_title(track), settings.volume,
+                    error, sizeof(error));
+            }
         } else {
             cast_started = cast_sender_play(
                 &device, media_url, audio_track_title(track), settings.volume,
