@@ -63,6 +63,7 @@ jobs:
           printf '%s\n' "$version" > "$package/version.txt"
           cp firmware/esp32-s3-prayer-clock/installer/index.html "$site/"
           cp firmware/esp32-s3-prayer-clock/installer/manifest.json "$site/"
+          cp firmware/esp32-s3-prayer-clock/installer/manifest-with-recordings.json "$site/"
           cp firmware/esp32-s3-prayer-clock/installer/FLASHING.txt "$site/"
           cp casaos/icon.png "$site/icon.png"
           cp "$package/adhan-clock-esp32-s3.bin" "$site/firmware/"
@@ -81,6 +82,7 @@ jobs:
           cp "$package/version.txt" "$site/firmware/"
           touch "$site/.nojekyll"
           sed -i "s/__VERSION__/$version/g" "$site/manifest.json"
+          sed -i "s/__VERSION__/$version/g" "$site/manifest-with-recordings.json"
 
       - name: Upload downloadable firmware
         uses: actions/upload-artifact@v4

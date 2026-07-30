@@ -111,11 +111,29 @@
     li + li { margin-top: 8px; }
 
     .installer {
-      display: flex;
-      flex-wrap: wrap;
-      align-items: center;
-      gap: 14px;
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 16px;
       margin-top: 20px;
+    }
+
+    .install-option {
+      padding: 16px;
+      background: var(--surface);
+      border: 1px solid var(--line);
+      border-radius: 6px;
+    }
+
+    .install-option h3 {
+      margin: 0 0 8px;
+      color: var(--ivory);
+      font-size: 16px;
+      letter-spacing: 0;
+    }
+
+    .install-option p {
+      margin-bottom: 14px;
+      font-size: 14px;
     }
 
     button {
@@ -164,6 +182,7 @@
       header { grid-template-columns: 64px minmax(0, 1fr); gap: 14px; }
       .app-icon { width: 64px; height: 64px; }
       h1 { font-size: 26px; }
+      .installer { grid-template-columns: 1fr; }
     }
   </style>
 </head>
@@ -190,16 +209,29 @@
       <ol>
         <li>Use <strong>Google Chrome or Microsoft Edge</strong> on a Windows, macOS, or Linux computer. Phones, tablets, Firefox, and Safari cannot use this installer.</li>
         <li>Connect the clock directly to the computer with a USB data cable and close any serial-monitor application.</li>
-        <li>Choose <strong>Install firmware</strong>, select the ESP32-S3 serial device, choose the install type, and confirm the installation.</li>
+        <li>Choose the install button that matches what you want, select the ESP32-S3 serial device, and confirm the installation.</li>
         <li>Keep the cable connected until installation reaches 100% and the clock restarts.</li>
       </ol>
 
       <div class="installer">
-        <esp-web-install-button manifest="manifest.json">
-          <button slot="activate" type="button">Install firmware</button>
-          <span slot="unsupported" class="unsupported">Open this page in Chrome or Edge on a computer with Web Serial support.</span>
-          <span slot="not-allowed" class="unsupported">Browser access to the serial device was blocked. Reload the page and allow access when prompted.</span>
-        </esp-web-install-button>
+        <div class="install-option">
+          <h3>Preserve recordings</h3>
+          <p>Use this for normal firmware updates. Keeps Wi-Fi, location, settings, adhan, and takbeer.</p>
+          <esp-web-install-button manifest="manifest.json">
+            <button slot="activate" type="button">Install firmware</button>
+            <span slot="unsupported" class="unsupported">Open this page in Chrome or Edge on a computer with Web Serial support.</span>
+            <span slot="not-allowed" class="unsupported">Browser access to the serial device was blocked. Reload the page and allow access when prompted.</span>
+          </esp-web-install-button>
+        </div>
+        <div class="install-option">
+          <h3>Install default recordings</h3>
+          <p>Use this for a new clock or missing audio. Replaces adhan and takbeer with the bundled recordings.</p>
+          <esp-web-install-button manifest="manifest-with-recordings.json">
+            <button slot="activate" type="button">Install with recordings</button>
+            <span slot="unsupported" class="unsupported">Open this page in Chrome or Edge on a computer with Web Serial support.</span>
+            <span slot="not-allowed" class="unsupported">Browser access to the serial device was blocked. Reload the page and allow access when prompted.</span>
+          </esp-web-install-button>
+        </div>
       </div>
       <p><strong>Preserve settings and recordings</strong> updates the firmware without touching saved Wi-Fi, location, settings, or uploaded MP3s.</p>
       <p><strong>Install default recordings</strong> also writes the default adhan and Eid takbeer into internal storage. Use it for a new clock, recovery, or a device missing its audio files. It replaces existing recordings but keeps Wi-Fi and settings unless you choose a full-device erase.</p>

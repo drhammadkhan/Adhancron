@@ -1,5 +1,5 @@
 {
-  "name": "Adhan Clock - Preserve settings and recordings",
+  "name": "Adhan Clock - Install default recordings",
   "version": "__VERSION__",
   "new_install_prompt_erase": false,
   "new_install_improv_wait_time": 0,
@@ -19,6 +19,10 @@
         {
           "path": "firmware/adhan-clock-esp32-s3-ota.bin",
           "offset": 65536
+        },
+        {
+          "path": "firmware/storage.bin",
+          "offset": 3211264
         },
         {
           "path": "firmware/ota-data-initial.bin",
