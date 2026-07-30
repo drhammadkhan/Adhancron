@@ -22,6 +22,15 @@ Manual installation with esptool
    python -m esptool --chip esp32s3 --port YOUR_SERIAL_PORT erase_flash
    python -m esptool --chip esp32s3 --port YOUR_SERIAL_PORT --baud 460800 write_flash 0x0 adhan-clock-esp32-s3.bin
 
+Optional: install the bundled adhan and Eid takbeer recordings into the
+internal audio partition:
+
+   python -m esptool --chip esp32s3 --port YOUR_SERIAL_PORT --baud 460800 write_flash 0x310000 storage.bin
+
+This replaces the internal adhan and takbeer recordings with the bundled
+defaults. It does not erase Wi-Fi, location, or other settings unless you also
+run erase_flash.
+
 On macOS, a port normally looks like /dev/cu.usbmodemXXXX.
 On Windows, it normally looks like COM3 or another COM number.
 
@@ -43,8 +52,10 @@ clock checks the published Adhan Clock release automatically and installs new
 application versions outside prayer and audio-playback windows. The dashboard
 shows the installed version and also provides a manual update check.
 
-The manual erase_flash command removes saved settings and uploaded adhan audio.
-The bundled firmware starts without an adhan MP3; upload one from the device dashboard
-or insert a FAT32 microSD card containing /adhan.mp3 for one-time import.
-The original Eid takbeer recording is included and installs into internal storage
-automatically; it can be replaced independently from the same dashboard.
+The manual erase_flash command removes saved settings and uploaded audio.
+If the internal adhan recording is missing after setup, the clock downloads the
+published default adhan MP3 automatically when Wi-Fi is available. The browser
+installer's "Install default recordings" option and the manual storage.bin flash
+install both bundled audio files immediately over USB. A FAT32 microSD card
+containing /adhan.mp3 or /takbeer.mp3 can still be used for one-time import.
+Both recordings can be replaced independently from the device dashboard.

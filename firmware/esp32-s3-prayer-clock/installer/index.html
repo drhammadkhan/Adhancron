@@ -190,7 +190,7 @@
       <ol>
         <li>Use <strong>Google Chrome or Microsoft Edge</strong> on a Windows, macOS, or Linux computer. Phones, tablets, Firefox, and Safari cannot use this installer.</li>
         <li>Connect the clock directly to the computer with a USB data cable and close any serial-monitor application.</li>
-        <li>Choose <strong>Install firmware</strong>, select the ESP32-S3 serial device, and confirm the installation.</li>
+        <li>Choose <strong>Install firmware</strong>, select the ESP32-S3 serial device, choose the install type, and confirm the installation.</li>
         <li>Keep the cable connected until installation reaches 100% and the clock restarts.</li>
       </ol>
 
@@ -201,7 +201,8 @@
           <span slot="not-allowed" class="unsupported">Browser access to the serial device was blocked. Reload the page and allow access when prompted.</span>
         </esp-web-install-button>
       </div>
-      <p><strong>Important:</strong> a normal installation preserves saved Wi-Fi, location, settings, and adhan audio. Choosing a full-device erase removes them.</p>
+      <p><strong>Preserve settings and recordings</strong> updates the firmware without touching saved Wi-Fi, location, settings, or uploaded MP3s.</p>
+      <p><strong>Install default recordings</strong> also writes the default adhan and Eid takbeer into internal storage. Use it for a new clock, recovery, or a device missing its audio files. It replaces existing recordings but keeps Wi-Fi and settings unless you choose a full-device erase.</p>
     </section>
 
     <section>
@@ -212,15 +213,17 @@
         <li>After the clock reconnects, open the IP address shown at the bottom of its display.</li>
         <li>Save the location, playback output, volume, enabled prayers, and adhan MP3.</li>
       </ol>
-      <p>After this installation, the clock checks for verified firmware updates over Wi-Fi and installs them automatically outside prayer and playback windows. USB is only needed again for recovery or a future storage-layout change.</p>
+      <p>After this installation, the clock checks for verified firmware updates over Wi-Fi and installs them automatically outside prayer and playback windows. USB is only needed again for recovery, restoring the bundled recordings, or a future storage-layout change.</p>
     </section>
 
     <section>
       <h2>Manual recovery</h2>
-      <p>Download the merged image when browser flashing is unavailable. It must be written at offset <code>0x0</code> with esptool.</p>
+      <p>Download the merged image when browser flashing is unavailable. It must be written at offset <code>0x0</code> with esptool. The storage image is optional and restores the bundled adhan and takbeer recordings.</p>
       <div class="downloads">
         <a href="firmware/adhan-clock-esp32-s3.bin" download>Download firmware</a>
         <a href="firmware/adhan-clock-esp32-s3.bin.sha256" download>Download checksum</a>
+        <a href="firmware/storage.bin" download>Download default recordings</a>
+        <a href="firmware/storage.bin.sha256" download>Download recordings checksum</a>
         <a href="FLASHING.txt" download>Manual flashing guide</a>
       </div>
     </section>

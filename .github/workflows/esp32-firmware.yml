@@ -38,18 +38,28 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          source /opt/esp/idf/export.sh
           package="firmware/esp32-s3-prayer-clock/package"
           site="firmware/esp32-s3-prayer-clock/site"
+          storage_root="$(mktemp -d)"
           version="${GITHUB_SHA::7}"
-          mkdir -p "$package" "$site/firmware"
+          mkdir -p "$package" "$site/firmware" "$storage_root"
           cp firmware/esp32-s3-prayer-clock/build/adhan-clock-esp32-s3.bin "$package/"
           cp firmware/esp32-s3-prayer-clock/build/adhancron_prayer_clock.bin "$package/adhan-clock-esp32-s3-ota.bin"
           cp firmware/esp32-s3-prayer-clock/build/bootloader/bootloader.bin "$package/"
           cp firmware/esp32-s3-prayer-clock/build/partition_table/partition-table.bin "$package/"
           cp firmware/esp32-s3-prayer-clock/build/ota_data_initial.bin "$package/ota-data-initial.bin"
+          cp adhan_final.mp3 "$storage_root/adhan.mp3"
+          cp firmware/esp32-s3-prayer-clock/main/eid_takbeer.mp3 "$storage_root/takbeer.mp3"
+          python /opt/esp/idf/components/fatfs/wl_fatfsgen.py "$storage_root" \
+            --partition_size 0x800000 \
+            --output_file "$package/storage.bin" \
+            --sector_size 4096 \
+            --use_default_datetime
           cp firmware/esp32-s3-prayer-clock/installer/FLASHING.txt "$package/"
           (cd "$package" && sha256sum adhan-clock-esp32-s3.bin > adhan-clock-esp32-s3.bin.sha256)
           (cd "$package" && sha256sum adhan-clock-esp32-s3-ota.bin > adhan-clock-esp32-s3-ota.bin.sha256)
+          (cd "$package" && sha256sum storage.bin > storage.bin.sha256)
           printf '%s\n' "$version" > "$package/version.txt"
           cp firmware/esp32-s3-prayer-clock/installer/index.html "$site/"
           cp firmware/esp32-s3-prayer-clock/installer/manifest.json "$site/"
@@ -59,6 +69,8 @@ jobs:
           cp "$package/adhan-clock-esp32-s3.bin.sha256" "$site/firmware/"
           cp "$package/adhan-clock-esp32-s3-ota.bin" "$site/firmware/"
           cp "$package/adhan-clock-esp32-s3-ota.bin.sha256" "$site/firmware/"
+          cp "$package/storage.bin" "$site/firmware/"
+          cp "$package/storage.bin.sha256" "$site/firmware/"
           cp adhan_final.mp3 "$site/firmware/default-adhan.mp3"
           cp adhan_final.mp3 "$package/default-adhan.mp3"
           (cd "$package" && sha256sum default-adhan.mp3 > default-adhan.mp3.sha256)

@@ -130,14 +130,19 @@ Use a Windows, macOS, or Linux computer with Google Chrome or Microsoft Edge:
 1. Open [Install Adhan Clock](https://drhammadkhan.github.io/Adhancron/).
 2. Confirm that the board is the LCDWIKI ES3N28P with 16 MB flash and 8 MB PSRAM.
 3. Connect it directly with a USB data cable.
-4. Select **Install firmware**, choose the ESP32-S3 serial device, and wait for installation to reach 100%.
+4. Select **Install firmware**, choose the ESP32-S3 serial device, choose the install type, and wait for installation to reach 100%.
 5. Continue with [First Setup](#first-setup).
 
 Phones, tablets, Firefox, and Safari cannot perform the browser installation.
-A normal installation preserves saved Wi-Fi, location, settings, and adhan
-audio by writing only the bootloader, partition table, OTA bookkeeping, and
-application regions. A full-device erase removes them. If the serial device is
-not listed, hold BOOT, tap RESET, release RESET, then release BOOT and retry.
+A normal **Preserve settings and recordings** installation keeps saved Wi-Fi,
+location, settings, and uploaded audio by writing only the bootloader,
+partition table, OTA bookkeeping, and application regions. **Install default
+recordings** also writes the bundled adhan and Eid takbeer MP3s into the
+internal 8 MB storage partition, which is useful for a new clock, recovery, or
+a device that is missing audio. That option replaces existing recordings but
+does not erase Wi-Fi or settings unless you separately choose a full-device
+erase. If the serial device is not listed, hold BOOT, tap RESET, release RESET,
+then release BOOT and retry.
 
 The installer also provides the merged firmware image, SHA-256 checksum, and a
 manual esptool guide. GitHub Actions rebuilds all of these from source whenever
@@ -197,13 +202,15 @@ setup network.
 The dashboard stores the adhan and Eid takbeer MP3s independently in the
 device's dedicated 8 MB internal flash partition. They are used for manual
 tests, scheduled playback, and the `/audio/adhan.mp3` and
-`/audio/takbeer.mp3` endpoints. The bundled takbeer is installed automatically
-when that slot is empty. If the adhan slot is empty after setup or an OTA
-update, the clock downloads the published default adhan MP3 and installs it
-without replacing a user-uploaded recording. A microSD card is optional: when
-either internal file is missing, the firmware imports `/sdcard/adhan.mp3` or
-`/sdcard/takbeer.mp3` from an inserted FAT32 card and keeps the card's copy as
-a backup. The card can be removed after import.
+`/audio/takbeer.mp3` endpoints. The USB browser installer can seed both
+recordings directly into this partition with **Install default recordings**.
+For OTA or preserve-storage installs, the bundled takbeer is installed
+automatically when that slot is empty. If the adhan slot is empty after setup
+or an OTA update, the clock downloads the published default adhan MP3 and
+installs it without replacing a user-uploaded recording. A microSD card is
+optional: when either internal file is missing, the firmware imports
+`/sdcard/adhan.mp3` or `/sdcard/takbeer.mp3` from an inserted FAT32 card and
+keeps the card's copy as a backup. The card can be removed after import.
 
 Hold BOOT for three seconds during startup to clear saved setup. If home Wi-Fi
 cannot be reached for 20 seconds, the recovery setup network is enabled without
