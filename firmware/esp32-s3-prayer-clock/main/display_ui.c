@@ -539,9 +539,14 @@ void display_ui_update(
         return;
     }
     if (!current_settings->location_configured) {
-        char address[64];
-        snprintf(address, sizeof(address), "Open %s.local in a browser",
-            current_settings->device_hostname);
+        char address[96];
+        if (device_address != NULL && device_address[0] != '\0') {
+            snprintf(address, sizeof(address), "Open %s.local or %s",
+                current_settings->device_hostname, device_address);
+        } else {
+            snprintf(address, sizeof(address), "Open %s.local in a browser",
+                current_settings->device_hostname);
+        }
         show_message("Set your location", address, COLOR_GOLD);
         lvgl_port_unlock();
         return;
