@@ -198,10 +198,12 @@ The dashboard stores the adhan and Eid takbeer MP3s independently in the
 device's dedicated 8 MB internal flash partition. They are used for manual
 tests, scheduled playback, and the `/audio/adhan.mp3` and
 `/audio/takbeer.mp3` endpoints. The bundled takbeer is installed automatically
-when that slot is empty. A microSD card is optional: when either internal file
-is missing, the firmware imports `/sdcard/adhan.mp3` or `/sdcard/takbeer.mp3`
-from an inserted FAT32 card and keeps the card's copy as a backup. The card can
-be removed after import.
+when that slot is empty. If the adhan slot is empty after setup or an OTA
+update, the clock downloads the published default adhan MP3 and installs it
+without replacing a user-uploaded recording. A microSD card is optional: when
+either internal file is missing, the firmware imports `/sdcard/adhan.mp3` or
+`/sdcard/takbeer.mp3` from an inserted FAT32 card and keeps the card's copy as
+a backup. The card can be removed after import.
 
 Hold BOOT for three seconds during startup to clear saved setup. If home Wi-Fi
 cannot be reached for 20 seconds, the recovery setup network is enabled without

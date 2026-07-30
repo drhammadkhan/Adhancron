@@ -10,10 +10,12 @@
 #include "driver/i2s_std.h"
 #include "driver/sdmmc_host.h"
 #include "driver/spi_master.h"
+#include "esp_crt_bundle.h"
 #include "esp_err.h"
 #include "esp_codec_dev.h"
 #include "esp_codec_dev_defaults.h"
 #include "esp_event.h"
+#include "esp_http_client.h"
 #include "esp_heap_caps.h"
 #include "esp_lcd_ili9341.h"
 #include "esp_lcd_panel_io.h"
@@ -43,6 +45,9 @@
 #include "prayer_times.h"
 #include "settings.h"
 #include "web_server.h"
+
+#define DEFAULT_ADHAN_URL "https://drhammadkhan.github.io/Adhancron/firmware/default-adhan.mp3"
+#define DEFAULT_AUDIO_MAX_BYTES (7 * 1024 * 1024)
 
 static const char *TAG = "adhancron_hw";
 
@@ -637,6 +642,109 @@ static bool copy_audio_file(
     return true;
 }
 
+static bool download_default_adhan(void) {
+    if (!storage_mounted || adhan_audio_available || file_exists(ADHAN_AUDIO_PATH)) {
+        adhan_audio_available = file_exists(ADHAN_AUDIO_PATH);
+        return adhan_audio_available;
+    }
+
+    ESP_LOGI(TAG, "Downloading default adhan MP3");
+    remove(ADHAN_UPLOAD_PATH);
+    FILE *destination = fopen(ADHAN_UPLOAD_PATH, "wb");
+    if (destination == NULL) {
+        ESP_LOGE(TAG, "Could not create default adhan destination");
+        return false;
+    }
+
+    const esp_http_client_config_t config = {
+        .url = DEFAULT_ADHAN_URL,
+        .crt_bundle_attach = esp_crt_bundle_attach,
+        .timeout_ms = 20000,
+        .buffer_size = 4096,
+        .keep_alive_enable = true,
+    };
+    esp_http_client_handle_t client = esp_http_client_init(&config);
+    if (client == NULL) {
+        fclose(destination);
+        remove(ADHAN_UPLOAD_PATH);
+        return false;
+    }
+
+    bool success = false;
+    int64_t written_total = 0;
+    uint8_t *buffer = malloc(16 * 1024);
+    if (buffer == NULL) {
+        goto cleanup;
+    }
+
+    if (esp_http_client_open(client, 0) != ESP_OK) {
+        ESP_LOGE(TAG, "Could not open default adhan download");
+        goto cleanup;
+    }
+    const int64_t content_length = esp_http_client_fetch_headers(client);
+    const int status = esp_http_client_get_status_code(client);
+    if (status != 200 || content_length <= 0 ||
+            content_length > DEFAULT_AUDIO_MAX_BYTES) {
+        ESP_LOGE(TAG, "Default adhan download rejected (HTTP %d, length %lld)",
+            status, (long long)content_length);
+        esp_http_client_close(client);
+        goto cleanup;
+    }
+
+    while (written_total < content_length) {
+        const int remaining = content_length - written_total > 16 * 1024
+            ? 16 * 1024 : (int)(content_length - written_total);
+        const int read = esp_http_client_read(
+            client, (char *)buffer, remaining);
+        if (read <= 0) {
+            ESP_LOGE(TAG, "Default adhan download stopped after %lld of %lld bytes",
+                (long long)written_total, (long long)content_length);
+            break;
+        }
+        if (fwrite(buffer, 1, (size_t)read, destination) != (size_t)read) {
+            ESP_LOGE(TAG, "Could not write default adhan to internal storage");
+            break;
+        }
+        written_total += read;
+    }
+    esp_http_client_close(client);
+    success = written_total == content_length;
+
+cleanup:
+    free(buffer);
+    esp_http_client_cleanup(client);
+    if (fclose(destination) != 0) {
+        success = false;
+    }
+    if (!success) {
+        remove(ADHAN_UPLOAD_PATH);
+        return false;
+    }
+    if (file_exists(ADHAN_AUDIO_PATH)) {
+        remove(ADHAN_UPLOAD_PATH);
+        adhan_audio_available = true;
+        return true;
+    }
+    if (rename(ADHAN_UPLOAD_PATH, ADHAN_AUDIO_PATH) != 0) {
+        remove(ADHAN_UPLOAD_PATH);
+        ESP_LOGE(TAG, "Could not install default adhan MP3");
+        return false;
+    }
+    adhan_audio_available = true;
+    ESP_LOGI(TAG, "Installed default %lld-byte adhan MP3",
+        (long long)written_total);
+    return true;
+}
+
+static void default_adhan_seed_task(void *unused) {
+    for (int attempt = 0; attempt < 40; attempt++) {
+        if (storage_mounted && adhan_audio_available) break;
+        if (storage_mounted && wifi_connected && download_default_adhan()) break;
+        vTaskDelay(pdMS_TO_TICKS(15000));
+    }
+    vTaskDelete(NULL);
+}
+
 static bool install_bundled_takbeer(void) {
     const size_t length = (size_t)(bundled_takbeer_end - bundled_takbeer_start);
     if (length == 0) return false;
@@ -903,6 +1011,9 @@ void app_main(void) {
         xTaskCreate(sd_retry_task, "sd_retry", 4096, NULL, 2, NULL);
     }
     probe_wifi();
+    if (storage_mounted && !adhan_audio_available) {
+        xTaskCreate(default_adhan_seed_task, "default_adhan", 8192, NULL, 2, NULL);
+    }
     xTaskCreate(prayer_scheduler_task, "prayer_scheduler", 8192, NULL, 4, NULL);
     xTaskCreate(display_task, "display", 4096, NULL, 3, NULL);
     firmware_update_start(

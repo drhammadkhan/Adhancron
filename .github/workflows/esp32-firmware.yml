@@ -59,6 +59,10 @@ jobs:
           cp "$package/adhan-clock-esp32-s3.bin.sha256" "$site/firmware/"
           cp "$package/adhan-clock-esp32-s3-ota.bin" "$site/firmware/"
           cp "$package/adhan-clock-esp32-s3-ota.bin.sha256" "$site/firmware/"
+          cp adhan_final.mp3 "$site/firmware/default-adhan.mp3"
+          cp adhan_final.mp3 "$package/default-adhan.mp3"
+          (cd "$package" && sha256sum default-adhan.mp3 > default-adhan.mp3.sha256)
+          cp "$package/default-adhan.mp3.sha256" "$site/firmware/"
           cp "$package/bootloader.bin" "$site/firmware/"
           cp "$package/partition-table.bin" "$site/firmware/"
           cp "$package/ota-data-initial.bin" "$site/firmware/"
