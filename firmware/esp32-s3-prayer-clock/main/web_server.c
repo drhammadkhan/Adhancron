@@ -259,6 +259,9 @@ static esp_err_t settings_handler(httpd_req_t *request) {
         get_value(body, "display_style", value, sizeof(value));
         current_settings->display_style = strcmp(value, "focus") == 0
             ? ADHAN_DISPLAY_FOCUS : ADHAN_DISPLAY_DETAILED;
+        get_value(body, "web_ui_style", value, sizeof(value));
+        current_settings->web_ui_style = strcmp(value, "alternative") == 0
+            ? ADHAN_WEB_UI_ALTERNATIVE : ADHAN_WEB_UI_STANDARD;
         strlcpy(current_settings->device_hostname, device_hostname,
             sizeof(current_settings->device_hostname));
         strlcpy(current_settings->ramadan_start_date, ramadan_start,
@@ -357,7 +360,8 @@ static esp_err_t status_handler(httpd_req_t *request) {
     format_minutes(current_settings->eid_takbeer_start_minute, eid_start);
     format_minutes(current_settings->eid_takbeer_end_minute, eid_end);
     written = snprintf(json + length, sizeof(json) - length,
-        ",\"playback_output\":\"%s\",\"display_style\":\"%s\",\"volume\":%d,"
+        ",\"playback_output\":\"%s\",\"display_style\":\"%s\","
+        "\"web_ui_style\":\"%s\",\"volume\":%d,"
         "\"automatic_updates\":%s,"
         "\"enabled_fajr\":%s,\"enabled_dhuhr\":%s,"
         "\"enabled_asr\":%s,\"enabled_maghrib\":%s,\"enabled_isha\":%s,"
@@ -368,6 +372,8 @@ static esp_err_t status_handler(httpd_req_t *request) {
         playback_output,
         current_settings->display_style == ADHAN_DISPLAY_FOCUS
             ? "focus" : "detailed",
+        current_settings->web_ui_style == ADHAN_WEB_UI_ALTERNATIVE
+            ? "alternative" : "standard",
         current_settings->volume,
         current_settings->automatic_updates ? "true" : "false",
         current_settings->enabled[0] ? "true" : "false",

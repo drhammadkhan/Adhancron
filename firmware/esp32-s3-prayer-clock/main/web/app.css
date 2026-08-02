@@ -255,6 +255,27 @@ output { float: right; color: var(--green-2); font-variant-numeric: tabular-nums
 .save-dock.error { background: var(--danger); }
 footer { min-height: 62px; padding: 18px 22px; display: flex; justify-content: center; gap: 14px; color: var(--ink-soft); background: #e9ece7; font-size: .78rem; }
 
+body[data-ui-style="alternative"] {
+  --paper: #f7f3ea;
+  --surface: #fffdf8;
+  --line: #d9d8cf;
+  background-image:
+    linear-gradient(90deg, rgba(23, 43, 45, .04) 1px, transparent 1px),
+    linear-gradient(rgba(23, 43, 45, .04) 1px, transparent 1px);
+  background-size: 28px 28px;
+}
+body[data-ui-style="alternative"] .site-header {
+  background: linear-gradient(135deg, #102f2b, #174d43);
+}
+body[data-ui-style="alternative"] .next-prayer {
+  border-left-color: #e2b45e;
+  box-shadow: 0 18px 45px rgba(20, 48, 44, .14);
+}
+body[data-ui-style="alternative"] .settings-panel,
+body[data-ui-style="alternative"] .prayer-grid {
+  box-shadow: 0 10px 28px rgba(20, 48, 44, .08);
+}
+
 .setup-body { min-height: 100vh; background: var(--green); }
 .setup-shell { width: min(560px, 100%); margin: auto; padding: 42px 20px 70px; color: white; }
 .setup-brand { display: flex; align-items: center; gap: 12px; margin-bottom: 42px; }

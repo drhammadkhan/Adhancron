@@ -15,6 +15,11 @@ typedef enum {
     ADHAN_DISPLAY_FOCUS = 1,
 } adhan_display_style_t;
 
+typedef enum {
+    ADHAN_WEB_UI_STANDARD = 0,
+    ADHAN_WEB_UI_ALTERNATIVE = 1,
+} adhan_web_ui_style_t;
+
 typedef struct {
     char wifi_ssid[33];
     char wifi_password[65];
@@ -41,6 +46,7 @@ typedef struct {
     int eid_takbeer_end_minute;
     int eid_takbeer_interval_minutes;
     adhan_display_style_t display_style;
+    adhan_web_ui_style_t web_ui_style;
     char device_hostname[33];
     bool prayer_override_enabled[5];
     int prayer_override_minutes[5];

@@ -132,6 +132,7 @@ function populatePrayerOverrides(status, setValues) {
 }
 
 function populateSettings(status) {
+  document.body.dataset.uiStyle = status.web_ui_style === 'alternative' ? 'alternative' : 'standard';
   savedCastId = status.cast_device_id || '';
   savedCastName = status.cast_device_name || '';
   savedCastHost = status.cast_device_host || '';
@@ -143,6 +144,8 @@ function populateSettings(status) {
   if (output) output.checked = true;
   const displayStyle = document.querySelector(`[name="display_style"][value="${status.display_style || 'detailed'}"]`);
   if (displayStyle) displayStyle.checked = true;
+  const webUiStyle = document.querySelector(`[name="web_ui_style"][value="${status.web_ui_style || 'standard'}"]`);
+  if (webUiStyle) webUiStyle.checked = true;
   const volume = byId('volume');
   if (volume) {
     volume.value = status.volume ?? 80;
@@ -490,6 +493,12 @@ async function useCoordinates() {
 
 function initDashboard() {
   document.querySelectorAll('[name="output"]').forEach(input => input.addEventListener('change', outputChanged));
+  document.querySelectorAll('[name="web_ui_style"]').forEach(input => {
+    input.addEventListener('change', event => {
+      document.body.dataset.uiStyle = event.target.value === 'alternative'
+        ? 'alternative' : 'standard';
+    });
+  });
   byId('cast-device').addEventListener('change', () => selectedName(byId('cast-device'), byId('cast-name')));
   byId('dlna-device').addEventListener('change', () => selectedName(byId('dlna-device'), byId('dlna-name')));
   byId('scan-cast').addEventListener('click', scanCastDevices);
