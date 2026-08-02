@@ -27,7 +27,7 @@
 // DSDOUT, the opposite direction used for the on-board microphone.
 #define BOARD_I2S_DOUT_GPIO 8
 #define BOARD_I2S_LRCK_GPIO 7
-#define BOARD_I2S_DIN_GPIO 8
+#define BOARD_I2S_DIN_GPIO 6
 
 // The audio codec shares the board I2C bus. Its common address is 0x18.
 #define BOARD_I2C_SDA_GPIO 16

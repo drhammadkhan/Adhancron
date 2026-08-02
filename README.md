@@ -64,6 +64,8 @@ It provides:
 
 It runs independently from the Docker and desktop editions and needs no home server or Home Assistant. See [firmware/esp32-s3-prayer-clock/README.md](firmware/esp32-s3-prayer-clock/README.md) for hardware, setup, build, and recovery details.
 
+An experimental sibling build at [firmware/esp32-s3-prayer-clock-voice](firmware/esp32-s3-prayer-clock-voice) adds offline ESP-SR voice commands for `next prayer` and `play adhan`. It is USB-first and separate from the normal OTA firmware while the microphone path and recognition accuracy are being tested.
+
 To put the firmware on a supported board without installing developer tools, open the [Adhan Clock browser installer](https://drhammadkhan.github.io/Adhancron/) in Chrome or Edge on a computer and connect the board over USB. The installer offers a normal firmware update that preserves settings and recordings, plus a factory/recovery option that also installs the bundled adhan and Eid takbeer audio files into internal storage.
 
 That USB installation enables safe over-the-air updates. Afterwards the clock checks the published release over Wi-Fi, installs verified application updates outside prayer and playback windows, and rolls back automatically if an updated application cannot complete startup.

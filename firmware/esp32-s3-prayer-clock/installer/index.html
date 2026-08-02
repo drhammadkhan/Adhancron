@@ -112,7 +112,7 @@
 
     .installer {
       display: grid;
-      grid-template-columns: repeat(2, minmax(0, 1fr));
+      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
       gap: 16px;
       margin-top: 20px;
     }
@@ -232,9 +232,19 @@
             <span slot="not-allowed" class="unsupported">Browser access to the serial device was blocked. Reload the page and allow access when prompted.</span>
           </esp-web-install-button>
         </div>
+        <div class="install-option">
+          <h3>Experimental voice commands</h3>
+          <p>USB install for offline commands: next prayer and play adhan. Includes the speech model and bundled recordings.</p>
+          <esp-web-install-button manifest="manifest-voice.json">
+            <button slot="activate" type="button">Install voice firmware</button>
+            <span slot="unsupported" class="unsupported">Open this page in Chrome or Edge on a computer with Web Serial support.</span>
+            <span slot="not-allowed" class="unsupported">Browser access to the serial device was blocked. Reload the page and allow access when prompted.</span>
+          </esp-web-install-button>
+        </div>
       </div>
       <p><strong>Preserve settings and recordings</strong> updates the firmware without touching saved Wi-Fi, location, settings, or uploaded MP3s.</p>
       <p><strong>Install default recordings</strong> also writes the default adhan and Eid takbeer into internal storage. Use it for a new clock, recovery, or a device missing its audio files. It replaces existing recordings but keeps Wi-Fi and settings unless you choose a full-device erase.</p>
+      <p><strong>Experimental voice commands</strong> installs a different partition layout with an ESP-SR model partition, so use it only when testing the microphone command build. It is USB-first and not the normal OTA firmware.</p>
     </section>
 
     <section>
@@ -256,6 +266,8 @@
         <a href="firmware/adhan-clock-esp32-s3.bin.sha256" download>Download checksum</a>
         <a href="firmware/storage.bin" download>Download default recordings</a>
         <a href="firmware/storage.bin.sha256" download>Download recordings checksum</a>
+        <a href="firmware/adhan-clock-esp32-s3-voice.bin" download>Download voice firmware</a>
+        <a href="firmware/adhan-clock-esp32-s3-voice.bin.sha256" download>Download voice checksum</a>
         <a href="FLASHING.txt" download>Manual flashing guide</a>
       </div>
     </section>

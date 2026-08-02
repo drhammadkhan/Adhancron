@@ -10,6 +10,13 @@ it calculates and schedules prayer times, stores and serves its own MP3, drives
 the screen and attached speaker, and can control Google Cast or Sonos/DLNA directly. It does
 not require Docker, Home Assistant, or another computer after setup.
 
+An experimental voice-command sibling build lives in
+[`../esp32-s3-prayer-clock-voice`](../esp32-s3-prayer-clock-voice). It keeps the
+same clock functionality but adds offline ESP-SR recognition for `next prayer`
+and `play adhan`. It uses a different USB-first partition table with a speech
+model partition, so the standard firmware remains the recommended build for
+normal OTA updates.
+
 ## Functionality
 
 - First-boot Wi-Fi setup network and browser onboarding.

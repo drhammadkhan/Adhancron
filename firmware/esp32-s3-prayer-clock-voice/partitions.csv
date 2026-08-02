@@ -1,0 +1,9 @@
+# Espressif ESP32-S3 Partition Table
+# Voice firmware is USB-first for now: one larger app, saved audio storage, and
+# an ESP-SR model partition. The standard firmware keeps OTA slots.
+# Name,   Type, SubType, Offset,   Size
+nvs,      data, nvs,     0x9000,   0x6000
+phy_init, data, phy,     0xf000,   0x1000
+factory,  app,  factory, 0x10000,  0x500000
+storage,  data, fat,             , 0x500000
+model,    data, spiffs,          , 0x510000

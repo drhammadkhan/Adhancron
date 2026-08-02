@@ -8,6 +8,7 @@ on:
     paths:
       - ".github/workflows/esp32-firmware.yml"
       - "firmware/esp32-s3-prayer-clock/**"
+      - "firmware/esp32-s3-prayer-clock-voice/**"
 
 permissions:
   contents: read
@@ -25,7 +26,7 @@ jobs:
       - name: Check out repository
         uses: actions/checkout@v4
 
-      - name: Build and merge firmware
+      - name: Build and merge standard firmware
         working-directory: firmware/esp32-s3-prayer-clock
         shell: bash
         run: |
@@ -33,6 +34,15 @@ jobs:
           export ADHAN_FIRMWARE_VERSION="${GITHUB_SHA::7}"
           idf.py build
           idf.py merge-bin -o adhan-clock-esp32-s3.bin -f raw
+
+      - name: Build and merge experimental voice firmware
+        working-directory: firmware/esp32-s3-prayer-clock-voice
+        shell: bash
+        run: |
+          source /opt/esp/idf/export.sh
+          export ADHAN_FIRMWARE_VERSION="${GITHUB_SHA::7}-voice"
+          idf.py build
+          idf.py merge-bin -o adhan-clock-esp32-s3-voice.bin -f raw
 
       - name: Prepare downloads and installer
         shell: bash
@@ -42,47 +52,76 @@ jobs:
           package="firmware/esp32-s3-prayer-clock/package"
           site="firmware/esp32-s3-prayer-clock/site"
           storage_root="$(mktemp -d)"
+          voice_storage_root="$(mktemp -d)"
           version="${GITHUB_SHA::7}"
-          mkdir -p "$package" "$site/firmware" "$storage_root"
+          mkdir -p "$package" "$site/firmware" "$storage_root" "$voice_storage_root"
           cp firmware/esp32-s3-prayer-clock/build/adhan-clock-esp32-s3.bin "$package/"
           cp firmware/esp32-s3-prayer-clock/build/adhancron_prayer_clock.bin "$package/adhan-clock-esp32-s3-ota.bin"
           cp firmware/esp32-s3-prayer-clock/build/bootloader/bootloader.bin "$package/"
           cp firmware/esp32-s3-prayer-clock/build/partition_table/partition-table.bin "$package/"
           cp firmware/esp32-s3-prayer-clock/build/ota_data_initial.bin "$package/ota-data-initial.bin"
+          cp firmware/esp32-s3-prayer-clock-voice/build/adhan-clock-esp32-s3-voice.bin "$package/"
+          cp firmware/esp32-s3-prayer-clock-voice/build/adhancron_prayer_clock_voice.bin "$package/adhan-clock-esp32-s3-voice-app.bin"
+          cp firmware/esp32-s3-prayer-clock-voice/build/bootloader/bootloader.bin "$package/voice-bootloader.bin"
+          cp firmware/esp32-s3-prayer-clock-voice/build/partition_table/partition-table.bin "$package/voice-partition-table.bin"
+          cp firmware/esp32-s3-prayer-clock-voice/build/srmodels/srmodels.bin "$package/voice-srmodels.bin"
           cp adhan_final.mp3 "$storage_root/adhan.mp3"
           cp firmware/esp32-s3-prayer-clock/main/eid_takbeer.mp3 "$storage_root/takbeer.mp3"
+          cp adhan_final.mp3 "$voice_storage_root/adhan.mp3"
+          cp firmware/esp32-s3-prayer-clock/main/eid_takbeer.mp3 "$voice_storage_root/takbeer.mp3"
           python /opt/esp/idf/components/fatfs/wl_fatfsgen.py "$storage_root" \
             --partition_size 0x800000 \
             --output_file "$package/storage.bin" \
             --sector_size 4096 \
             --use_default_datetime
+          python /opt/esp/idf/components/fatfs/wl_fatfsgen.py "$voice_storage_root" \
+            --partition_size 0x500000 \
+            --output_file "$package/voice-storage.bin" \
+            --sector_size 4096 \
+            --use_default_datetime
           cp firmware/esp32-s3-prayer-clock/installer/FLASHING.txt "$package/"
           (cd "$package" && sha256sum adhan-clock-esp32-s3.bin > adhan-clock-esp32-s3.bin.sha256)
           (cd "$package" && sha256sum adhan-clock-esp32-s3-ota.bin > adhan-clock-esp32-s3-ota.bin.sha256)
+          (cd "$package" && sha256sum adhan-clock-esp32-s3-voice.bin > adhan-clock-esp32-s3-voice.bin.sha256)
+          (cd "$package" && sha256sum adhan-clock-esp32-s3-voice-app.bin > adhan-clock-esp32-s3-voice-app.bin.sha256)
+          (cd "$package" && sha256sum voice-srmodels.bin > voice-srmodels.bin.sha256)
           (cd "$package" && sha256sum storage.bin > storage.bin.sha256)
+          (cd "$package" && sha256sum voice-storage.bin > voice-storage.bin.sha256)
           printf '%s\n' "$version" > "$package/version.txt"
           cp firmware/esp32-s3-prayer-clock/installer/index.html "$site/"
           cp firmware/esp32-s3-prayer-clock/installer/manifest.json "$site/"
           cp firmware/esp32-s3-prayer-clock/installer/manifest-with-recordings.json "$site/"
+          cp firmware/esp32-s3-prayer-clock/installer/manifest-voice.json "$site/"
           cp firmware/esp32-s3-prayer-clock/installer/FLASHING.txt "$site/"
           cp casaos/icon.png "$site/icon.png"
           cp "$package/adhan-clock-esp32-s3.bin" "$site/firmware/"
           cp "$package/adhan-clock-esp32-s3.bin.sha256" "$site/firmware/"
           cp "$package/adhan-clock-esp32-s3-ota.bin" "$site/firmware/"
           cp "$package/adhan-clock-esp32-s3-ota.bin.sha256" "$site/firmware/"
+          cp "$package/adhan-clock-esp32-s3-voice.bin" "$site/firmware/"
+          cp "$package/adhan-clock-esp32-s3-voice.bin.sha256" "$site/firmware/"
+          cp "$package/adhan-clock-esp32-s3-voice-app.bin" "$site/firmware/"
+          cp "$package/adhan-clock-esp32-s3-voice-app.bin.sha256" "$site/firmware/"
           cp "$package/storage.bin" "$site/firmware/"
           cp "$package/storage.bin.sha256" "$site/firmware/"
+          cp "$package/voice-storage.bin" "$site/firmware/"
+          cp "$package/voice-storage.bin.sha256" "$site/firmware/"
+          cp "$package/voice-srmodels.bin" "$site/firmware/"
+          cp "$package/voice-srmodels.bin.sha256" "$site/firmware/"
           cp adhan_final.mp3 "$site/firmware/default-adhan.mp3"
           cp adhan_final.mp3 "$package/default-adhan.mp3"
           (cd "$package" && sha256sum default-adhan.mp3 > default-adhan.mp3.sha256)
           cp "$package/default-adhan.mp3.sha256" "$site/firmware/"
           cp "$package/bootloader.bin" "$site/firmware/"
           cp "$package/partition-table.bin" "$site/firmware/"
+          cp "$package/voice-bootloader.bin" "$site/firmware/"
+          cp "$package/voice-partition-table.bin" "$site/firmware/"
           cp "$package/ota-data-initial.bin" "$site/firmware/"
           cp "$package/version.txt" "$site/firmware/"
           touch "$site/.nojekyll"
           sed -i "s/__VERSION__/$version/g" "$site/manifest.json"
           sed -i "s/__VERSION__/$version/g" "$site/manifest-with-recordings.json"
+          sed -i "s/__VERSION__/$version-voice/g" "$site/manifest-voice.json"
 
       - name: Upload downloadable firmware
         uses: actions/upload-artifact@v4

@@ -45,6 +45,9 @@
 #include "prayer_times.h"
 #include "settings.h"
 #include "web_server.h"
+#ifdef ADHAN_ENABLE_VOICE_COMMANDS
+#include "voice_commands.h"
+#endif
 
 #define DEFAULT_ADHAN_URL "https://drhammadkhan.github.io/Adhancron/firmware/default-adhan.mp3"
 #define DEFAULT_AUDIO_MAX_BYTES (7 * 1024 * 1024)
@@ -54,6 +57,9 @@ static const char *TAG = "adhancron_hw";
 static esp_lcd_panel_handle_t display;
 static i2c_master_bus_handle_t i2c_bus;
 static i2s_chan_handle_t i2s_tx;
+#ifdef ADHAN_ENABLE_VOICE_COMMANDS
+static i2s_chan_handle_t i2s_rx;
+#endif
 static esp_codec_dev_handle_t audio;
 static int audio_sample_rate;
 static bool i2s_output_enabled;
@@ -240,7 +246,11 @@ static void init_audio(void) {
     };
     ESP_ERROR_CHECK(gpio_config(&audio_enable_config));
     const i2s_chan_config_t channel_config = I2S_CHANNEL_DEFAULT_CONFIG(I2S_NUM_0, I2S_ROLE_MASTER);
+#ifdef ADHAN_ENABLE_VOICE_COMMANDS
+    ESP_ERROR_CHECK(i2s_new_channel(&channel_config, &i2s_tx, &i2s_rx));
+#else
     ESP_ERROR_CHECK(i2s_new_channel(&channel_config, &i2s_tx, NULL));
+#endif
     const i2s_std_config_t i2s_config = {
         .clk_cfg = I2S_STD_CLK_DEFAULT_CONFIG(16000),
         .slot_cfg = I2S_STD_PHILIPS_SLOT_DEFAULT_CONFIG(16, I2S_SLOT_MODE_STEREO),
@@ -249,14 +259,27 @@ static void init_audio(void) {
             .bclk = BOARD_I2S_BCLK_GPIO,
             .ws = BOARD_I2S_LRCK_GPIO,
             .dout = BOARD_I2S_DOUT_GPIO,
+#ifdef ADHAN_ENABLE_VOICE_COMMANDS
+            .din = BOARD_I2S_DIN_GPIO,
+#else
             .din = I2S_GPIO_UNUSED,
+#endif
         },
     };
     ESP_ERROR_CHECK(i2s_channel_init_std_mode(i2s_tx, &i2s_config));
     ESP_ERROR_CHECK(i2s_channel_enable(i2s_tx));
+#ifdef ADHAN_ENABLE_VOICE_COMMANDS
+    ESP_ERROR_CHECK(i2s_channel_init_std_mode(i2s_rx, &i2s_config));
+    ESP_ERROR_CHECK(i2s_channel_enable(i2s_rx));
+#endif
     i2s_output_enabled = true;
 
-    audio_codec_i2s_cfg_t codec_i2s_config = {.tx_handle = i2s_tx};
+    audio_codec_i2s_cfg_t codec_i2s_config = {
+#ifdef ADHAN_ENABLE_VOICE_COMMANDS
+        .rx_handle = i2s_rx,
+#endif
+        .tx_handle = i2s_tx,
+    };
     audio_codec_i2c_cfg_t codec_i2c_config = {
         .addr = ES8311_CODEC_DEFAULT_ADDR,
         .bus_handle = i2c_bus,
@@ -265,7 +288,11 @@ static void init_audio(void) {
     const audio_codec_ctrl_if_t *ctrl_if = audio_codec_new_i2c_ctrl(&codec_i2c_config);
     const audio_codec_gpio_if_t *gpio_if = audio_codec_new_gpio();
     es8311_codec_cfg_t es8311_config = {
+#ifdef ADHAN_ENABLE_VOICE_COMMANDS
+        .codec_mode = ESP_CODEC_DEV_WORK_MODE_BOTH,
+#else
         .codec_mode = ESP_CODEC_DEV_WORK_MODE_DAC,
+#endif
         .ctrl_if = ctrl_if,
         .gpio_if = gpio_if,
         .pa_pin = BOARD_AUDIO_ENABLE_GPIO,
@@ -274,12 +301,19 @@ static void init_audio(void) {
     };
     const audio_codec_if_t *codec_if = es8311_codec_new(&es8311_config);
     esp_codec_dev_cfg_t device_config = {
+#ifdef ADHAN_ENABLE_VOICE_COMMANDS
+        .dev_type = ESP_CODEC_DEV_TYPE_IN_OUT,
+#else
         .dev_type = ESP_CODEC_DEV_TYPE_OUT,
+#endif
         .codec_if = codec_if,
         .data_if = data_if,
     };
     audio = esp_codec_dev_new(&device_config);
     ESP_ERROR_CHECK(esp_codec_dev_set_out_vol(audio, 80));
+#ifdef ADHAN_ENABLE_VOICE_COMMANDS
+    ESP_ERROR_CHECK(esp_codec_dev_set_in_gain(audio, 30.0f));
+#endif
     ESP_LOGI(TAG, "Audio path initialised; waiting for playback");
 }
 
@@ -411,7 +445,17 @@ static void play_audio_from_storage(audio_track_t track) {
     if (audio_sample_rate != 0) {
         ESP_ERROR_CHECK(esp_codec_dev_close(audio));
         audio_sample_rate = 0;
+#ifdef ADHAN_ENABLE_VOICE_COMMANDS
+        if (i2s_output_enabled) {
+            ESP_ERROR_CHECK(i2s_channel_disable(i2s_tx));
+        }
+        const i2s_std_clk_config_t voice_clock_config = I2S_STD_CLK_DEFAULT_CONFIG(16000);
+        ESP_ERROR_CHECK(i2s_channel_reconfig_std_clock(i2s_tx, &voice_clock_config));
+        ESP_ERROR_CHECK(i2s_channel_enable(i2s_tx));
+        i2s_output_enabled = true;
+#else
         i2s_output_enabled = false;
+#endif
     }
     ESP_LOGI(TAG, "%s playback finished (%d MP3 frames)",
         audio_track_title(track), decoded_frames);
@@ -511,6 +555,19 @@ static void play_audio(audio_track_t track) {
     play_audio_from_storage(track);
     xSemaphoreGive(playback_mutex);
 }
+
+#ifdef ADHAN_ENABLE_VOICE_COMMANDS
+static void voice_play_adhan(void *context) {
+    (void)context;
+    play_audio(AUDIO_TRACK_ADHAN);
+}
+
+static void voice_show_next_prayer(void *context) {
+    (void)context;
+    settings.display_style = ADHAN_DISPLAY_FOCUS;
+    ESP_LOGI(TAG, "Voice command: showing next prayer focus face");
+}
+#endif
 
 static bool firmware_update_window_safe(void) {
     const time_t now = time(NULL);
@@ -1011,6 +1068,15 @@ void app_main(void) {
         xTaskCreate(sd_retry_task, "sd_retry", 4096, NULL, 2, NULL);
     }
     probe_wifi();
+#ifdef ADHAN_ENABLE_VOICE_COMMANDS
+    const adhan_voice_commands_config_t voice_config = {
+        .rx_channel = i2s_rx,
+        .play_adhan = voice_play_adhan,
+        .show_next_prayer = voice_show_next_prayer,
+        .context = NULL,
+    };
+    ESP_ERROR_CHECK_WITHOUT_ABORT(adhan_voice_commands_start(&voice_config));
+#endif
     if (storage_mounted && !adhan_audio_available) {
         xTaskCreate(default_adhan_seed_task, "default_adhan", 8192, NULL, 2, NULL);
     }

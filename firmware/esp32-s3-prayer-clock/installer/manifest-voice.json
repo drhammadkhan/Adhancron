@@ -1,0 +1,34 @@
+{
+  "name": "Adhan Clock - Experimental voice commands",
+  "version": "__VERSION__",
+  "new_install_prompt_erase": false,
+  "new_install_improv_wait_time": 0,
+  "builds": [
+    {
+      "chipFamily": "ESP32-S3",
+      "improv": false,
+      "parts": [
+        {
+          "path": "firmware/voice-bootloader.bin",
+          "offset": 0
+        },
+        {
+          "path": "firmware/voice-partition-table.bin",
+          "offset": 32768
+        },
+        {
+          "path": "firmware/adhan-clock-esp32-s3-voice-app.bin",
+          "offset": 65536
+        },
+        {
+          "path": "firmware/voice-storage.bin",
+          "offset": 5308416
+        },
+        {
+          "path": "firmware/voice-srmodels.bin",
+          "offset": 10551296
+        }
+      ]
+    }
+  ]
+}

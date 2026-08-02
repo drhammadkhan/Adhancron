@@ -31,6 +31,26 @@ This replaces the internal adhan and takbeer recordings with the bundled
 defaults. It does not erase Wi-Fi, location, or other settings unless you also
 run erase_flash.
 
+Experimental voice-command firmware
+-----------------------------------
+The experimental voice build has a different partition table because it also
+needs an ESP-SR speech model partition. Use the browser installer where
+possible. For manual flashing, write the merged image at offset 0:
+
+   python -m esptool --chip esp32s3 --port YOUR_SERIAL_PORT erase_flash
+   python -m esptool --chip esp32s3 --port YOUR_SERIAL_PORT --baud 460800 write_flash 0x0 adhan-clock-esp32-s3-voice.bin
+
+The merged voice image includes the bootloader, voice partition table,
+application, and ESP-SR model partition. The browser installer also writes a
+voice-storage.bin recordings image at the voice firmware's audio partition
+offset. If you are flashing manually and want the bundled recordings
+immediately, write:
+
+   python -m esptool --chip esp32s3 --port YOUR_SERIAL_PORT --baud 460800 write_flash 0x510000 voice-storage.bin
+
+The voice firmware is USB-first while the microphone command path is being
+tested. Use the standard firmware for normal OTA updates.
+
 On macOS, a port normally looks like /dev/cu.usbmodemXXXX.
 On Windows, it normally looks like COM3 or another COM number.
 
