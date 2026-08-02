@@ -26,4 +26,4 @@ idf_component_register(
     REQUIRES app_update driver esp_adc esp_app_format esp_http_client esp_https_ota esp_lcd esp_lvgl_port lvgl esp_wifi esp_event esp_netif esp_http_server esp-tls esp_timer json fatfs wear_levelling mbedtls nvs_flash sdmmc mdns esp-sr
 )
 
-target_compile_definitions(${COMPONENT_LIB} PRIVATE ADHAN_ENABLE_VOICE_COMMANDS=1)
+target_compile_definitions(${COMPONENT_LIB} PRIVATE ADHAN_VOICE_FIRMWARE=1)

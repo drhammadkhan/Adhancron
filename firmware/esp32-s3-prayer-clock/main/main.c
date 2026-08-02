@@ -569,6 +569,7 @@ static void voice_show_next_prayer(void *context) {
 }
 #endif
 
+#if !defined(ADHAN_ENABLE_VOICE_COMMANDS) && !defined(ADHAN_VOICE_FIRMWARE)
 static bool firmware_update_window_safe(void) {
     const time_t now = time(NULL);
     if (now < playback_guard_until) {
@@ -619,6 +620,7 @@ static bool firmware_update_window_safe(void) {
     }
     return true;
 }
+#endif
 
 static bool file_exists(const char *path) {
     FILE *file = fopen(path, "rb");
@@ -1082,7 +1084,11 @@ void app_main(void) {
     }
     xTaskCreate(prayer_scheduler_task, "prayer_scheduler", 8192, NULL, 4, NULL);
     xTaskCreate(display_task, "display", 4096, NULL, 3, NULL);
+#if defined(ADHAN_ENABLE_VOICE_COMMANDS) || defined(ADHAN_VOICE_FIRMWARE)
+    ESP_LOGI(TAG, "Automatic OTA updates disabled for experimental voice firmware");
+#else
     firmware_update_start(
         &settings, &wifi_connected, playback_mutex, firmware_update_window_safe);
+#endif
     ESP_LOGI(TAG, "Prayer scheduler started. Configure Wi-Fi and location before use.");
 }

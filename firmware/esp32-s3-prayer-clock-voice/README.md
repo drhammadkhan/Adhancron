@@ -2,11 +2,13 @@
 
 This is an experimental sibling firmware for the LCDWIKI ESP32-S3 2.8-inch Adhan Clock.
 
-It keeps the normal clock, prayer-time, web UI, audio, Cast, DLNA, Ramadan and Eid features, then adds local offline voice command recognition through Espressif ESP-SR.
+It keeps the normal clock, prayer-time, web UI, audio, Cast, DLNA, Ramadan and Eid features, and reserves space for local offline voice command recognition through Espressif ESP-SR.
+
+Offline command recognition is currently paused in this build. Early hardware testing showed the ESP-SR MultiNet command path could crash the device after boot, so the published voice image now boots as a safe test layout while the recogniser is stabilised.
 
 ## Voice commands
 
-The first build listens continuously for:
+The intended command set is:
 
 - `next prayer` - switches the screen to the focus clock face.
 - `play adhan` - starts adhan playback using the configured output.

@@ -132,8 +132,6 @@ static void detect_task(void *argument) {
     if (errors != NULL) {
         ESP_LOGW(TAG, "One or more voice commands could not be added");
     }
-    multinet->print_active_speech_commands(model_data);
-
     const int mn_chunksize = multinet->get_samp_chunksize(model_data);
     const int afe_chunksize = afe_handle->get_fetch_chunksize(afe_data);
     ESP_LOGI(TAG, "Voice command recogniser ready: model=%s, mn=%d, afe=%d",
