@@ -27,9 +27,9 @@
     </script>
     <style>
       :root {
-        --ink: #1b2942;
-        --ink-soft: #294661;
-        --stone: #f7f3ea;
+        --ink: #172421;
+        --ink-soft: #3e5752;
+        --stone: #f4f7f5;
         --paper: #fffdf8;
         --line: #d8dfd9;
         --gold: #d7a34e;
@@ -41,23 +41,21 @@
 
       body {
         background-color: var(--stone);
-        background-image: linear-gradient(90deg, rgba(27, 41, 66, .035) 1px, transparent 1px), linear-gradient(rgba(27, 41, 66, .035) 1px, transparent 1px);
-        background-size: 28px 28px;
         font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
       }
 
       .app-shell { max-width: 1180px; }
-      .brand-mark { box-shadow: 0 10px 28px rgba(27, 41, 66, .22); }
+      .brand-mark { box-shadow: 0 10px 28px rgba(23, 36, 33, .14); }
       .eyebrow { color: var(--gold); letter-spacing: .18em; }
-      .surface { background: rgba(255, 253, 248, .9); border: 1px solid var(--line); box-shadow: 0 18px 50px rgba(27, 41, 66, .08); }
-      .hero-shell { background: var(--ink); box-shadow: 0 22px 60px rgba(27, 41, 66, .25); }
+      .surface { background: rgba(255, 255, 255, .95); border: 1px solid var(--line); box-shadow: 0 12px 30px rgba(23, 36, 33, .06); }
+      .hero-shell { background: #fff; border: 1px solid var(--line); box-shadow: 0 14px 34px rgba(23, 36, 33, .08); }
       .hero-copy { position: relative; z-index: 1; }
       .hero-image { background-image: url('/static/icon.jpg'); background-size: cover; background-position: center; min-height: 260px; }
-      .hero-image::after { content: ""; display: block; min-height: 260px; background: rgba(27, 41, 66, .18); }
+      .hero-image::after { content: ""; display: block; min-height: 260px; background: rgba(255, 255, 255, .08); }
       .quiet-label { color: #6b756f; letter-spacing: .14em; }
       .next-panel { background: #155a57; border: 1px solid rgba(245, 223, 175, .5); box-shadow: inset 0 1px 0 rgba(255, 255, 255, .1); }
-      .setup-panel { background: #fff9ef; }
-      .action-bar { border-top: 1px solid rgba(255, 255, 255, .15); }
+      .setup-panel { background: #fff; }
+      .action-bar { border-top: 1px solid rgba(23, 36, 33, .12); }
       .action-bar .btn { min-height: 2.8rem; }
       .settings-panel summary::-webkit-details-marker, .settings-panel summary::marker { display: none; }
       .settings-panel[open] summary { border-bottom: 1px solid var(--line); padding-bottom: 1.1rem; }
@@ -74,8 +72,34 @@
       .annual-panel { background: #e2f0e9; border-color: #b4d5c9; }
       .annual-panel .btn { border-color: var(--leaf); color: var(--leaf); }
       .annual-panel .btn:hover { background: var(--leaf); color: white; }
-      .status-line { background: rgba(255, 253, 248, .8); border-color: var(--line); }
+      .status-line { background: rgba(255, 255, 255, .9); border-color: var(--line); }
       .badge { letter-spacing: .02em; }
+      .hero-title { color: var(--ink); }
+      .hero-description { color: #4d625d; }
+      .hero-secondary-btn { border-color: #c5d0cc; color: var(--ink); }
+      .hero-secondary-btn:hover { border-color: var(--leaf); background: #eef7f3; color: var(--leaf); }
+      .hero-refresh-btn { color: #4d625d; }
+      .hero-refresh-btn:hover { background: #eef7f3; color: var(--leaf); }
+
+      body[data-ui-style="alternative"] {
+        --ink: #1b2942;
+        --ink-soft: #294661;
+        --stone: #f7f3ea;
+        background-image: linear-gradient(90deg, rgba(27, 41, 66, .035) 1px, transparent 1px), linear-gradient(rgba(27, 41, 66, .035) 1px, transparent 1px);
+        background-size: 28px 28px;
+      }
+      body[data-ui-style="alternative"] .surface { background: rgba(255, 253, 248, .9); box-shadow: 0 18px 50px rgba(27, 41, 66, .08); }
+      body[data-ui-style="alternative"] .brand-mark { box-shadow: 0 10px 28px rgba(27, 41, 66, .22); }
+      body[data-ui-style="alternative"] .hero-shell { background: var(--ink); border: 0; box-shadow: 0 22px 60px rgba(27, 41, 66, .25); }
+      body[data-ui-style="alternative"] .hero-image::after { background: rgba(27, 41, 66, .18); }
+      body[data-ui-style="alternative"] .setup-panel { background: #fff9ef; }
+      body[data-ui-style="alternative"] .action-bar { border-top-color: rgba(255, 255, 255, .15); }
+      body[data-ui-style="alternative"] .hero-title { color: white; }
+      body[data-ui-style="alternative"] .hero-description { color: #ecfdf5; }
+      body[data-ui-style="alternative"] .hero-secondary-btn { border-color: rgba(255, 255, 255, .4); color: white; }
+      body[data-ui-style="alternative"] .hero-secondary-btn:hover { border-color: white; background: white; color: var(--ink); }
+      body[data-ui-style="alternative"] .hero-refresh-btn { color: #ecfdf5; }
+      body[data-ui-style="alternative"] .hero-refresh-btn:hover { background: rgba(255, 255, 255, .1); color: #ecfdf5; }
 
       @media (max-width: 640px) {
         .hero-shell, .surface { border-radius: 1.25rem; }
@@ -86,7 +110,7 @@
       }
     </style>
   </head>
-  <body class="min-h-screen text-slate-800">
+  <body class="min-h-screen text-slate-800" data-ui-style="standard">
     <main class="app-shell mx-auto flex min-h-screen flex-col px-4 py-5 sm:px-6 sm:py-8 lg:px-8">
       <header class="mb-5 flex items-center justify-between">
         <a href="/" class="flex items-center gap-3" aria-label="Adhancron dashboard">
@@ -102,13 +126,13 @@
       <section class="hero-shell overflow-hidden rounded-[1.8rem] lg:grid lg:grid-cols-[1.25fr_.75fr]">
         <div class="hero-copy px-6 py-8 sm:px-9 sm:py-10">
           <p id="heroEyebrow" class="eyebrow text-xs font-bold uppercase">Daily prayer times and adhan playback</p>
-          <h1 id="heroTitle" class="mt-4 max-w-xl font-display text-4xl leading-[1.05] text-white sm:text-5xl">Your home prayer schedule.</h1>
-          <p class="mt-4 max-w-xl text-sm leading-6 text-emerald-50 sm:text-base">Adhancron calculates daily prayer times for your location and plays the adhan through your chosen home speaker.</p>
+          <h1 id="heroTitle" class="hero-title mt-4 max-w-xl font-display text-4xl leading-[1.05] sm:text-5xl">Your home prayer schedule.</h1>
+          <p class="hero-description mt-4 max-w-xl text-sm leading-6 sm:text-base">Adhancron calculates daily prayer times for your location and plays the adhan through your chosen home speaker.</p>
           <div class="action-bar mt-7 flex flex-col gap-2 pt-5 sm:flex-row sm:flex-wrap">
             <button id="playBtn" type="button" onclick="handlePlay(event, 'adhan')" class="btn border-0 bg-[var(--gold)] text-[var(--ink)] hover:bg-[#ddb062]">Test Adhan</button>
-            <button id="playTakbeerBtn" type="button" onclick="handlePlay(event, 'takbeer')" class="btn btn-outline border-white/40 bg-transparent text-white hover:border-white hover:bg-white hover:text-[var(--ink)]">Test Eid Takbeer</button>
-            <button id="saveBtn" type="button" class="btn btn-outline border-white/30 bg-transparent text-white hover:border-white hover:bg-white hover:text-[var(--ink)]" disabled>Save Schedule</button>
-            <button id="refreshBtn" type="button" class="btn btn-ghost text-emerald-50 hover:bg-white/10">Refresh</button>
+            <button id="playTakbeerBtn" type="button" onclick="handlePlay(event, 'takbeer')" class="hero-secondary-btn btn btn-outline bg-transparent">Test Eid Takbeer</button>
+            <button id="saveBtn" type="button" class="hero-secondary-btn btn btn-outline bg-transparent" disabled>Save Schedule</button>
+            <button id="refreshBtn" type="button" class="hero-refresh-btn btn btn-ghost">Refresh</button>
           </div>
         </div>
         <div class="hero-image hidden lg:block" role="img" aria-label="Mosque at sunset"></div>
@@ -143,6 +167,15 @@
             <span id="haSettingsBadge" class="badge badge-ghost px-4 py-3 text-xs sm:text-sm">Checking settings...</span>
           </summary>
           <div class="mt-5 flex flex-col gap-5">
+          <label class="form-control max-w-md">
+            <div class="label">
+              <span class="label-text text-sm font-medium">Interface style</span>
+            </div>
+            <select id="uiStyleInput" class="select select-bordered w-full bg-white/80">
+              <option value="standard">Standard - clean and practical</option>
+              <option value="alternative">Alternative - warmer and more visual</option>
+            </select>
+          </label>
           <label class="form-control max-w-md">
             <div class="label">
               <span class="label-text text-sm font-medium">Playback Method</span>
@@ -410,6 +443,6 @@
         return false;
       }
     </script>
-    <script src="static/app.js?v=22"></script>
+    <script src="static/app.js?v=23"></script>
   </body>
 </html>

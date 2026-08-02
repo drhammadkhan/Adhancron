@@ -62,6 +62,7 @@ class SettingsUpdate(BaseModel):
     longitude: str | None = None
     location_name: str | None = None
     display_style: str | None = None
+    ui_style: str | None = None
     local_audio_device: str | None = None
     playback_method: str | None = None
     google_cast_host: str | None = None
@@ -160,6 +161,7 @@ def _settings_response(request: Request | None = None) -> dict:
         "longitude": current.get("longitude") or os.getenv("ADHAN_LONGITUDE", ""),
         "location_name": current.get("location_name", ""),
         "display_style": current.get("display_style", "overview"),
+        "ui_style": current.get("ui_style", "standard"),
         "local_audio_device": current.get("local_audio_device") or os.getenv("ADHAN_ALSA_DEVICE", "default"),
         "attached_playback_available": _attached_playback_available(),
         "timezone": os.getenv("TZ", "UTC"),
@@ -230,6 +232,9 @@ def update_settings(payload: SettingsUpdate, request: Request) -> dict:
     display_style = payload.display_style or current.get("display_style", "overview")
     if display_style not in {"overview", "focus"}:
         raise HTTPException(status_code=400, detail="Display style must be Overview or Focus")
+    ui_style = payload.ui_style or current.get("ui_style", "standard")
+    if ui_style not in {"standard", "alternative"}:
+        raise HTTPException(status_code=400, detail="Interface style must be Standard or Alternative")
     if playback_method == "google_cast":
         cast_host = payload.google_cast_host if payload.google_cast_host is not None else current.get("google_cast_host", "")
         cast_port = payload.google_cast_port if payload.google_cast_port is not None else current.get("google_cast_port", "8009")

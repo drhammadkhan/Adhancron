@@ -14,10 +14,12 @@ class SettingsManagerTests(unittest.TestCase):
             saved = manager.update_settings({
                 "location_name": "Kingston upon Thames",
                 "display_style": "focus",
+                "ui_style": "alternative",
                 "local_audio_device": "default",
             })
         self.assertEqual(saved["location_name"], "Kingston upon Thames")
         self.assertEqual(saved["display_style"], "focus")
+        self.assertEqual(saved["ui_style"], "alternative")
 
     def test_eid_dates_can_be_added_and_cleared_without_losing_other_settings(self):
         with tempfile.TemporaryDirectory() as directory:

@@ -45,6 +45,7 @@ const latitudeInput = document.getElementById("latitudeInput");
 const longitudeInput = document.getElementById("longitudeInput");
 const locationNameInput = document.getElementById("locationNameInput");
 const displayStyleInput = document.getElementById("displayStyleInput");
+const uiStyleInput = document.getElementById("uiStyleInput");
 const locationSearchInput = document.getElementById("locationSearchInput");
 const searchLocationBtn = document.getElementById("searchLocationBtn");
 const locationResults = document.getElementById("locationResults");
@@ -63,6 +64,12 @@ const uploadTakbeerBtn = document.getElementById("uploadTakbeerBtn");
 const heroEyebrow = document.getElementById("heroEyebrow");
 const heroTitle = document.getElementById("heroTitle");
 let airplayPairingSession = "";
+
+function applyUiStyle(style) {
+  const cleanStyle = style === "alternative" ? "alternative" : "standard";
+  document.body.dataset.uiStyle = cleanStyle;
+  if (uiStyleInput) uiStyleInput.value = cleanStyle;
+}
 
 function setStatus(message, type = "ghost") {
   statusBadge.className = `badge badge-${type} px-4 py-3 text-xs sm:text-sm`;
@@ -119,6 +126,7 @@ function renderSettings(settings, overrideMessage = null) {
   if (longitudeInput) longitudeInput.value = settings.longitude || "";
   if (locationNameInput) locationNameInput.value = settings.location_name || "";
   if (displayStyleInput) displayStyleInput.value = settings.display_style || "overview";
+  applyUiStyle(settings.ui_style || "standard");
   if (eidFitrDateInput) eidFitrDateInput.value = settings.eid_fitr_date || "";
   if (eidAdhaDateInput) eidAdhaDateInput.value = settings.eid_adha_date || "";
   if (eidTakbeerStartInput) eidTakbeerStartInput.value = settings.eid_takbeer_start || "07:00";
@@ -372,6 +380,7 @@ async function saveSettings() {
     payload.location_name = locationNameInput ? locationNameInput.value.trim() : "";
   }
   if (displayStyleInput) payload.display_style = displayStyleInput.value;
+  if (uiStyleInput) payload.ui_style = uiStyleInput.value;
   if (haTokenInput.value.trim()) {
     payload.ha_token = haTokenInput.value;
   }
@@ -714,6 +723,10 @@ if (playbackMethodInput) {
       setSettingsStatus("Scan and choose a Sonos or DLNA speaker before testing", "warning");
     }
   });
+}
+
+if (uiStyleInput) {
+  uiStyleInput.addEventListener("change", () => applyUiStyle(uiStyleInput.value));
 }
 if (googleCastDeviceInput) {
   googleCastDeviceInput.addEventListener("change", () => {

@@ -16,6 +16,7 @@ class SettingsManager:
         "longitude",
         "location_name",
         "display_style",
+        "ui_style",
         "local_audio_device",
         "playback_method",
         "google_cast_host",
