@@ -840,8 +840,18 @@ static esp_err_t play_handler(httpd_req_t *request) {
     }
     const audio_track_t track = takbeer
         ? AUDIO_TRACK_EID_TAKBEER : AUDIO_TRACK_ADHAN;
-    xTaskCreate(play_task, takbeer ? "play_takbeer" : "play_adhan",
+#ifdef ADHAN_ENABLE_VOICE_COMMANDS
+    play_audio(track);
+#else
+    const BaseType_t task_result = xTaskCreate(
+        play_task, takbeer ? "play_takbeer" : "play_adhan",
         12288, (void *)(intptr_t)track, 4, NULL);
+    if (task_result != pdPASS) {
+        ESP_LOGE(TAG, "Could not create audio playback task");
+        return httpd_resp_send_err(request, HTTPD_500_INTERNAL_SERVER_ERROR,
+            "Could not start audio playback");
+    }
+#endif
     return httpd_resp_sendstr(request,
         takbeer ? "Eid takbeer playback is starting." :
             "Adhan playback is starting.");

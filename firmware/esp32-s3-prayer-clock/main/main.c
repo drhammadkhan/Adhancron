@@ -26,6 +26,9 @@
 #include "esp_vfs_fat.h"
 #include "esp_wifi.h"
 #include "freertos/FreeRTOS.h"
+#ifdef ADHAN_ENABLE_VOICE_COMMANDS
+#include "freertos/idf_additions.h"
+#endif
 #include "freertos/task.h"
 #include "freertos/semphr.h"
 #include "mp3dec.h"
@@ -63,6 +66,9 @@ static i2s_chan_handle_t i2s_rx;
 static esp_codec_dev_handle_t audio;
 static int audio_sample_rate;
 static bool i2s_output_enabled;
+#ifdef ADHAN_ENABLE_VOICE_COMMANDS
+static bool voice_codec_open;
+#endif
 static bool sd_mounted;
 static bool storage_mounted;
 static wl_handle_t storage_wl_handle = WL_INVALID_HANDLE;
@@ -99,11 +105,29 @@ static void start_setup_access_point(void) {
     ESP_LOGI(TAG, "Setup Wi-Fi ready: Adhancron Setup (password: adhancron), open http://192.168.4.1");
 }
 
+static void schedule_wifi_fallback(void);
+
 static void wifi_fallback_task(void *unused) {
     vTaskDelay(pdMS_TO_TICKS(20000));
+    esp_netif_t *station = esp_netif_get_handle_from_ifkey("WIFI_STA_DEF");
+    esp_netif_ip_info_t ip_info = {0};
+    if (station != NULL && esp_netif_get_ip_info(station, &ip_info) == ESP_OK &&
+            ip_info.ip.addr != 0) {
+        wifi_connected = true;
+    }
     if (!wifi_connected) {
-        ESP_LOGW(TAG, "Home Wi-Fi unavailable; enabling recovery setup network");
-        start_setup_access_point();
+        if (xSemaphoreTake(playback_mutex, 0) == pdTRUE) {
+            ESP_LOGW(TAG, "Home Wi-Fi unavailable; enabling recovery setup network");
+            start_setup_access_point();
+            xSemaphoreGive(playback_mutex);
+        } else {
+            wifi_fallback_pending = false;
+            ESP_LOGI(TAG, "Deferring Wi-Fi recovery until audio playback finishes");
+            vTaskDelay(pdMS_TO_TICKS(10000));
+            schedule_wifi_fallback();
+            vTaskDelete(NULL);
+            return;
+        }
     }
     wifi_fallback_pending = false;
     vTaskDelete(NULL);
@@ -154,6 +178,7 @@ static void current_device_address(char address[16]) {
 }
 
 static void display_task(void *unused) {
+    ESP_LOGI(TAG, "Display refresh task started");
     while (true) {
         char device_address[16];
         battery_status_t battery = {0};
@@ -313,6 +338,14 @@ static void init_audio(void) {
     ESP_ERROR_CHECK(esp_codec_dev_set_out_vol(audio, 80));
 #ifdef ADHAN_ENABLE_VOICE_COMMANDS
     ESP_ERROR_CHECK(esp_codec_dev_set_in_gain(audio, 30.0f));
+    esp_codec_dev_sample_info_t voice_sample_info = {
+        .sample_rate = 16000,
+        .channel = 2,
+        .bits_per_sample = 16,
+    };
+    ESP_ERROR_CHECK(esp_codec_dev_open(audio, &voice_sample_info));
+    voice_codec_open = true;
+    ESP_LOGI(TAG, "Microphone ADC opened at 16000 Hz");
 #endif
     ESP_LOGI(TAG, "Audio path initialised; waiting for playback");
 }
@@ -322,8 +355,16 @@ static void configure_audio_output(int sample_rate) {
         return;
     }
 
-    if (audio_sample_rate != 0) {
+    if (audio_sample_rate != 0
+#ifdef ADHAN_ENABLE_VOICE_COMMANDS
+            || voice_codec_open
+#endif
+            ) {
         ESP_ERROR_CHECK(esp_codec_dev_close(audio));
+        i2s_output_enabled = false;
+#ifdef ADHAN_ENABLE_VOICE_COMMANDS
+        voice_codec_open = false;
+#endif
     }
 
     if (i2s_output_enabled) {
@@ -365,6 +406,12 @@ static void play_audio_from_storage(audio_track_t track) {
         xSemaphoreGive(audio_mutex);
         return;
     }
+#ifdef ADHAN_ENABLE_VOICE_COMMANDS
+    const bool voice_paused = adhan_voice_commands_pause() == ESP_OK;
+    if (!voice_paused) {
+        ESP_LOGW(TAG, "Attached playback continuing without a microphone pause");
+    }
+#endif
 
     const size_t input_capacity = 8192;
     uint8_t *input = heap_caps_malloc(input_capacity, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
@@ -378,6 +425,11 @@ static void play_audio_from_storage(audio_track_t track) {
             MP3FreeDecoder(decoder);
         }
         fclose(file);
+#ifdef ADHAN_ENABLE_VOICE_COMMANDS
+        if (voice_paused) {
+            ESP_ERROR_CHECK_WITHOUT_ABORT(adhan_voice_commands_resume());
+        }
+#endif
         xSemaphoreGive(audio_mutex);
         return;
     }
@@ -445,6 +497,7 @@ static void play_audio_from_storage(audio_track_t track) {
     if (audio_sample_rate != 0) {
         ESP_ERROR_CHECK(esp_codec_dev_close(audio));
         audio_sample_rate = 0;
+        i2s_output_enabled = false;
 #ifdef ADHAN_ENABLE_VOICE_COMMANDS
         if (i2s_output_enabled) {
             ESP_ERROR_CHECK(i2s_channel_disable(i2s_tx));
@@ -453,6 +506,14 @@ static void play_audio_from_storage(audio_track_t track) {
         ESP_ERROR_CHECK(i2s_channel_reconfig_std_clock(i2s_tx, &voice_clock_config));
         ESP_ERROR_CHECK(i2s_channel_enable(i2s_tx));
         i2s_output_enabled = true;
+        esp_codec_dev_sample_info_t voice_sample_info = {
+            .sample_rate = 16000,
+            .channel = 2,
+            .bits_per_sample = 16,
+        };
+        ESP_ERROR_CHECK(esp_codec_dev_open(audio, &voice_sample_info));
+        voice_codec_open = true;
+        ESP_LOGI(TAG, "Microphone ADC restored after playback");
 #else
         i2s_output_enabled = false;
 #endif
@@ -463,6 +524,11 @@ static void play_audio_from_storage(audio_track_t track) {
     free(pcm);
     free(input);
     fclose(file);
+#ifdef ADHAN_ENABLE_VOICE_COMMANDS
+    if (voice_paused) {
+        ESP_ERROR_CHECK_WITHOUT_ABORT(adhan_voice_commands_resume());
+    }
+#endif
     xSemaphoreGive(audio_mutex);
 }
 
@@ -557,9 +623,31 @@ static void play_audio(audio_track_t track) {
 }
 
 #ifdef ADHAN_ENABLE_VOICE_COMMANDS
+static TaskHandle_t voice_playback_task_handle;
+
+static void voice_playback_task(void *context) {
+    (void)context;
+    while (true) {
+        uint32_t notification = 0;
+        xTaskNotifyWait(0, UINT32_MAX, &notification, portMAX_DELAY);
+        if (notification > 0) {
+            play_audio((audio_track_t)(notification - 1));
+        }
+    }
+}
+
+static void voice_request_audio(audio_track_t track) {
+    if (voice_playback_task_handle == NULL ||
+            xTaskNotify(voice_playback_task_handle, (uint32_t)track + 1,
+                eSetValueWithoutOverwrite) != pdPASS) {
+        ESP_LOGW(TAG, "%s playback request ignored because audio is busy",
+            audio_track_title(track));
+    }
+}
+
 static void voice_play_adhan(void *context) {
     (void)context;
-    play_audio(AUDIO_TRACK_ADHAN);
+    voice_request_audio(AUDIO_TRACK_ADHAN);
 }
 
 static void voice_show_next_prayer(void *context) {
@@ -969,7 +1057,11 @@ static void prayer_scheduler_task(void *unused) {
                     if (settings.enabled[index] && fired[index] != prayer_minute && minutes_late >= 0 && minutes_late <= 2) {
                         fired[index] = prayer_minute;
                         ESP_LOGI(TAG, "Scheduled %s adhan", prayer_time_name(prayer_indexes[index]));
+#ifdef ADHAN_ENABLE_VOICE_COMMANDS
+                        voice_request_audio(AUDIO_TRACK_ADHAN);
+#else
                         play_audio(AUDIO_TRACK_ADHAN);
+#endif
                     }
                 }
             }
@@ -987,7 +1079,11 @@ static void prayer_scheduler_task(void *unused) {
                     fired_takbeer_slot != takbeer_slot) {
                 fired_takbeer_slot = takbeer_slot;
                 ESP_LOGI(TAG, "Scheduled %s takbeer", eid_kind_name(eid.kind));
+#ifdef ADHAN_ENABLE_VOICE_COMMANDS
+                voice_request_audio(AUDIO_TRACK_EID_TAKBEER);
+#else
                 play_audio(AUDIO_TRACK_EID_TAKBEER);
+#endif
             }
             last_minute = minute;
         }
@@ -1027,7 +1123,13 @@ static void probe_wifi(void) {
         settings.device_hostname);
     web_server_start(
         &settings, &storage_mounted, &adhan_audio_available,
-        &takbeer_audio_available, play_audio);
+        &takbeer_audio_available,
+#ifdef ADHAN_ENABLE_VOICE_COMMANDS
+        voice_request_audio
+#else
+        play_audio
+#endif
+    );
 }
 
 void app_main(void) {
@@ -1066,10 +1168,24 @@ void app_main(void) {
     ESP_ERROR_CHECK(esp_codec_dev_set_out_vol(audio, settings.volume));
     mount_internal_storage();
     probe_sd_card();
+#ifdef ADHAN_ENABLE_VOICE_COMMANDS
+    ESP_ERROR_CHECK(xTaskCreatePinnedToCore(
+        voice_playback_task, "voice_playback", 8192, NULL, 4,
+        &voice_playback_task_handle, 1) == pdPASS ? ESP_OK : ESP_ERR_NO_MEM);
+#endif
     if (!sd_mounted && (!adhan_audio_available || !takbeer_audio_available)) {
         xTaskCreate(sd_retry_task, "sd_retry", 4096, NULL, 2, NULL);
     }
     probe_wifi();
+#ifdef ADHAN_ENABLE_VOICE_COMMANDS
+    ESP_ERROR_CHECK(xTaskCreateWithCaps(
+        display_task, "display", 4096, NULL, 3, NULL,
+        MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT) == pdPASS
+#else
+    ESP_ERROR_CHECK(xTaskCreate(
+        display_task, "display", 4096, NULL, 3, NULL) == pdPASS
+#endif
+            ? ESP_OK : ESP_ERR_NO_MEM);
 #ifdef ADHAN_ENABLE_VOICE_COMMANDS
     const adhan_voice_commands_config_t voice_config = {
         .rx_channel = i2s_rx,
@@ -1082,8 +1198,15 @@ void app_main(void) {
     if (storage_mounted && !adhan_audio_available) {
         xTaskCreate(default_adhan_seed_task, "default_adhan", 8192, NULL, 2, NULL);
     }
-    xTaskCreate(prayer_scheduler_task, "prayer_scheduler", 8192, NULL, 4, NULL);
-    xTaskCreate(display_task, "display", 4096, NULL, 3, NULL);
+#ifdef ADHAN_ENABLE_VOICE_COMMANDS
+    ESP_ERROR_CHECK(xTaskCreateWithCaps(
+        prayer_scheduler_task, "prayer_scheduler", 8192, NULL, 4, NULL,
+        MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT) == pdPASS
+#else
+    ESP_ERROR_CHECK(xTaskCreate(
+        prayer_scheduler_task, "prayer_scheduler", 8192, NULL, 4, NULL) == pdPASS
+#endif
+            ? ESP_OK : ESP_ERR_NO_MEM);
 #if defined(ADHAN_ENABLE_VOICE_COMMANDS) || defined(ADHAN_VOICE_FIRMWARE)
     ESP_LOGI(TAG, "Automatic OTA updates disabled for experimental voice firmware");
 #else

@@ -9,6 +9,7 @@
 #include "esp_err.h"
 #include "esp_heap_caps.h"
 #include "esp_log.h"
+#include "esp_timer.h"
 #include "esp_mn_iface.h"
 #include "esp_mn_models.h"
 #include "esp_mn_speech_commands.h"
@@ -20,6 +21,7 @@
 
 #define VOICE_COMMAND_NEXT_PRAYER 1
 #define VOICE_COMMAND_PLAY_ADHAN 2
+#define VOICE_DETECTION_THRESHOLD 0.50f
 
 static const char *TAG = "adhan_voice";
 
@@ -27,6 +29,8 @@ static const esp_afe_sr_iface_t *afe_handle;
 static esp_afe_sr_data_t *afe_data;
 static adhan_voice_commands_config_t voice_config;
 static volatile bool voice_running;
+static volatile bool voice_pause_requested;
+static volatile bool voice_feed_paused;
 
 static void dispatch_voice_command(int command_id) {
     switch (command_id) {
@@ -65,19 +69,48 @@ static void feed_task(void *argument) {
         vTaskDelete(NULL);
     }
 
+    int64_t next_level_log = esp_timer_get_time() + 2000000;
+
     while (voice_running) {
+        if (voice_pause_requested) {
+            voice_feed_paused = true;
+            vTaskDelay(pdMS_TO_TICKS(20));
+            continue;
+        }
+        voice_feed_paused = false;
         size_t bytes_read = 0;
         esp_err_t result = i2s_channel_read(
-            voice_config.rx_channel, raw, stereo_bytes, &bytes_read, portMAX_DELAY);
+            voice_config.rx_channel, raw, stereo_bytes, &bytes_read,
+            pdMS_TO_TICKS(100));
+        if (voice_pause_requested) {
+            continue;
+        }
         if (result != ESP_OK || bytes_read == 0) {
-            ESP_LOGW(TAG, "Voice mic read failed: %s", esp_err_to_name(result));
+            if (result != ESP_ERR_TIMEOUT) {
+                ESP_LOGW(TAG, "Voice mic read failed: %s", esp_err_to_name(result));
+            }
             vTaskDelay(pdMS_TO_TICKS(50));
             continue;
         }
 
+        int32_t left_peak = 0;
+        int32_t right_peak = 0;
         if (bytes_read >= stereo_bytes) {
             for (int index = 0; index < feed_chunksize; index++) {
-                feed[index * feed_channels] = raw[index * 2];
+                int32_t left = raw[index * 2];
+                int32_t right = raw[index * 2 + 1];
+                left = left < 0 ? -left : left;
+                right = right < 0 ? -right : right;
+                if (left > left_peak) {
+                    left_peak = left;
+                }
+                if (right > right_peak) {
+                    right_peak = right;
+                }
+            }
+            const int active_slot = right_peak > left_peak ? 1 : 0;
+            for (int index = 0; index < feed_chunksize; index++) {
+                feed[index * feed_channels] = raw[index * 2 + active_slot];
             }
         } else {
             const size_t samples = bytes_read / sizeof(int16_t);
@@ -96,6 +129,12 @@ static void feed_task(void *argument) {
                 feed[index * feed_channels + channel] = 0;
             }
         }
+        const int64_t now = esp_timer_get_time();
+        if (now >= next_level_log) {
+            ESP_LOGI(TAG, "Microphone level: left=%ld right=%ld",
+                (long)left_peak, (long)right_peak);
+            next_level_log = now + 2000000;
+        }
         afe_handle->feed(afe_data, feed);
     }
 
@@ -106,38 +145,93 @@ static void feed_task(void *argument) {
 
 static void detect_task(void *argument) {
     srmodel_list_t *models = argument;
+    esp_mn_iface_t *multinet = NULL;
+    model_iface_data_t *model_data = NULL;
+    bool commands_allocated = false;
     char *model_name = esp_srmodel_filter(models, ESP_MN_PREFIX, ESP_MN_ENGLISH);
     if (model_name == NULL) {
         ESP_LOGE(TAG, "No English MultiNet model found in model partition");
-        vTaskDelete(NULL);
+        goto cleanup;
     }
 
-    esp_mn_iface_t *multinet = esp_mn_handle_from_name(model_name);
+    multinet = esp_mn_handle_from_name(model_name);
     if (multinet == NULL) {
         ESP_LOGE(TAG, "Could not create MultiNet handle for %s", model_name);
-        vTaskDelete(NULL);
+        goto cleanup;
     }
-    model_iface_data_t *model_data = multinet->create(model_name, 6000);
+    model_data = multinet->create(model_name, 6000);
     if (model_data == NULL) {
         ESP_LOGE(TAG, "Could not load MultiNet model %s", model_name);
-        vTaskDelete(NULL);
+        goto cleanup;
     }
-    multinet->switch_loader_mode(model_data, ESP_MN_LOAD_FROM_PSRAM_FLASH);
 
-    ESP_ERROR_CHECK_WITHOUT_ABORT(esp_mn_commands_alloc(multinet, model_data));
-    ESP_ERROR_CHECK_WITHOUT_ABORT(esp_mn_commands_clear());
-    ESP_ERROR_CHECK_WITHOUT_ABORT(esp_mn_commands_add(VOICE_COMMAND_NEXT_PRAYER, "NEXT PRAYER"));
-    ESP_ERROR_CHECK_WITHOUT_ABORT(esp_mn_commands_add(VOICE_COMMAND_PLAY_ADHAN, "PLAY ADHAN"));
+    // Keep the model handle returned by create(). switch_loader_mode() may
+    // replace that handle; the previous implementation discarded its return
+    // value and then passed a stale pointer into set_speech_commands().
+    esp_err_t command_result = esp_mn_commands_alloc(multinet, model_data);
+    if (command_result != ESP_OK) {
+        ESP_LOGE(TAG, "Could not allocate voice command list: %s",
+            esp_err_to_name(command_result));
+        goto cleanup;
+    }
+    commands_allocated = true;
+    command_result = esp_mn_commands_clear();
+    if (command_result == ESP_OK) {
+        command_result = esp_mn_commands_add(
+            VOICE_COMMAND_NEXT_PRAYER, "NEXT PRAYER");
+    }
+    if (command_result == ESP_OK) {
+        command_result = esp_mn_commands_add(
+            VOICE_COMMAND_PLAY_ADHAN, "PLAY ADHAN");
+    }
+    if (command_result == ESP_OK) {
+        command_result = esp_mn_commands_add(
+            VOICE_COMMAND_PLAY_ADHAN, "PLAY AZAN");
+    }
+    if (command_result == ESP_OK) {
+        command_result = esp_mn_commands_add(
+            VOICE_COMMAND_PLAY_ADHAN, "PLAY ATHAN");
+    }
+    if (command_result == ESP_OK) {
+        command_result = esp_mn_commands_add(
+            VOICE_COMMAND_PLAY_ADHAN, "PLAY PRAYER CALL");
+    }
+    if (command_result == ESP_OK) {
+        command_result = esp_mn_commands_add(
+            VOICE_COMMAND_PLAY_ADHAN, "PLAY AUDIO");
+    }
+    if (command_result == ESP_OK) {
+        command_result = esp_mn_commands_add(
+            VOICE_COMMAND_PLAY_ADHAN, "START PRAYER CALL");
+    }
+    if (command_result != ESP_OK) {
+        ESP_LOGE(TAG, "Could not configure voice commands: %s",
+            esp_err_to_name(command_result));
+        goto cleanup;
+    }
     esp_mn_error_t *errors = esp_mn_commands_update();
     if (errors != NULL) {
-        ESP_LOGW(TAG, "One or more voice commands could not be added");
+        ESP_LOGE(TAG, "MultiNet rejected one or more voice commands");
+        goto cleanup;
     }
+    multinet->set_det_threshold(model_data, VOICE_DETECTION_THRESHOLD);
     const int mn_chunksize = multinet->get_samp_chunksize(model_data);
     const int afe_chunksize = afe_handle->get_fetch_chunksize(afe_data);
-    ESP_LOGI(TAG, "Voice command recogniser ready: model=%s, mn=%d, afe=%d",
-        model_name, mn_chunksize, afe_chunksize);
+    if (mn_chunksize != afe_chunksize) {
+        ESP_LOGE(TAG, "Voice frame mismatch: MultiNet=%d, AFE=%d",
+            mn_chunksize, afe_chunksize);
+        goto cleanup;
+    }
+    ESP_LOGI(TAG,
+        "Voice command recogniser ready: model=%s, mn=%d, afe=%d, threshold=%.2f",
+        model_name, mn_chunksize, afe_chunksize,
+        (double)VOICE_DETECTION_THRESHOLD);
 
     while (voice_running) {
+        if (voice_pause_requested) {
+            vTaskDelay(pdMS_TO_TICKS(100));
+            continue;
+        }
         afe_fetch_result_t *result = afe_handle->fetch(afe_data);
         if (result == NULL || result->ret_value == ESP_FAIL) {
             ESP_LOGW(TAG, "Voice AFE fetch failed");
@@ -161,8 +255,15 @@ static void detect_task(void *argument) {
         }
     }
 
-    multinet->destroy(model_data);
-    esp_mn_commands_free();
+cleanup:
+    voice_running = false;
+    if (model_data != NULL && multinet != NULL) {
+        multinet->destroy(model_data);
+    }
+    if (commands_allocated) {
+        esp_mn_commands_free();
+    }
+    ESP_LOGW(TAG, "Voice command recogniser stopped; the prayer clock will continue normally");
     vTaskDelete(NULL);
 }
 
@@ -191,7 +292,12 @@ esp_err_t adhan_voice_commands_start(const adhan_voice_commands_config_t *config
         return ESP_FAIL;
     }
 
+    ESP_LOGI(TAG, "Voice memory before tasks: internal=%u, PSRAM=%u",
+        (unsigned)heap_caps_get_free_size(MALLOC_CAP_INTERNAL),
+        (unsigned)heap_caps_get_free_size(MALLOC_CAP_SPIRAM));
     voice_running = true;
+    voice_pause_requested = false;
+    voice_feed_paused = false;
     if (xTaskCreatePinnedToCore(feed_task, "voice_feed", 8192, NULL, 5, NULL, 0) != pdPASS ||
             xTaskCreatePinnedToCore(detect_task, "voice_detect", 8192, models, 5, NULL, 1) != pdPASS) {
         voice_running = false;
@@ -200,5 +306,41 @@ esp_err_t adhan_voice_commands_start(const adhan_voice_commands_config_t *config
     }
 
     ESP_LOGI(TAG, "Offline voice commands enabled: NEXT PRAYER, PLAY ADHAN");
+    return ESP_OK;
+}
+
+esp_err_t adhan_voice_commands_pause(void) {
+    if (!voice_running || voice_config.rx_channel == NULL) {
+        return ESP_ERR_INVALID_STATE;
+    }
+
+    voice_pause_requested = true;
+    for (int attempt = 0; attempt < 50 && !voice_feed_paused; attempt++) {
+        vTaskDelay(pdMS_TO_TICKS(10));
+    }
+    if (!voice_feed_paused) {
+        voice_pause_requested = false;
+        ESP_LOGE(TAG, "Microphone did not pause before playback");
+        return ESP_ERR_TIMEOUT;
+    }
+
+    ESP_LOGI(TAG, "Microphone paused for playback");
+    return ESP_OK;
+}
+
+esp_err_t adhan_voice_commands_resume(void) {
+    if (!voice_running || voice_config.rx_channel == NULL) {
+        return ESP_ERR_INVALID_STATE;
+    }
+
+    const esp_err_t result = i2s_channel_enable(voice_config.rx_channel);
+    if (result != ESP_OK && result != ESP_ERR_INVALID_STATE) {
+        ESP_LOGE(TAG, "Could not restore microphone input: %s",
+            esp_err_to_name(result));
+        return result;
+    }
+    voice_feed_paused = false;
+    voice_pause_requested = false;
+    ESP_LOGI(TAG, "Microphone listening resumed");
     return ESP_OK;
 }

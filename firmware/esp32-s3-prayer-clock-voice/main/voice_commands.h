@@ -13,3 +13,5 @@ typedef struct {
 } adhan_voice_commands_config_t;
 
 esp_err_t adhan_voice_commands_start(const adhan_voice_commands_config_t *config);
+esp_err_t adhan_voice_commands_pause(void);
+esp_err_t adhan_voice_commands_resume(void);
